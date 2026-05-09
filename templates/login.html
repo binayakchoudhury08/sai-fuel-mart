@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAI FUEL MART Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+
+<div class="main-box">
+
+    <div class="left-box">
+
+        <div class="brand">
+            <div class="fuel-logo">
+                <div class="pump-body"></div>
+                <div class="pump-hose"></div>
+            </div>
+
+            <div>
+                <h1>SAI FUEL MART</h1>
+                <p>FUELING YOUR TRUST</p>
+            </div>
+        </div>
+
+        <h2>Welcome <span>back</span></h2>
+        <p class="sub-text">Sign in to continue to your account</p>
+
+        <form method="POST">
+
+            <label>Username</label>
+            <div class="input-box">
+                <span>👤</span>
+                <input type="text" name="username" placeholder="Enter your username" required>
+            </div>
+
+            <label>Password</label>
+            <div class="input-box">
+                <span>🔒</span>
+                <input type="password" name="password" placeholder="Enter your password" required>
+                <span>👁</span>
+            </div>
+
+            <div class="remember">
+                <input type="checkbox" name="remember">
+                <span>Remember me</span>
+            </div>
+
+            <button type="submit">Sign In →</button>
+
+            {% if error %}
+            <p class="error">{{ error }}</p>
+            {% endif %}
+
+        </form>
+
+        <p class="footer">© 2025 <span>SAI FUEL MART.</span> All rights reserved.</p>
+
+    </div>
+
+    <div class="right-box">
+
+        <img src="{{ url_for('static', filename='images/pump.jpg') }}" class="pump-img">
+
+        <div class="overlay">
+            <h2>Welcome!</h2>
+            <p>Manage your petrol pump<br>operations efficiently</p>
+
+            <div class="feature">
+                📊
+                <div>
+                    <b>Daily Closing Reports</b><br>
+                    <small>View daily sales and closing reports</small>
+                </div>
+            </div>
+
+            <div class="feature">
+                🚚
+                <div>
+                    <b>Transport Management</b><br>
+                    <small>Manage transport and credit</small>
+                </div>
+            </div>
+
+            <div class="feature">
+                📈
+                <div>
+                    <b>Stock & Sales Tracking</b><br>
+                    <small>Track stock, sales and inventory</small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

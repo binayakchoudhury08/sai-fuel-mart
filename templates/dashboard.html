@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SAI FUEL MART Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <h2>SAI FUEL MART</h2>
+            <p>FUELING YOUR TRUST</p>
+        </div>
+
+        <nav>
+            <a class="active"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i
+             class="fa-solid fa-file-invoice-dollar"></i> Daily Closing </a>
+            <a><i class="fa-solid fa-gauge"></i> Dip Entry</a>
+            <a><i class="fa-solid fa-gas-pump"></i> Nozzle Sales</a>
+            <a><i class="fa-solid fa-oil-can"></i> Tank Stock</a>
+            <a><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a><i class="fa-solid fa-users"></i> Credit Parties</a>
+            <a><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+
+        <a href="/logout" class="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
+    </aside>
+
+    <main class="main">
+
+        <header class="topbar">
+            <button class="menu"><i class="fa-solid fa-bars"></i></button>
+
+            <div class="search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Search anything...
+            </div>
+
+            <div class="user">
+                <i class="fa-solid fa-bell"></i>
+                <div class="avatar">AM</div>
+                <div>
+                    <h4>Admin User</h4>
+                    <p>Administrator</p>
+                </div>
+            </div>
+        </header>
+
+        <section class="title-row">
+            <div>
+                <h1>Dashboard</h1>
+                <p>Welcome back, Admin! Here's what's happening today.</p>
+            </div>
+            <div class="date-box"><i class="fa-solid fa-calendar-days"></i> 18 May 2025</div>
+        </section>
+
+        <section class="kpi-grid">
+            <div class="kpi-card">
+                <div class="icon orange"><i class="fa-solid fa-gas-pump"></i></div>
+                <div>
+                    <p>Today Petrol Sales</p>
+                    <h2>₹ 1,24,560.00</h2>
+                    <span>2456.78 Ltrs</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="icon yellow"><i class="fa-solid fa-gas-pump"></i></div>
+                <div>
+                    <p>Today Diesel Sales</p>
+                    <h2>₹ 1,78,320.00</h2>
+                    <span>3456.25 Ltrs</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="icon green"><i class="fa-solid fa-fire-flame-simple"></i></div>
+                <div>
+                    <p>CNG Sales</p>
+                    <h2>₹ 45,780.00</h2>
+                    <span>1285.63 Kg</span>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="icon blue"><i class="fa-solid fa-wallet"></i></div>
+                <div>
+                    <p>Total Collection</p>
+                    <h2>₹ 3,48,660.00</h2>
+                    <span>Today</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-grid">
+
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h3>Sales Analytics</h3>
+                    <button>This Month</button>
+                </div>
+
+                <div class="fake-chart">
+                    <svg viewBox="0 0 800 260" preserveAspectRatio="none">
+                        <polyline points="0,160 80,120 160,140 240,80 320,100 400,60 480,110 560,75 640,90 720,55 800,80" />
+                        <polyline class="line2" points="0,210 80,180 160,195 240,150 320,160 400,130 480,170 560,140 640,150 720,115 800,100" />
+                    </svg>
+                </div>
+            </div>
+
+            <div class="card alerts-card">
+                <div class="card-head">
+                    <h3>Alerts</h3>
+                    <a>View all</a>
+                </div>
+
+                <div class="alert">⚠ Diesel Tank-2 stock is low <span>10 min ago</span></div>
+                <div class="alert">🚚 Pending credit transport approval <span>25 min ago</span></div>
+                <div class="alert">🔴 Credit payment overdue <span>1 hr ago</span></div>
+                <div class="alert">⛽ Nozzle 3 abnormal sales detected <span>2 hrs ago</span></div>
+            </div>
+
+            <div class="card task-card">
+                <div class="card-head">
+                    <h3>Task Remaining</h3>
+                    <a>View all</a>
+                </div>
+
+                <label><input type="checkbox"> Daily Closing Check</label>
+                <label><input type="checkbox" checked> Update Credit Transport</label>
+                <label><input type="checkbox" checked> Check Tank Dip</label>
+                <label><input type="checkbox"> Prepare Cash Report</label>
+                <label><input type="checkbox"> Check Lube Stock</label>
+                <label><input type="checkbox"> Attendance Entry</label>
+            </div>
+
+            <div class="card tank-card">
+                <h3>Tank Stock Movement</h3>
+                <p class="muted">Opening + Received - Sold = Closing</p>
+
+                <div class="stock-row">
+                    <b>MS / Petrol</b>
+                    <span>Opening: 12,314 L</span>
+                    <span>Received: 0 L</span>
+                    <span>Sold: 2,476.86 L</span>
+                    <strong>Closing: 9,837.14 L</strong>
+                </div>
+
+                <div class="stock-row">
+                    <b>HSD / Diesel</b>
+                    <span>Opening: 18,457 L</span>
+                    <span>Received: 20,000 L</span>
+                    <span>Sold: 22,000.38 L</span>
+                    <strong>Closing: 16,456.62 L</strong>
+                </div>
+            </div>
+
+            <div class="card rates-card">
+                <h3>Fuel Rates</h3>
+                <p>Updated: 18 May 2025, 10:30 AM</p>
+                <div class="rate-row"><span>Petrol</span><b>₹ 106.25 /Ltr</b></div>
+                <div class="rate-row"><span>Diesel</span><b>₹ 93.72 /Ltr</b></div>
+                <div class="rate-row"><span>CNG</span><b>₹ 75.50 /Kg</b></div>
+            </div>
+
+            <div class="card credit-card">
+                <div class="card-head">
+                    <h3>Pending Credit</h3>
+                    <a>View all</a>
+                </div>
+
+                <div class="credit-row"><span>Shiv Transport</span><b>₹ 45,780.00</b><small>Overdue 5 days</small></div>
+                <div class="credit-row"><span>Patel Logistics</span><b>₹ 32,600.00</b><small>Overdue 3 days</small></div>
+                <div class="credit-row"><span>Royal Enterprises</span><b>₹ 18,950.00</b><small>Overdue 2 days</small></div>
+
+                <h2>₹ 97,330.00</h2>
+            </div>
+
+            <div class="card transport-card">
+                <div class="card-head">
+                    <h3>Credit Transport Summary</h3>
+                    <a>View all</a>
+                </div>
+
+                <div class="entry"><b>Shiv Transport</b><span>HSD • 500 Ltrs • ₹ 46,990</span><em class="pending">Pending</em></div>
+                <div class="entry"><b>S.V.T</b><span>HSD • 900 Ltrs • ₹ 84,582</span><em>Paid</em></div>
+                <div class="entry"><b>Patel Logistics</b><span>HSD • 300 Ltrs • ₹ 28,194</span><em class="pending">Partial</em></div>
+                <div class="entry"><b>Royal Enterprises</b><span>HSD • 700 Ltrs • ₹ 65,604</span><em class="pending">Pending</em></div>
+            </div>
+
+        </section>
+
+        <footer>© 2025 <span>SAI FUEL MART.</span> All rights reserved.</footer>
+
+    </main>
+
+</div>
+
+</body>
+</html>
