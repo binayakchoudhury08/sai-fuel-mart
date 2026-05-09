@@ -1,5 +1,5 @@
-const MS_RATE_DEFAULT = 102.46;
-const HSD_RATE_DEFAULT = 93.72;
+const MS_RATE_DEFAULT = parseFloat(document.querySelector("#ms-rate").value) || 0;
+const HSD_RATE_DEFAULT = parseFloat(document.querySelector("#hsd-rate").value) || 0;
 
 const formatMoney = (value) => {
     return "₹ " + (Number(value) || 0).toFixed(2);

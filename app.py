@@ -50,9 +50,19 @@ def dashboard():
 
 @app.route("/daily-closing")
 def daily_closing():
-    if session.get("logged_in"):
-        return render_template("daily_closing.html")
-    return redirect(url_for("login"))
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM settings WHERE id = 1")
+    settings_data = cur.fetchone()
+
+    conn.close()
+
+    return render_template("daily_closing.html", settings=settings_data)
 
 
 @app.route("/logout")
@@ -63,6 +73,22 @@ def logout():
 def init_db():
     conn = sqlite3.connect("sai_fuel_mart.db")
     cur = conn.cursor()
+
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY,
+        ms_rate REAL,
+        hsd_rate REAL
+        )
+    """)
+
+    cur.execute("""
+    INSERT OR IGNORE INTO settings (id, ms_rate, hsd_rate)
+    VALUES (1, 102.46, 93.72)
+    """)
+
+
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS daily_closing (
@@ -233,6 +259,44 @@ def update_report(id):
     conn.close()
 
     return redirect(url_for("reports"))
+
+@app.route("/settings")
+def settings():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM settings WHERE id = 1")
+    settings_data = cur.fetchone()
+
+    conn.close()
+
+    return render_template("settings.html", settings=settings_data)
+
+@app.route("/save-settings", methods=["POST"])
+def save_settings():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    ms_rate = request.form["ms_rate"]
+    hsd_rate = request.form["hsd_rate"]
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE settings
+        SET ms_rate = ?, hsd_rate = ?
+        WHERE id = 1
+    """, (ms_rate, hsd_rate))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("settings"))
 
 
 
