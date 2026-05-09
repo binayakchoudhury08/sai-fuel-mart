@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Report - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+</head>
+
+<body>
+
+<div class="main-content">
+
+    <div class="topbar">
+        <div>
+            <h1>Edit Daily Closing Report</h1>
+            <p>Update saved record</p>
+        </div>
+    </div>
+
+    <form method="POST" action="/update-report/{{ row['id'] }}" class="box">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Date</label>
+                <input type="text" name="date" value="{{ row['date'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>MS Litres</label>
+                <input type="number" step="0.01" name="ms_litres" value="{{ row['ms_litres'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>HSD Litres</label>
+                <input type="number" step="0.01" name="hsd_litres" value="{{ row['hsd_litres'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Total Fuel Sale</label>
+                <input type="number" step="0.01" name="total_fuel_sale" value="{{ row['total_fuel_sale'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Lube Sale</label>
+                <input type="number" step="0.01" name="lube_sale" value="{{ row['lube_sale'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Digital Collection</label>
+                <input type="number" step="0.01" name="digital_collection" value="{{ row['digital_collection'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Credit Given</label>
+                <input type="number" step="0.01" name="credit_given" value="{{ row['credit_given'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Transport Received</label>
+                <input type="number" step="0.01" name="transport_received" value="{{ row['transport_received'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Net Credit Due</label>
+                <input type="number" step="0.01" name="net_credit_due" value="{{ row['net_credit_due'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Total Expense</label>
+                <input type="number" step="0.01" name="total_expense" value="{{ row['total_expense'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Cash In Hand</label>
+                <input type="number" step="0.01" name="cash_in_hand" value="{{ row['cash_in_hand'] }}">
+            </div>
+
+        </div>
+
+        <br>
+
+        <button class="save-btn-top" type="submit">Update Report</button>
+        <a href="/reports" class="add-btn">Back</a>
+
+    </form>
+
+</div>
+
+</body>
+</html>

@@ -246,3 +246,37 @@ document.addEventListener("DOMContentLoaded", () => {
     setupAddButtons();
     updateAllTotals();
 });
+
+document.querySelector("#save-closing").addEventListener("click", () => {
+
+    const data = {
+        date: new Date().toISOString().split("T")[0],
+        ms_litres: sumInputs(".ms-sale"),
+        hsd_litres: sumInputs(".hsd-sale"),
+        total_fuel_sale:
+            (sumInputs(".ms-sale") * MS_RATE_DEFAULT) +
+            (sumInputs(".hsd-sale") * HSD_RATE_DEFAULT),
+        lube_sale: sumInputs(".lube-amount"),
+        digital_collection: sumInputs(".digital-input"),
+        credit_given: sumInputs(".credit-row .amount"),
+        transport_received: getNumber("#transport-received"),
+        net_credit_due: Math.max(
+            sumInputs(".credit-row .amount") - getNumber("#transport-received"), 0
+        ),
+        total_expense: sumInputs(".expense-amount"),
+        cash_in_hand: document.querySelector("#summary-cash").innerText.replace("₹", "").trim()
+    };
+
+    fetch("/save-daily-closing", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(result => {
+        alert(result.message);
+    });
+
+});
