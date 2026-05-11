@@ -311,3 +311,46 @@ body{
         grid-template-columns:1fr;
     }
 }
+.date-box{
+    padding:18px 24px;
+    margin-bottom:22px;
+}
+
+.date-picker-row{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+}
+
+.date-group{
+    width:260px;
+}
+
+.date-group label{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    color:#ffb000;
+    font-weight:600;
+    margin-bottom:10px;
+}
+
+.date-group input{
+    background:#111827;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;
+    padding:14px 16px;
+    color:white;
+    font-size:15px;
+    outline:none;
+}
+
+.date-group input:focus{
+    border:1px solid #ff9800;
+    box-shadow:0 0 14px rgba(255,152,0,0.25);
+}
+
+.date-group input::-webkit-calendar-picker-indicator{
+    filter:invert(1);
+    cursor:pointer;
+}

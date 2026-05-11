@@ -1,5 +1,5 @@
-const MS_RATE_DEFAULT = parseFloat(document.querySelector("#ms-rate").value) || 0;
-const HSD_RATE_DEFAULT = parseFloat(document.querySelector("#hsd-rate").value) || 0;
+const MS_RATE_DEFAULT = parseFloat(document.querySelector("#ms-rate")?.value) || 102.46;
+const HSD_RATE_DEFAULT = parseFloat(document.querySelector("#hsd-rate")?.value) || 93.98;
 
 const formatMoney = (value) => {
     return "₹ " + (Number(value) || 0).toFixed(2);
@@ -100,7 +100,7 @@ function setupExpenseRow(row) {
 }
 
 function setupAddButtons() {
-    document.querySelector("#add-credit").addEventListener("click", () => {
+    document.querySelector("#add-credit")?.addEventListener("click", () => {
         const tbody = document.querySelector("#credit-table tbody");
 
         const tr = document.createElement("tr");
@@ -129,7 +129,7 @@ function setupAddButtons() {
         setupCreditRow(tr);
     });
 
-    document.querySelector("#add-lube").addEventListener("click", () => {
+    document.querySelector("#add-lube")?.addEventListener("click", () => {
         const tbody = document.querySelector("#lube-table tbody");
 
         const tr = document.createElement("tr");
@@ -154,7 +154,7 @@ function setupAddButtons() {
         setupLubeRow(tr);
     });
 
-    document.querySelector("#add-expense").addEventListener("click", () => {
+    document.querySelector("#add-expense")?.addEventListener("click", () => {
         const tbody = document.querySelector("#expense-table tbody");
 
         const tr = document.createElement("tr");
@@ -171,19 +171,23 @@ function setupAddButtons() {
 }
 
 function updateStock(msSale, hsdSale) {
-    document.querySelector("#ms-stock-sale").value = msSale.toFixed(2);
-    document.querySelector("#hsd-stock-sale").value = hsdSale.toFixed(2);
+    const msStockSale = document.querySelector("#ms-stock-sale");
+    const hsdStockSale = document.querySelector("#hsd-stock-sale");
+    const msStockClosing = document.querySelector("#ms-stock-closing");
+    const hsdStockClosing = document.querySelector("#hsd-stock-closing");
+
+    if (!msStockSale || !hsdStockSale || !msStockClosing || !hsdStockClosing) return;
+
+    msStockSale.value = msSale.toFixed(2);
+    hsdStockSale.value = hsdSale.toFixed(2);
 
     const msOpening = getNumber("#ms-stock-opening");
     const msReceived = getNumber("#ms-stock-received");
     const hsdOpening = getNumber("#hsd-stock-opening");
     const hsdReceived = getNumber("#hsd-stock-received");
 
-    document.querySelector("#ms-stock-closing").value =
-        (msOpening + msReceived - msSale).toFixed(2);
-
-    document.querySelector("#hsd-stock-closing").value =
-        (hsdOpening + hsdReceived - hsdSale).toFixed(2);
+    msStockClosing.value = (msOpening + msReceived - msSale).toFixed(2);
+    hsdStockClosing.value = (hsdOpening + hsdReceived - hsdSale).toFixed(2);
 }
 
 function updateAllTotals() {
@@ -227,7 +231,92 @@ function updateAllTotals() {
     updateStock(msLitres, hsdLitres);
 }
 
+function setupDateLoad() {
+    const dateInput = document.querySelector("#closing-date");
+
+    if (!dateInput) return;
+
+    if (!dateInput.value) {
+        dateInput.value = new Date().toISOString().split("T")[0];
+    }
+
+    dateInput.addEventListener("change", function () {
+        const selectedDate = this.value;
+
+        fetch(`/get-daily-closing/${selectedDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.id) {
+                    alert("No saved data found for this date");
+                    return;
+                }
+
+                document.querySelector("#ms-litres-card").innerText = data.ms_litres + " Ltrs";
+                document.querySelector("#hsd-litres-card").innerText = data.hsd_litres + " Ltrs";
+
+                document.querySelector("#ms-sale-card").innerText = "Saved";
+                document.querySelector("#hsd-sale-card").innerText = "Saved";
+                document.querySelector("#total-sale-card").innerText =
+                    formatMoney((Number(data.total_fuel_sale) || 0) + (Number(data.lube_sale) || 0));
+
+                document.querySelector("#summary-fuel-sale").innerText = formatMoney(data.total_fuel_sale);
+                document.querySelector("#summary-lube-sale").innerText = formatMoney(data.lube_sale);
+                document.querySelector("#summary-digital").innerText = formatMoney(data.digital_collection);
+                document.querySelector("#summary-credit").innerText = formatMoney(data.credit_given);
+                document.querySelector("#summary-transport-received").innerText = formatMoney(data.transport_received);
+                document.querySelector("#summary-net-credit").innerText = formatMoney(data.net_credit_due);
+                document.querySelector("#summary-expense").innerText = formatMoney(data.total_expense);
+                document.querySelector("#summary-cash").innerText = formatMoney(data.cash_in_hand);
+
+                alert("Saved report loaded");
+            })
+            .catch(error => {
+                console.log(error);
+                alert("Error loading saved report");
+            });
+    });
+}
+
+function setupSaveClosing() {
+    document.querySelector("#save-closing")?.addEventListener("click", () => {
+        const data = {
+            date: document.querySelector("#closing-date").value,
+            ms_litres: sumInputs(".ms-sale"),
+            hsd_litres: sumInputs(".hsd-sale"),
+            total_fuel_sale:
+                (sumInputs(".ms-sale") * MS_RATE_DEFAULT) +
+                (sumInputs(".hsd-sale") * HSD_RATE_DEFAULT),
+            lube_sale: sumInputs(".lube-amount"),
+            digital_collection: sumInputs(".digital-input"),
+            credit_given: sumInputs(".credit-row .amount"),
+            transport_received: getNumber("#transport-received"),
+            net_credit_due: Math.max(
+                sumInputs(".credit-row .amount") - getNumber("#transport-received"), 0
+            ),
+            total_expense: sumInputs(".expense-amount"),
+            cash_in_hand: document.querySelector("#summary-cash").innerText.replace("₹", "").trim()
+        };
+
+        fetch("/save-daily-closing", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(result => {
+            alert(result.message);
+        })
+        .catch(error => {
+            console.log(error);
+            alert("Save failed");
+        });
+    });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    setupDateLoad();
     setupNozzleCalculation();
 
     document.querySelectorAll(".credit-row").forEach(setupCreditRow);
@@ -238,45 +327,12 @@ document.addEventListener("DOMContentLoaded", () => {
         input.addEventListener("input", updateAllTotals);
     });
 
-    document.querySelector("#ms-stock-opening").addEventListener("input", updateAllTotals);
-    document.querySelector("#ms-stock-received").addEventListener("input", updateAllTotals);
-    document.querySelector("#hsd-stock-opening").addEventListener("input", updateAllTotals);
-    document.querySelector("#hsd-stock-received").addEventListener("input", updateAllTotals);
+    document.querySelector("#ms-stock-opening")?.addEventListener("input", updateAllTotals);
+    document.querySelector("#ms-stock-received")?.addEventListener("input", updateAllTotals);
+    document.querySelector("#hsd-stock-opening")?.addEventListener("input", updateAllTotals);
+    document.querySelector("#hsd-stock-received")?.addEventListener("input", updateAllTotals);
 
     setupAddButtons();
+    setupSaveClosing();
     updateAllTotals();
-});
-
-document.querySelector("#save-closing").addEventListener("click", () => {
-
-    const data = {
-        date: new Date().toISOString().split("T")[0],
-        ms_litres: sumInputs(".ms-sale"),
-        hsd_litres: sumInputs(".hsd-sale"),
-        total_fuel_sale:
-            (sumInputs(".ms-sale") * MS_RATE_DEFAULT) +
-            (sumInputs(".hsd-sale") * HSD_RATE_DEFAULT),
-        lube_sale: sumInputs(".lube-amount"),
-        digital_collection: sumInputs(".digital-input"),
-        credit_given: sumInputs(".credit-row .amount"),
-        transport_received: getNumber("#transport-received"),
-        net_credit_due: Math.max(
-            sumInputs(".credit-row .amount") - getNumber("#transport-received"), 0
-        ),
-        total_expense: sumInputs(".expense-amount"),
-        cash_in_hand: document.querySelector("#summary-cash").innerText.replace("₹", "").trim()
-    };
-
-    fetch("/save-daily-closing", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data)
-    })
-    .then(res => res.json())
-    .then(result => {
-        alert(result.message);
-    });
-
 });

@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
 from datetime import timedelta
+from flask import jsonify
 
 app = Flask(__name__)
 
@@ -112,13 +113,25 @@ def init_db():
 
 @app.route("/save-daily-closing", methods=["POST"])
 def save_daily_closing():
-    if not session.get("logged_in"):
-        return {"status": "error", "message": "Not logged in"}
 
     data = request.get_json()
 
     conn = sqlite3.connect("sai_fuel_mart.db")
     cur = conn.cursor()
+
+    cur.execute(
+        "SELECT id FROM daily_closing WHERE date = ?",
+        (data["date"],)
+    )
+
+    existing = cur.fetchone()
+
+    if existing:
+        conn.close()
+        return jsonify({
+            "status": "error",
+            "message": "This date data already exists. Please edit from Reports."
+        })
 
     cur.execute("""
         INSERT INTO daily_closing (
@@ -152,7 +165,10 @@ def save_daily_closing():
     conn.commit()
     conn.close()
 
-    return {"status": "success", "message": "Daily closing saved successfully"}
+    return jsonify({
+        "status": "success",
+        "message": "Daily closing saved successfully"
+    })
 
 @app.route("/reports")
 def reports():
@@ -298,7 +314,30 @@ def save_settings():
 
     return redirect(url_for("settings"))
 
+@app.route("/get-daily-closing/<date>")
+def get_daily_closing(date):
 
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM daily_closing
+        WHERE date = ?
+        ORDER BY id DESC
+        LIMIT 1
+    """, (date,))
+
+    row = cur.fetchone()
+
+    conn.close()
+
+    if row:
+        return jsonify(dict(row))
+
+    return jsonify({})
 
 if __name__ == "__main__":
     init_db()
