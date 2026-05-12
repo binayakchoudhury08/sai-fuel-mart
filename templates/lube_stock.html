@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lube Stock - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+<div class="container">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <h2>SAI FUEL MART</h2>
+            <p>FUELING YOUR TRUST</p>
+        </div>
+
+        <nav>
+            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a class="active" href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+
+        <div class="topbar">
+            <div>
+                <h1>Lube Stock</h1>
+                <p>Manage lube products, selling rate and stock balance</p>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-plus"></i> Add Lube Product
+            </div>
+
+            <form method="POST" action="/save-lube-product">
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label>Product Name</label>
+                        <input type="text" name="product_name" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Selling Rate</label>
+                        <input type="number" step="0.01" name="selling_rate" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Opening Stock</label>
+                        <input type="number" name="opening_stock" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Purchase Qty</label>
+                        <input type="number" name="purchase_qty" value="0">
+                    </div>
+                </div>
+
+                <br>
+
+                <button class="save-btn-top" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Product
+                </button>
+            </form>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-boxes-stacked"></i> Lube Stock Register
+            </div>
+
+            <table class="entry-table">
+                <tr>
+                    <th>Product</th>
+                    <th>Rate</th>
+                    <th>Opening</th>
+                    <th>Purchase</th>
+                    <th>Sale</th>
+                    <th>Closing</th>
+                    <th>Status</th>
+                </tr>
+
+                {% for item in lube_items %}
+                <tr>
+                    <td>{{ item["product_name"] }}</td>
+                    <td>₹ {{ item["selling_rate"] }}</td>
+                    <td>{{ item["opening_stock"] }}</td>
+                    <td>{{ item["purchase_qty"] }}</td>
+                    <td>{{ item["sale_qty"] }}</td>
+                    <td>{{ item["closing_stock"] }}</td>
+                    <td>
+                        {% if item["closing_stock"] <= 5 %}
+                            <span style="color:#ff4b4b;">Low Stock</span>
+                        {% else %}
+                            <span style="color:#4ade80;">Available</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>
