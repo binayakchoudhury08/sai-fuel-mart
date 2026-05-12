@@ -5,6 +5,7 @@ from flask import jsonify
 from openpyxl import Workbook
 from flask import send_file
 from io import BytesIO
+from datetime import timedelta, datetime
 
 app = Flask(__name__)
 
@@ -135,6 +136,33 @@ def init_db():
             cash_in_hand REAL
         )
     """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS staff_master (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        staff_name TEXT,
+        role TEXT,
+        status TEXT
+    )
+""")
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS staff_master (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        staff_name TEXT,
+        role TEXT,
+        status TEXT
+    )
+""")
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS attendance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        staff_name TEXT,
+        attendance_status TEXT
+    )
+""")
 
     conn.commit()
     conn.close()
@@ -417,6 +445,97 @@ def export_reports():
         download_name="Sai_Fuel_Mart_Reports.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+@app.route("/attendance")
+def attendance():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM staff_master ORDER BY id DESC")
+    staff_list = cur.fetchall()
+
+    cur.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 20")
+    attendance_list = cur.fetchall()
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    cur.execute("SELECT COUNT(*) AS total_staff FROM staff_master WHERE status='Active'")
+    total_staff = cur.fetchone()["total_staff"]
+
+    cur.execute("SELECT COUNT(*) AS present_today FROM attendance WHERE date=? AND attendance_status='Present'", (today,))
+    present_today = cur.fetchone()["present_today"]
+
+    cur.execute("SELECT COUNT(*) AS absent_leave FROM attendance WHERE date=? AND attendance_status IN ('Absent','Leave')", (today,))
+    absent_leave = cur.fetchone()["absent_leave"]
+
+    conn.close()
+
+    return render_template(
+        "attendance.html",
+        staff_list=staff_list,
+        attendance_list=attendance_list,
+        total_staff=total_staff,
+        present_today=present_today,
+        absent_leave=absent_leave
+    )
+
+
+@app.route("/save-staff", methods=["POST"])
+def save_staff():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO staff_master (staff_name, role, status)
+        VALUES (?, ?, ?)
+    """, (
+        request.form["staff_name"],
+        request.form["role"],
+        request.form["status"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+
+@app.route("/save-attendance", methods=["POST"])
+def save_attendance():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO attendance (date, staff_name, attendance_status)
+        VALUES (?, ?, ?)
+    """, (
+        request.form["date"],
+        request.form["staff_name"],
+        request.form["attendance_status"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+@app.route("/lube-stock")
+def lube_stock():
+    if not session.get("lo" \
+    "gged_in"):
+        return redirect(url_for("login"))
+
+    return render_template("lube_stock.html")
 
 
 

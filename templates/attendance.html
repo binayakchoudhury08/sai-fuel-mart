@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Attendance - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+<div class="container">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <h2>SAI FUEL MART</h2>
+            <p>FUELING YOUR TRUST</p>
+        </div>
+
+        <nav>
+            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a class="active" href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+
+        <div class="topbar">
+            <div>
+                <h1>Attendance Register</h1>
+                <p>Staff master and daily attendance entry</p>
+            </div>
+
+            <div class="date-box">
+                <i class="fa-solid fa-calendar-days"></i>
+                Daily Staff Entry
+            </div>
+        </div>
+
+        <div class="cards">
+            <div class="card petrol">
+                <h3>Total Staff</h3>
+                <h2>{{ total_staff }}</h2>
+                <p>Active employees</p>
+            </div>
+
+            <div class="card diesel">
+                <h3>Present Today</h3>
+                <h2>{{ present_today }}</h2>
+                <p>Marked present</p>
+            </div>
+
+            <div class="card total">
+                <h3>Absent / Leave</h3>
+                <h2>{{ absent_leave }}</h2>
+                <p>Today status</p>
+            </div>
+        </div>
+
+        <div class="two-grid">
+
+            <div class="box">
+                <div class="box-title">
+                    <i class="fa-solid fa-user-plus"></i> Staff Master
+                </div>
+
+                <form method="POST" action="/save-staff">
+                    <div class="form-grid">
+
+                        <div class="input-group">
+                            <label>Staff Name</label>
+                            <input type="text" name="staff_name" placeholder="Enter staff name" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Role</label>
+                            <select name="role" required>
+                                <option value="">Select Role</option>
+                                <option>Manager</option>
+                                <option>Supervisor</option>
+                                <option>Salesman</option>
+                                <option>Cleaner</option>
+                                <option>Security</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Status</label>
+                            <select name="status" required>
+                                <option>Active</option>
+                                <option>Inactive</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <br>
+
+                    <button class="save-btn-top" type="submit">
+                        <i class="fa-solid fa-user-plus"></i> Add Staff
+                    </button>
+                </form>
+            </div>
+
+            <div class="box">
+                <div class="box-title">
+                    <i class="fa-solid fa-calendar-check"></i> Daily Attendance
+                </div>
+
+                <form method="POST" action="/save-attendance">
+                    <div class="form-grid">
+
+                        <div class="input-group date-group">
+                            <label>
+                                <i class="fa-solid fa-calendar-days"></i>
+                                Attendance Date
+                            </label>
+                            <input type="date" name="date" id="attendance-date" required>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Staff Name</label>
+                            <select name="staff_name" required>
+                                <option value="">Select Staff</option>
+                                {% for staff in staff_list %}
+                                <option>{{ staff["staff_name"] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Attendance</label>
+                            <select name="attendance_status" required>
+                                <option>Present</option>
+                                <option>Absent</option>
+                                <option>Leave</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <br>
+
+                    <button class="save-btn-top" type="submit">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Attendance
+                    </button>
+                </form>
+            </div>
+
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-users"></i> Staff List
+            </div>
+
+            <table class="entry-table">
+                <tr>
+                    <th>Staff Name</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                </tr>
+
+                {% for staff in staff_list %}
+                <tr>
+                    <td>{{ staff["staff_name"] }}</td>
+                    <td>{{ staff["role"] }}</td>
+                    <td>{{ staff["status"] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-clipboard-check"></i> Recent Attendance
+            </div>
+
+            <table class="entry-table">
+                <tr>
+                    <th>Date</th>
+                    <th>Staff Name</th>
+                    <th>Status</th>
+                </tr>
+
+                {% for att in attendance_list %}
+                <tr>
+                    <td>{{ att["date"] }}</td>
+                    <td>{{ att["staff_name"] }}</td>
+                    <td>{{ att["attendance_status"] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+    document.getElementById("attendance-date").value =
+        new Date().toISOString().split("T")[0];
+</script>
+
+</body>
+</html>
