@@ -2,6 +2,9 @@ import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
 from datetime import timedelta
 from flask import jsonify
+from openpyxl import Workbook
+from flask import send_file
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -40,14 +43,39 @@ def login():
             error = "Invalid username or password"
 
     return render_template("login.html", error=error)
+  
 
 
 @app.route("/dashboard")
 def dashboard():
-    if session.get("logged_in"):
-        return render_template("dashboard.html")
-    return redirect(url_for("login"))
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM daily_closing ORDER BY id DESC LIMIT 1")
+    latest = cur.fetchone()
+
+    cur.execute("""
+        SELECT
+            SUM(total_fuel_sale) AS monthly_sale,
+            SUM(total_expense) AS monthly_expense,
+            SUM(net_credit_due) AS monthly_credit,
+            SUM(cash_in_hand) AS monthly_cash
+        FROM daily_closing
+        WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now')
+    """)
+    monthly = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "dashboard.html",
+        latest=latest,
+        monthly=monthly
+    )
 
 @app.route("/daily-closing")
 def daily_closing():
@@ -338,6 +366,59 @@ def get_daily_closing(date):
         return jsonify(dict(row))
 
     return jsonify({})
+
+@app.route("/export-reports")
+def export_reports():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = sqlite3.connect("sai_fuel_mart.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM daily_closing ORDER BY date DESC")
+    rows = cur.fetchall()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Closing Reports"
+
+    headers = [
+        "Date", "MS Litres", "HSD Litres", "Fuel Sale", "Lube Sale",
+        "Digital Collection", "Credit Given", "Transport Received",
+        "Net Credit Due", "Expense", "Cash In Hand"
+    ]
+
+    ws.append(headers)
+
+    for row in rows:
+        ws.append([
+            row["date"],
+            row["ms_litres"],
+            row["hsd_litres"],
+            row["total_fuel_sale"],
+            row["lube_sale"],
+            row["digital_collection"],
+            row["credit_given"],
+            row["transport_received"],
+            row["net_credit_due"],
+            row["total_expense"],
+            row["cash_in_hand"]
+        ])
+
+    file_stream = BytesIO()
+    wb.save(file_stream)
+    file_stream.seek(0)
+
+    return send_file(
+        file_stream,
+        as_attachment=True,
+        download_name="Sai_Fuel_Mart_Reports.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 
 if __name__ == "__main__":
     init_db()

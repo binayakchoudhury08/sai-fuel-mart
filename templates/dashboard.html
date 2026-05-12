@@ -17,20 +17,22 @@
         </div>
 
         <nav>
-            <a class="active"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing </a>
-            <a><i class="fa-solid fa-gauge"></i> Dip Entry</a>
-            <a><i class="fa-solid fa-gas-pump"></i> Nozzle Sales</a>
-            <a><i class="fa-solid fa-oil-can"></i> Tank Stock</a>
-            <a><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a><i class="fa-solid fa-users"></i> Credit Parties</a>
-            <a><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a class="active" href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a href="#"><i class="fa-solid fa-gauge"></i> Dip Entry</a>
+            <a href="#"><i class="fa-solid fa-gas-pump"></i> Nozzle Sales</a>
+            <a href="#"><i class="fa-solid fa-oil-can"></i> Tank Stock</a>
+            <a href="#"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a href="#"><i class="fa-solid fa-users"></i> Credit Parties</a>
+            <a href="#"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a href="#"><i class="fa-solid fa-user-check"></i> Attendance</a>
             <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
             <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
         </nav>
 
-        <a href="/logout" class="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
+        <a href="/logout" class="logout">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+        </a>
     </aside>
 
     <main class="main">
@@ -58,45 +60,50 @@
                 <h1>Dashboard</h1>
                 <p>Welcome back, Admin! Here's what's happening today.</p>
             </div>
-            <div class="date-box"><i class="fa-solid fa-calendar-days"></i> 18 May 2025</div>
+
+            <div class="date-box">
+                <i class="fa-solid fa-calendar-days"></i> Latest Updated
+            </div>
         </section>
 
         <section class="kpi-grid">
+
             <div class="kpi-card">
                 <div class="icon orange"><i class="fa-solid fa-gas-pump"></i></div>
                 <div>
-                    <p>Today Petrol Sales</p>
-                    <h2>₹ 1,24,560.00</h2>
-                    <span>2456.78 Ltrs</span>
+                    <p>Latest Fuel Sale</p>
+                    <h2>₹ {{ latest["total_fuel_sale"] if latest else 0 }}</h2>
+                    <span>MS + HSD</span>
                 </div>
             </div>
 
             <div class="kpi-card">
-                <div class="icon yellow"><i class="fa-solid fa-gas-pump"></i></div>
+                <div class="icon yellow"><i class="fa-solid fa-oil-can"></i></div>
                 <div>
-                    <p>Today Diesel Sales</p>
-                    <h2>₹ 1,78,320.00</h2>
-                    <span>3456.25 Ltrs</span>
-                </div>
-            </div>
-
-            <div class="kpi-card">
-                <div class="icon green"><i class="fa-solid fa-fire-flame-simple"></i></div>
-                <div>
-                    <p>CNG Sales</p>
-                    <h2>₹ 45,780.00</h2>
-                    <span>1285.63 Kg</span>
+                    <p>Latest Lube Sale</p>
+                    <h2>₹ {{ latest["lube_sale"] if latest else 0 }}</h2>
+                    <span>Daily Closing</span>
                 </div>
             </div>
 
             <div class="kpi-card">
                 <div class="icon blue"><i class="fa-solid fa-wallet"></i></div>
                 <div>
-                    <p>Total Collection</p>
-                    <h2>₹ 3,48,660.00</h2>
-                    <span>Today</span>
+                    <p>Latest Cash In Hand</p>
+                    <h2>₹ {{ latest["cash_in_hand"] if latest else 0 }}</h2>
+                    <span>Final Cash</span>
                 </div>
             </div>
+
+            <div class="kpi-card">
+                <div class="icon red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div>
+                    <p>Net Credit Due</p>
+                    <h2>₹ {{ latest["net_credit_due"] if latest else 0 }}</h2>
+                    <span>Pending Due</span>
+                </div>
+            </div>
+
         </section>
 
         <section class="content-grid">
@@ -113,6 +120,11 @@
                         <polyline class="line2" points="0,210 80,180 160,195 240,150 320,160 400,130 480,170 560,140 640,150 720,115 800,100" />
                     </svg>
                 </div>
+
+                <div class="monthly-box">
+                    <span>Total Saved Sales</span>
+                    <h2>₹ {{ monthly["monthly_sale"] if monthly and monthly["monthly_sale"] else 0 }}</h2>
+                </div>
             </div>
 
             <div class="card alerts-card">
@@ -121,10 +133,10 @@
                     <a>View all</a>
                 </div>
 
-                <div class="alert">⚠ Diesel Tank-2 stock is low <span>10 min ago</span></div>
-                <div class="alert">🚚 Pending credit transport approval <span>25 min ago</span></div>
-                <div class="alert">🔴 Credit payment overdue <span>1 hr ago</span></div>
-                <div class="alert">⛽ Nozzle 3 abnormal sales detected <span>2 hrs ago</span></div>
+                <div class="alert">⚠ Check daily closing before export <span>Today</span></div>
+                <div class="alert">🔴 Credit due needs review <span>Today</span></div>
+                <div class="alert">⛽ Verify nozzle testing entries <span>Today</span></div>
+                <div class="alert">📦 Check lube stock update <span>Today</span></div>
             </div>
 
             <div class="card task-card">
@@ -134,8 +146,8 @@
                 </div>
 
                 <label><input type="checkbox"> Daily Closing Check</label>
-                <label><input type="checkbox" checked> Update Credit Transport</label>
-                <label><input type="checkbox" checked> Check Tank Dip</label>
+                <label><input type="checkbox"> Update Credit Transport</label>
+                <label><input type="checkbox"> Check Tank Dip</label>
                 <label><input type="checkbox"> Prepare Cash Report</label>
                 <label><input type="checkbox"> Check Lube Stock</label>
                 <label><input type="checkbox"> Attendance Entry</label>
@@ -147,52 +159,75 @@
 
                 <div class="stock-row">
                     <b>MS / Petrol</b>
-                    <span>Opening: 12,314 L</span>
-                    <span>Received: 0 L</span>
-                    <span>Sold: 2,476.86 L</span>
-                    <strong>Closing: 9,837.14 L</strong>
+                    <span>Latest Litres Sold: {{ latest["ms_litres"] if latest else 0 }} L</span>
+                    <strong>From Daily Closing</strong>
                 </div>
 
                 <div class="stock-row">
                     <b>HSD / Diesel</b>
-                    <span>Opening: 18,457 L</span>
-                    <span>Received: 20,000 L</span>
-                    <span>Sold: 22,000.38 L</span>
-                    <strong>Closing: 16,456.62 L</strong>
+                    <span>Latest Litres Sold: {{ latest["hsd_litres"] if latest else 0 }} L</span>
+                    <strong>From Daily Closing</strong>
                 </div>
             </div>
 
             <div class="card rates-card">
                 <h3>Fuel Rates</h3>
-                <p>Updated: 18 May 2025, 10:30 AM</p>
-                <div class="rate-row"><span>Petrol</span><b>₹ 106.25 /Ltr</b></div>
-                <div class="rate-row"><span>Diesel</span><b>₹ 93.72 /Ltr</b></div>
-                <div class="rate-row"><span>CNG</span><b>₹ 75.50 /Kg</b></div>
+                <p>Rates are managed from Settings</p>
+
+                <div class="rate-row"><span>MS Rate</span><b>From Settings</b></div>
+                <div class="rate-row"><span>HSD Rate</span><b>From Settings</b></div>
             </div>
 
             <div class="card credit-card">
                 <div class="card-head">
-                    <h3>Pending Credit</h3>
-                    <a>View all</a>
+                    <h3>Credit Status</h3>
+                    <a href="/reports">View Reports</a>
                 </div>
 
-                <div class="credit-row"><span>Shiv Transport</span><b>₹ 45,780.00</b><small>Overdue 5 days</small></div>
-                <div class="credit-row"><span>Patel Logistics</span><b>₹ 32,600.00</b><small>Overdue 3 days</small></div>
-                <div class="credit-row"><span>Royal Enterprises</span><b>₹ 18,950.00</b><small>Overdue 2 days</small></div>
+                <div class="credit-row">
+                    <span>Credit Given</span>
+                    <b>₹ {{ latest["credit_given"] if latest else 0 }}</b>
+                    <small>Latest closing</small>
+                </div>
 
-                <h2>₹ 97,330.00</h2>
+                <div class="credit-row">
+                    <span>Transport Received</span>
+                    <b>₹ {{ latest["transport_received"] if latest else 0 }}</b>
+                    <small>Latest closing</small>
+                </div>
+
+                <h2>₹ {{ latest["net_credit_due"] if latest else 0 }}</h2>
             </div>
 
             <div class="card transport-card">
                 <div class="card-head">
-                    <h3>Credit Transport Summary</h3>
-                    <a>View all</a>
+                    <h3>Latest Daily Closing Summary</h3>
+                    <a href="/reports">View all</a>
                 </div>
 
-                <div class="entry"><b>Shiv Transport</b><span>HSD • 500 Ltrs • ₹ 46,990</span><em class="pending">Pending</em></div>
-                <div class="entry"><b>S.V.T</b><span>HSD • 900 Ltrs • ₹ 84,582</span><em>Paid</em></div>
-                <div class="entry"><b>Patel Logistics</b><span>HSD • 300 Ltrs • ₹ 28,194</span><em class="pending">Partial</em></div>
-                <div class="entry"><b>Royal Enterprises</b><span>HSD • 700 Ltrs • ₹ 65,604</span><em class="pending">Pending</em></div>
+                <div class="entry">
+                    <b>Date</b>
+                    <span>{{ latest["date"] if latest else "No record saved" }}</span>
+                    <em>Saved</em>
+                </div>
+
+                <div class="entry">
+                    <b>Total Fuel Sale</b>
+                    <span>₹ {{ latest["total_fuel_sale"] if latest else 0 }}</span>
+                    <em>Fuel</em>
+                </div>
+
+                <div class="entry">
+                    <b>Total Expense</b>
+                    <span>₹ {{ latest["total_expense"] if latest else 0 }}</span>
+                    <em class="pending">Expense</em>
+                </div>
+
+                <div class="entry">
+                    <b>Cash In Hand</b>
+                    <span>₹ {{ latest["cash_in_hand"] if latest else 0 }}</span>
+                    <em>Cash</em>
+                </div>
             </div>
 
         </section>
