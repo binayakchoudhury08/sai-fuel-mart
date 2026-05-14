@@ -733,9 +733,7 @@ body{
 
 <div class="tank-progress">
 
-<div class="tank-fill petrol-fill"
-style="width: {{ ms_percent }}%;">
-</div>
+<div class="tank-fill petrol-fill" data-percent="{{ ms_percent }}"></div>
 
 </div>
 
@@ -812,9 +810,7 @@ style="width: {{ ms_percent }}%;">
 
 <div class="tank-progress">
 
-<div class="tank-fill diesel-fill"
-style="width: {{ hsd_percent }}%;">
-</div>
+<div class="tank-fill diesel-fill" data-percent="{{ hsd_percent }}"></div>
 
 </div>
 
@@ -1053,12 +1049,19 @@ All lube stock levels normal.
 </script>
 
 <script>
+var tankFills = document.querySelectorAll(".tank-fill");
+
+tankFills.forEach(function(fill){
+    var percent = fill.getAttribute("data-percent") || 0;
+    fill.style.width = percent + "%";
+});
+
 var labels = JSON.parse(document.getElementById("chart-labels").textContent || "[]");
 var sales = JSON.parse(document.getElementById("chart-sales").textContent || "[]");
 
 var chartCanvas = document.getElementById("salesChart");
 
-if (chartCanvas) {
+if(chartCanvas){
     new Chart(chartCanvas, {
         type: "line",
         data: {
