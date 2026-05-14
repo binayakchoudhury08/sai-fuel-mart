@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Lube - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+</head>
+
+<body>
+
+<div class="main-content">
+
+    <div class="topbar">
+        <div>
+            <h1>Edit Lube Product</h1>
+            <p>Manual stock update</p>
+        </div>
+    </div>
+
+    <form method="POST" action="/update-lube/{{ item['id'] }}" class="box">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Product Name</label>
+                <input type="text" name="product_name" value="{{ item['product_name'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Selling Rate</label>
+                <input type="number" step="0.01" name="selling_rate" value="{{ item['selling_rate'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Opening Stock</label>
+                <input type="number" step="0.01" name="opening_stock" value="{{ item['opening_stock'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Purchase Qty</label>
+                <input type="number" step="0.01" name="purchase_qty" value="{{ item['purchase_qty'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Sale Qty</label>
+                <input type="number" step="0.01" name="sale_qty" value="{{ item['sale_qty'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Closing Stock</label>
+                <input type="number" step="0.01" value="{{ item['closing_stock'] }}" readonly>
+            </div>
+
+        </div>
+
+        <br>
+
+        <button class="save-btn-top" type="submit">Update Product</button>
+        <a href="/lube-stock" class="add-btn">Back</a>
+
+    </form>
+
+</div>
+
+</body>
+</html>

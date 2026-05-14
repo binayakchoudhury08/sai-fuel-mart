@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>Edit Tank Level</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/daily_closing.css') }}">
+
+<style>
+
+.edit-box{
+    max-width:900px;
+    margin:auto;
+    background:white;
+    padding:35px;
+    border-radius:28px;
+    box-shadow:0 20px 55px rgba(0,0,0,.08);
+    margin-top:40px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:20px;
+}
+
+.save-btn{
+    margin-top:30px;
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 30px;
+    border-radius:16px;
+    font-size:15px;
+    cursor:pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="edit-box">
+
+<h1>Edit Tank Level</h1>
+
+<br>
+
+<form method="POST"
+      action="/update-tank-level/{{ row['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+    <label>Date</label>
+    <input type="date"
+           name="date"
+           value="{{ row['date'] }}">
+</div>
+
+<div class="input-group">
+    <label>Fuel Type</label>
+
+    <select name="fuel_type">
+
+        <option value="MS"
+        {% if row["fuel_type"]=="MS" %}
+        selected
+        {% endif %}
+        >MS</option>
+
+        <option value="HSD"
+        {% if row["fuel_type"]=="HSD" %}
+        selected
+        {% endif %}
+        >HSD</option>
+
+    </select>
+
+</div>
+
+<div class="input-group">
+    <label>Opening Stock</label>
+    <input type="number"
+           step="0.01"
+           name="opening_stock"
+           value="{{ row['opening_stock'] }}">
+</div>
+
+<div class="input-group">
+    <label>Received Stock</label>
+    <input type="number"
+           step="0.01"
+           name="received_stock"
+           value="{{ row['received_stock'] }}">
+</div>
+
+<div class="input-group">
+    <label>Own Tanker</label>
+    <input type="number"
+           step="0.01"
+           name="own_tanker_stock"
+           value="{{ row['own_tanker_stock'] }}">
+</div>
+
+<div class="input-group">
+    <label>Sale Qty</label>
+    <input type="number"
+           step="0.01"
+           name="sale_stock"
+           value="{{ row['sale_stock'] }}">
+</div>
+
+<div class="input-group">
+    <label>Actual Dip Stock</label>
+    <input type="number"
+           step="0.01"
+           name="current_stock"
+           value="{{ row['current_stock'] }}">
+</div>
+
+</div>
+
+<button class="save-btn">
+    Update Tank Level
+</button>
+
+</form>
+
+</div>
+
+</body>
+</html>

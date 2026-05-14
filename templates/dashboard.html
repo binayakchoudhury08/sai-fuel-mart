@@ -1,242 +1,1091 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>SAI FUEL MART Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<meta charset="UTF-8">
+<title>Sai Fuel Mart Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Inter,sans-serif;
+}
+
+body{
+    background:#f3f6fb;
+    color:#111827;
+}
+
+.app{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:260px;
+    background:#07120c;
+    color:white;
+    padding:24px;
+    position:sticky;
+    top:0;
+    height:100vh;
+    border-radius:0 30px 30px 0;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    color:#9ca3af;
+    margin-top:6px;
+    font-size:12px;
+}
+
+.sidebar nav{
+    margin-top:35px;
+}
+
+.sidebar a{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    text-decoration:none;
+    color:#d1d5db;
+    padding:14px;
+    border-radius:18px;
+    margin-bottom:10px;
+    transition:.3s;
+    font-size:14px;
+}
+
+.sidebar a:hover,
+.sidebar a.active{
+    background:#10251a;
+    color:#4ade80;
+    transform:translateX(4px);
+}
+
+/* MAIN */
+
+.main{
+    flex:1;
+    padding:28px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+}
+
+.page-title h1{
+    font-size:34px;
+}
+
+.page-title p{
+    color:#6b7280;
+    margin-top:8px;
+}
+
+.top-actions{
+    display:flex;
+    gap:14px;
+}
+
+.top-btn{
+    background:white;
+    border:none;
+    width:48px;
+    height:48px;
+    border-radius:18px;
+    box-shadow:0 10px 25px rgba(0,0,0,.06);
+    cursor:pointer;
+}
+
+/* KPI */
+
+.kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:28px;
+}
+
+.kpi-card{
+    background:white;
+    border-radius:28px;
+    padding:22px;
+    box-shadow:0 18px 40px rgba(0,0,0,.05);
+    transition:.3s;
+}
+
+.kpi-card:hover{
+    transform:translateY(-5px);
+}
+
+.kpi-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:18px;
+}
+
+.kpi-icon{
+    width:54px;
+    height:54px;
+    border-radius:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+}
+
+.blue-bg{
+    background:#dbeafe;
+    color:#2563eb;
+}
+
+.green-bg{
+    background:#dcfce7;
+    color:#16a34a;
+}
+
+.orange-bg{
+    background:#ffedd5;
+    color:#ea580c;
+}
+
+.red-bg{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.kpi-card h2{
+    font-size:28px;
+    margin-top:6px;
+}
+
+.kpi-card p{
+    color:#6b7280;
+    font-size:13px;
+}
+
+/* GRID */
+
+.dashboard-grid{
+    display:grid;
+    grid-template-columns:1.4fr 1fr;
+    gap:24px;
+}
+
+.panel{
+    background:white;
+    border-radius:30px;
+    padding:24px;
+    box-shadow:0 18px 40px rgba(0,0,0,.05);
+    margin-bottom:24px;
+}
+
+.panel-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:22px;
+}
+
+.panel-head h3{
+    font-size:20px;
+}
+
+.panel-head a{
+    text-decoration:none;
+    color:#16a34a;
+    font-size:13px;
+    font-weight:700;
+}
+
+/* OPERATIONS */
+
+.operations-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:16px;
+}
+
+.operation-card{
+    background:#f8fafc;
+    border-radius:22px;
+    padding:18px;
+    transition:.3s;
+    text-decoration:none;
+    color:#111827;
+    border:1px solid #eef2f7;
+}
+
+.operation-card:hover{
+    background:white;
+    transform:translateY(-5px);
+    box-shadow:0 15px 35px rgba(0,0,0,.06);
+}
+
+.operation-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:14px;
+}
+
+.operation-icon{
+    width:48px;
+    height:48px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+}
+
+.operation-card h4{
+    margin-bottom:8px;
+}
+
+.operation-card p{
+    color:#6b7280;
+    font-size:13px;
+}
+
+/* TANK */
+
+.tank-grid{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.tank-card{
+    background:#f8fafc;
+    border:1px solid #edf2f7;
+    border-radius:26px;
+    padding:18px;
+    transition:.3s;
+    position:relative;
+    overflow:hidden;
+}
+
+.tank-card:hover{
+    transform:translateY(-4px);
+    background:white;
+    box-shadow:0 18px 40px rgba(0,0,0,.06);
+}
+
+.tank-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+}
+
+.tank-left{
+    display:flex;
+    align-items:center;
+    gap:14px;
+}
+
+.tank-icon{
+    width:52px;
+    height:52px;
+    border-radius:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+}
+
+.petrol-icon{
+    background:#dbeafe;
+    color:#2563eb;
+}
+
+.diesel-icon{
+    background:#dcfce7;
+    color:#16a34a;
+}
+
+.tank-title h3{
+    font-size:18px;
+    margin-bottom:4px;
+}
+
+.tank-title p{
+    font-size:12px;
+    color:#6b7280;
+}
+
+.tank-percent{
+    font-size:14px;
+    font-weight:700;
+    color:#16a34a;
+}
+
+.tank-progress{
+    width:100%;
+    height:14px;
+    background:#e5e7eb;
+    border-radius:999px;
+    overflow:hidden;
+    margin-bottom:16px;
+}
+
+.tank-fill{
+    height:100%;
+    border-radius:999px;
+    transition:1s ease;
+}
+
+.petrol-fill{
+    background:linear-gradient(to right,#2563eb,#60a5fa);
+}
+
+.diesel-fill{
+    background:linear-gradient(to right,#16a34a,#4ade80);
+}
+
+.tank-bottom{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:6px;
+}
+
+.tank-stock{
+    font-size:24px;
+    font-weight:700;
+}
+
+.tank-chip{
+    padding:8px 14px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+}
+
+.gain{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.loss{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.tank-hover{
+    position:absolute;
+    top:20px;
+    right:20px;
+    width:180px;
+    background:#111827;
+    color:white;
+    padding:15px;
+    border-radius:18px;
+    opacity:0;
+    visibility:hidden;
+    transition:.3s;
+    z-index:100;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
+}
+
+.tank-card:hover .tank-hover{
+    opacity:1;
+    visibility:visible;
+}
+
+.tank-hover p{
+    font-size:12px;
+    margin-bottom:7px;
+}
+
+/* ALERT */
+
+.alert{
+    background:#fff7ed;
+    border:1px solid #fed7aa;
+    padding:15px;
+    border-radius:18px;
+    margin-bottom:14px;
+    color:#9a3412;
+    font-size:13px;
+}
+
+/* TABLE */
+
+.transport-table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0 10px;
+}
+
+.transport-table th{
+    text-align:left;
+    font-size:12px;
+    color:#6b7280;
+    padding:0 12px;
+}
+
+.transport-table td{
+    background:#f8fafc;
+    padding:14px 12px;
+}
+
+.transport-table tr td:first-child{
+    border-radius:14px 0 0 14px;
+}
+
+.transport-table tr td:last-child{
+    border-radius:0 14px 14px 0;
+}
+
+/* RESPONSIVE */
+
+@media(max-width:1200px){
+
+.kpi-grid{
+    grid-template-columns:repeat(2,1fr);
+}
+
+.dashboard-grid{
+    grid-template-columns:1fr;
+}
+
+}
+
+@media(max-width:700px){
+
+.kpi-grid{
+    grid-template-columns:1fr;
+}
+
+.operations-grid{
+    grid-template-columns:1fr;
+}
+
+}
+
+</style>
 </head>
 
 <body>
 
-<div class="dashboard">
+<div class="app">
 
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>SAI FUEL MART</h2>
-            <p>FUELING YOUR TRUST</p>
-        </div>
+<!-- SIDEBAR -->
 
-        <nav>
-            <a class="active" href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="#"><i class="fa-solid fa-gauge"></i> Dip Entry</a>
-            <a href="#"><i class="fa-solid fa-gas-pump"></i> Nozzle Sales</a>
-            <a href="#"><i class="fa-solid fa-oil-can"></i> Tank Stock</a>
-            <a href="#"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="#"><i class="fa-solid fa-users"></i> Credit Parties</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
+<aside class="sidebar">
 
-        <a href="/logout" class="logout">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
-        </a>
-    </aside>
+<div class="logo">
+    <h2>SAI FUEL MART</h2>
+    <p>Fuel Operations System</p>
+</div>
 
-    <main class="main">
+<nav>
 
-        <header class="topbar">
-            <button class="menu"><i class="fa-solid fa-bars"></i></button>
+<a class="active" href="/dashboard">
+    <i class="fa-solid fa-house"></i>
+    Dashboard
+</a>
 
-            <div class="search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                Search anything...
-            </div>
+<a href="/daily-closing">
+    <i class="fa-solid fa-file-invoice-dollar"></i>
+    Daily Closing
+</a>
 
-            <div class="user">
-                <i class="fa-solid fa-bell"></i>
-                <div class="avatar">AM</div>
-                <div>
-                    <h4>Admin User</h4>
-                    <p>Administrator</p>
-                </div>
-            </div>
-        </header>
+<a href="/tank-level">
+    <i class="fa-solid fa-oil-well"></i>
+    Tank Level
+</a>
 
-        <section class="title-row">
-            <div>
-                <h1>Dashboard</h1>
-                <p>Welcome back, Admin! Here's what's happening today.</p>
-            </div>
+<a href="/credit-transport">
+    <i class="fa-solid fa-truck"></i>
+    Credit Transport
+</a>
 
-            <div class="date-box">
-                <i class="fa-solid fa-calendar-days"></i> Latest Updated
-            </div>
-        </section>
+<a href="/digital-collection">
+    <i class="fa-solid fa-credit-card"></i>
+    Digital Collection
+</a>
 
-        <section class="kpi-grid">
+<a href="/lube-stock">
+    <i class="fa-solid fa-bottle-droplet"></i>
+    Lube Stock
+</a>
 
-            <div class="kpi-card">
-                <div class="icon orange"><i class="fa-solid fa-gas-pump"></i></div>
-                <div>
-                    <p>Latest Fuel Sale</p>
-                    <h2>₹ {{ latest["total_fuel_sale"] if latest else 0 }}</h2>
-                    <span>MS + HSD</span>
-                </div>
-            </div>
+<a href="/attendance">
+    <i class="fa-solid fa-user-check"></i>
+    Attendance
+</a>
 
-            <div class="kpi-card">
-                <div class="icon yellow"><i class="fa-solid fa-oil-can"></i></div>
-                <div>
-                    <p>Latest Lube Sale</p>
-                    <h2>₹ {{ latest["lube_sale"] if latest else 0 }}</h2>
-                    <span>Daily Closing</span>
-                </div>
-            </div>
+<a href="/reports">
+    <i class="fa-solid fa-chart-line"></i>
+    Reports
+</a>
 
-            <div class="kpi-card">
-                <div class="icon blue"><i class="fa-solid fa-wallet"></i></div>
-                <div>
-                    <p>Latest Cash In Hand</p>
-                    <h2>₹ {{ latest["cash_in_hand"] if latest else 0 }}</h2>
-                    <span>Final Cash</span>
-                </div>
-            </div>
+<a href="/settings">
+    <i class="fa-solid fa-gear"></i>
+    Settings
+</a>
 
-            <div class="kpi-card">
-                <div class="icon red"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                <div>
-                    <p>Net Credit Due</p>
-                    <h2>₹ {{ latest["net_credit_due"] if latest else 0 }}</h2>
-                    <span>Pending Due</span>
-                </div>
-            </div>
+</nav>
 
-        </section>
+</aside>
 
-        <section class="content-grid">
+<!-- MAIN -->
 
-            <div class="card chart-card">
-                <div class="card-head">
-                    <h3>Sales Analytics</h3>
-                    <button>This Month</button>
-                </div>
+<main class="main">
 
-                <div class="fake-chart">
-                    <svg viewBox="0 0 800 260" preserveAspectRatio="none">
-                        <polyline points="0,160 80,120 160,140 240,80 320,100 400,60 480,110 560,75 640,90 720,55 800,80" />
-                        <polyline class="line2" points="0,210 80,180 160,195 240,150 320,160 400,130 480,170 560,140 640,150 720,115 800,100" />
-                    </svg>
-                </div>
+<div class="topbar">
 
-                <div class="monthly-box">
-                    <span>Total Saved Sales</span>
-                    <h2>₹ {{ monthly["monthly_sale"] if monthly and monthly["monthly_sale"] else 0 }}</h2>
-                </div>
-            </div>
+<div class="page-title">
+    <h1>Fuel Operations Dashboard</h1>
+    <p>Connected operations and live fuel monitoring</p>
+</div>
 
-            <div class="card alerts-card">
-                <div class="card-head">
-                    <h3>Alerts</h3>
-                    <a>View all</a>
-                </div>
-
-                <div class="alert">⚠ Check daily closing before export <span>Today</span></div>
-                <div class="alert">🔴 Credit due needs review <span>Today</span></div>
-                <div class="alert">⛽ Verify nozzle testing entries <span>Today</span></div>
-                <div class="alert">📦 Check lube stock update <span>Today</span></div>
-            </div>
-
-            <div class="card task-card">
-                <div class="card-head">
-                    <h3>Task Remaining</h3>
-                    <a>View all</a>
-                </div>
-
-                <label><input type="checkbox"> Daily Closing Check</label>
-                <label><input type="checkbox"> Update Credit Transport</label>
-                <label><input type="checkbox"> Check Tank Dip</label>
-                <label><input type="checkbox"> Prepare Cash Report</label>
-                <label><input type="checkbox"> Check Lube Stock</label>
-                <label><input type="checkbox"> Attendance Entry</label>
-            </div>
-
-            <div class="card tank-card">
-                <h3>Tank Stock Movement</h3>
-                <p class="muted">Opening + Received - Sold = Closing</p>
-
-                <div class="stock-row">
-                    <b>MS / Petrol</b>
-                    <span>Latest Litres Sold: {{ latest["ms_litres"] if latest else 0 }} L</span>
-                    <strong>From Daily Closing</strong>
-                </div>
-
-                <div class="stock-row">
-                    <b>HSD / Diesel</b>
-                    <span>Latest Litres Sold: {{ latest["hsd_litres"] if latest else 0 }} L</span>
-                    <strong>From Daily Closing</strong>
-                </div>
-            </div>
-
-            <div class="card rates-card">
-                <h3>Fuel Rates</h3>
-                <p>Rates are managed from Settings</p>
-
-                <div class="rate-row"><span>MS Rate</span><b>From Settings</b></div>
-                <div class="rate-row"><span>HSD Rate</span><b>From Settings</b></div>
-            </div>
-
-            <div class="card credit-card">
-                <div class="card-head">
-                    <h3>Credit Status</h3>
-                    <a href="/reports">View Reports</a>
-                </div>
-
-                <div class="credit-row">
-                    <span>Credit Given</span>
-                    <b>₹ {{ latest["credit_given"] if latest else 0 }}</b>
-                    <small>Latest closing</small>
-                </div>
-
-                <div class="credit-row">
-                    <span>Transport Received</span>
-                    <b>₹ {{ latest["transport_received"] if latest else 0 }}</b>
-                    <small>Latest closing</small>
-                </div>
-
-                <h2>₹ {{ latest["net_credit_due"] if latest else 0 }}</h2>
-            </div>
-
-            <div class="card transport-card">
-                <div class="card-head">
-                    <h3>Latest Daily Closing Summary</h3>
-                    <a href="/reports">View all</a>
-                </div>
-
-                <div class="entry">
-                    <b>Date</b>
-                    <span>{{ latest["date"] if latest else "No record saved" }}</span>
-                    <em>Saved</em>
-                </div>
-
-                <div class="entry">
-                    <b>Total Fuel Sale</b>
-                    <span>₹ {{ latest["total_fuel_sale"] if latest else 0 }}</span>
-                    <em>Fuel</em>
-                </div>
-
-                <div class="entry">
-                    <b>Total Expense</b>
-                    <span>₹ {{ latest["total_expense"] if latest else 0 }}</span>
-                    <em class="pending">Expense</em>
-                </div>
-
-                <div class="entry">
-                    <b>Cash In Hand</b>
-                    <span>₹ {{ latest["cash_in_hand"] if latest else 0 }}</span>
-                    <em>Cash</em>
-                </div>
-            </div>
-
-        </section>
-
-        <footer>© 2025 <span>SAI FUEL MART.</span> All rights reserved.</footer>
-
-    </main>
+<div class="top-actions">
+    <button class="top-btn"><i class="fa-regular fa-bell"></i></button>
+    <button class="top-btn"><i class="fa-regular fa-user"></i></button>
+</div>
 
 </div>
+
+<!-- KPI -->
+
+<section class="kpi-grid">
+
+<div class="kpi-card">
+
+<div class="kpi-top">
+
+<div>
+    <p>MS Sale</p>
+    <h2>{{ latest["ms_litres"] if latest else 0 }}</h2>
+</div>
+
+<div class="kpi-icon blue-bg">
+    <i class="fa-solid fa-gas-pump"></i>
+</div>
+
+</div>
+
+<p>Latest petrol sale litres</p>
+
+</div>
+
+<div class="kpi-card">
+
+<div class="kpi-top">
+
+<div>
+    <p>HSD Sale</p>
+    <h2>{{ latest["hsd_litres"] if latest else 0 }}</h2>
+</div>
+
+<div class="kpi-icon green-bg">
+    <i class="fa-solid fa-oil-can"></i>
+</div>
+
+</div>
+
+<p>Latest diesel sale litres</p>
+
+</div>
+
+<div class="kpi-card">
+
+<div class="kpi-top">
+
+<div>
+    <p>Monthly Sale</p>
+
+    <h2>
+
+    ₹
+
+    {% set sale = monthly["monthly_sale"] if monthly and monthly["monthly_sale"] else 0 %}
+
+    {% if sale >= 10000000 %}
+
+    {{ "%.2f"|format(sale / 10000000) }} Cr
+
+    {% elif sale >= 100000 %}
+
+    {{ "%.2f"|format(sale / 100000) }} L
+
+    {% else %}
+
+    {{ "%.0f"|format(sale) }}
+
+    {% endif %}
+
+    </h2>
+
+</div>
+
+<div class="kpi-icon orange-bg">
+    <i class="fa-solid fa-chart-line"></i>
+</div>
+
+</div>
+
+<p>Total monthly fuel revenue</p>
+
+</div>
+
+<div class="kpi-card">
+
+<div class="kpi-top">
+
+<div>
+    <p>Credit Due</p>
+    <h2>₹ {{ monthly["monthly_credit"] if monthly and monthly["monthly_credit"] else 0 }}</h2>
+</div>
+
+<div class="kpi-icon red-bg">
+    <i class="fa-solid fa-truck"></i>
+</div>
+
+</div>
+
+<p>Outstanding transport credit</p>
+
+</div>
+
+</section>
+
+<div class="dashboard-grid">
+
+<!-- LEFT -->
+
+<div>
+
+<div class="panel">
+
+<div class="panel-head">
+    <h3>Fuel Sales Trend</h3>
+    <a href="/reports">View Reports</a>
+</div>
+
+<canvas id="salesChart"></canvas>
+
+</div>
+
+<div class="panel">
+
+<div class="panel-head">
+    <h3>Live Tank Levels</h3>
+    <a href="/tank-level">Manage</a>
+</div>
+
+<div class="tank-grid">
+
+<!-- MS -->
+
+{% if ms_tank %}
+
+{% set ms_percent = 0 %}
+
+{% if ms_tank["current_stock"] %}
+    {% set ms_percent = ((ms_tank["current_stock"] / 22000) * 100) | round(1) %}
+{% endif %}
+
+<div class="tank-card">
+
+<div class="tank-top">
+
+<div class="tank-left">
+
+<div class="tank-icon petrol-icon">
+    <i class="fa-solid fa-gas-pump"></i>
+</div>
+
+<div class="tank-title">
+    <h3>MS Tank</h3>
+    <p>Petrol Stock</p>
+</div>
+
+</div>
+
+<div class="tank-percent">
+    {{ ms_percent }}%
+</div>
+
+</div>
+
+<div class="tank-progress">
+
+<div class="tank-fill petrol-fill"
+style="width: {{ ms_percent }}%;">
+</div>
+
+</div>
+
+<div class="tank-bottom">
+
+<div class="tank-stock">
+    {{ ms_tank["current_stock"] or 0 }} L
+</div>
+
+{% if (ms_tank["gain_qty"] or 0) > 0 %}
+
+<div class="tank-chip gain">
++ {{ ms_tank["gain_qty"] }} L
+</div>
+
+{% elif (ms_tank["shortage_qty"] or 0) > 0 %}
+
+<div class="tank-chip loss">
+- {{ ms_tank["shortage_qty"] }} L
+</div>
+
+{% endif %}
+
+</div>
+
+<div class="tank-hover">
+
+<p><b>Opening:</b> {{ ms_tank["opening_stock"] }}</p>
+
+<p><b>Received:</b> {{ ms_tank["received_stock"] }}</p>
+
+<p><b>Sale:</b> {{ ms_tank["sale_stock"] }}</p>
+
+<p><b>Date:</b> {{ ms_tank["date"] }}</p>
+
+</div>
+
+</div>
+
+{% endif %}
+
+<!-- HSD -->
+
+{% if hsd_tank %}
+
+{% set hsd_percent = 0 %}
+
+{% if hsd_tank["current_stock"] %}
+    {% set hsd_percent = ((hsd_tank["current_stock"] / 35000) * 100) | round(1) %}
+{% endif %}
+
+<div class="tank-card">
+
+<div class="tank-top">
+
+<div class="tank-left">
+
+<div class="tank-icon diesel-icon">
+    <i class="fa-solid fa-oil-can"></i>
+</div>
+
+<div class="tank-title">
+    <h3>HSD Tank</h3>
+    <p>Diesel Stock</p>
+</div>
+
+</div>
+
+<div class="tank-percent">
+    {{ hsd_percent }}%
+</div>
+
+</div>
+
+<div class="tank-progress">
+
+<div class="tank-fill diesel-fill"
+style="width: {{ hsd_percent }}%;">
+</div>
+
+</div>
+
+<div class="tank-bottom">
+
+<div class="tank-stock">
+    {{ hsd_tank["current_stock"] or 0 }} L
+</div>
+
+{% if (hsd_tank["gain_qty"] or 0) > 0 %}
+
+<div class="tank-chip gain">
++ {{ hsd_tank["gain_qty"] }} L
+</div>
+
+{% elif (hsd_tank["shortage_qty"] or 0) > 0 %}
+
+<div class="tank-chip loss">
+- {{ hsd_tank["shortage_qty"] }} L
+</div>
+
+{% endif %}
+
+</div>
+
+<div class="tank-hover">
+
+<p><b>Opening:</b> {{ hsd_tank["opening_stock"] }}</p>
+
+<p><b>Received:</b> {{ hsd_tank["received_stock"] }}</p>
+
+<p><b>Sale:</b> {{ hsd_tank["sale_stock"] }}</p>
+
+<p><b>Date:</b> {{ hsd_tank["date"] }}</p>
+
+</div>
+
+</div>
+
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+<!-- RIGHT -->
+
+<div>
+
+<div class="panel">
+
+<div class="panel-head">
+    <h3>Connected Operations</h3>
+</div>
+
+<div class="operations-grid">
+
+<a href="/daily-closing" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon blue-bg">
+    <i class="fa-solid fa-file-invoice-dollar"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Daily Closing</h4>
+<p>Fuel sales and expenses.</p>
+
+</a>
+
+<a href="/tank-level" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon green-bg">
+    <i class="fa-solid fa-oil-well"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Tank Level</h4>
+<p>Stock and gain shortage.</p>
+
+</a>
+
+<a href="/credit-transport" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon red-bg">
+    <i class="fa-solid fa-truck"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Transport</h4>
+<p>Credit parties and payments.</p>
+
+</a>
+
+<a href="/digital-collection" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon orange-bg">
+    <i class="fa-solid fa-credit-card"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Collections</h4>
+<p>UPI and digital collection.</p>
+
+</a>
+
+<a href="/lube-stock" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon green-bg">
+    <i class="fa-solid fa-bottle-droplet"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Lube Stock</h4>
+<p>Lubricant inventory tracking.</p>
+
+</a>
+
+<a href="/attendance" class="operation-card">
+
+<div class="operation-top">
+
+<div class="operation-icon blue-bg">
+    <i class="fa-solid fa-user-check"></i>
+</div>
+
+<i class="fa-solid fa-arrow-up-right-from-square"></i>
+
+</div>
+
+<h4>Attendance</h4>
+<p>Staff attendance management.</p>
+
+</a>
+
+</div>
+
+</div>
+
+<div class="panel">
+
+<div class="panel-head">
+    <h3>Low Stock Alerts</h3>
+    <a href="/lube-stock">Open</a>
+</div>
+
+{% if low_lube %}
+
+{% for item in low_lube %}
+
+<div class="alert">
+{{ item["product_name"] }} stock running low.
+</div>
+
+{% endfor %}
+
+{% else %}
+
+<div class="alert">
+All lube stock levels normal.
+</div>
+
+{% endif %}
+
+</div>
+
+<div class="panel">
+
+<div class="panel-head">
+    <h3>Transport Overview</h3>
+    <a href="/credit-transport">Manage</a>
+</div>
+
+<table class="transport-table">
+
+<tr>
+    <th>Party</th>
+    <th>Due</th>
+</tr>
+
+{% for t in transporter_summary %}
+
+<tr>
+
+<td>{{ t["party_name"] }}</td>
+
+<td>₹ {{ t["balance_due"] }}</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+</main>
+
+</div>
+<script type="application/json" id="chart-labels">
+{{ chart_rows|map(attribute='date')|list|tojson }}
+</script>
+
+<script type="application/json" id="chart-sales">
+{{ chart_rows|map(attribute='total_fuel_sale')|list|tojson }}
+</script>
+
+<script>
+var labels = JSON.parse(document.getElementById("chart-labels").textContent || "[]");
+var sales = JSON.parse(document.getElementById("chart-sales").textContent || "[]");
+
+var chartCanvas = document.getElementById("salesChart");
+
+if (chartCanvas) {
+    new Chart(chartCanvas, {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Fuel Sale",
+                data: sales,
+                borderColor: "#2563eb",
+                backgroundColor: "rgba(37,99,235,.10)",
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+</script>
 
 </body>
 </html>

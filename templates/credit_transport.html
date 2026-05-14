@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Credit Transport - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+<div class="container">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <h2>SAI FUEL MART</h2>
+            <p>FUELING YOUR TRUST</p>
+        </div>
+
+        <nav>
+            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a class="active" href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+
+        <div class="topbar">
+            <div>
+                <h1>Credit Transport</h1>
+                <p>Manage transporter credit balance and payments</p>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-user-plus"></i> Add Transporter
+            </div>
+
+            <form method="POST" action="/save-transporter">
+                <div class="form-grid">
+
+                    <div class="input-group">
+                        <label>Transporter / Party Name</label>
+                        <input type="text" name="party_name" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Opening Balance</label>
+                        <input type="number" step="0.01" name="opening_balance" value="0">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Status</label>
+                        <select name="status">
+                            <option>Active</option>
+                            <option>Inactive</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <br>
+
+                <button class="save-btn-top" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Transporter
+                </button>
+            </form>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-money-bill-transfer"></i> Payment Received
+            </div>
+
+            <form method="POST" action="/save-transport-payment">
+                <div class="form-grid">
+
+                    <div class="input-group">
+                        <label>Date</label>
+                        <input type="date" name="date" id="payment-date" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Transporter</label>
+                        <select name="transporter_id" required>
+                            <option value="">Select Transporter</option>
+
+                            {% for t in transporters %}
+                            <option value="{{ t['id'] }}">{{ t['party_name'] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Payment Amount</label>
+                        <input type="number" step="0.01" name="payment_amount" required>
+                    </div>
+
+                </div>
+
+                <br>
+
+                <button class="save-btn-top" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Payment
+                </button>
+            </form>
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-table"></i> Transporter Balance Register
+            </div>
+
+            <table class="entry-table">
+                <tr>
+                    <th>Party Name</th>
+                    <th>Opening</th>
+                    <th>Credit Given</th>
+                    <th>Payment Received</th>
+                    <th>Balance Due</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+
+                {% for t in transporters %}
+                <tr>
+                    <td>{{ t["party_name"] }}</td>
+                    <td>₹ {{ t["opening_balance"] }}</td>
+                    <td>₹ {{ t["credit_given"] }}</td>
+                    <td>₹ {{ t["payment_received"] }}</td>
+                    <td><b>₹ {{ t["balance_due"] }}</b></td>
+                    <td>{{ t["status"] }}</td>
+                    <td>
+                        <a href="/edit-transporter/{{ t['id'] }}" class="add-btn">Edit</a>
+                        <a href="/delete-transporter/{{ t['id'] }}" class="add-btn"
+                           onclick="return confirm('Delete this transporter?')">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+    document.getElementById("payment-date").value =
+        new Date().toISOString().split("T")[0];
+</script>
+
+</body>
+</html>

@@ -19,8 +19,11 @@
         <nav>
             <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
             <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
             <a class="active" href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
             <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
         </nav>
     </aside>
@@ -32,14 +35,10 @@
                 <h1>Attendance Register</h1>
                 <p>Staff master and daily attendance entry</p>
             </div>
-
-            <div class="date-box">
-                <i class="fa-solid fa-calendar-days"></i>
-                Daily Staff Entry
-            </div>
         </div>
 
         <div class="cards">
+
             <div class="card petrol">
                 <h3>Total Staff</h3>
                 <h2>{{ total_staff }}</h2>
@@ -57,6 +56,7 @@
                 <h2>{{ absent_leave }}</h2>
                 <p>Today status</p>
             </div>
+
         </div>
 
         <div class="two-grid">
@@ -71,7 +71,7 @@
 
                         <div class="input-group">
                             <label>Staff Name</label>
-                            <input type="text" name="staff_name" placeholder="Enter staff name" required>
+                            <input type="text" name="staff_name" required>
                         </div>
 
                         <div class="input-group">
@@ -113,11 +113,8 @@
                 <form method="POST" action="/save-attendance">
                     <div class="form-grid">
 
-                        <div class="input-group date-group">
-                            <label>
-                                <i class="fa-solid fa-calendar-days"></i>
-                                Attendance Date
-                            </label>
+                        <div class="input-group">
+                            <label>Attendance Date</label>
                             <input type="date" name="date" id="attendance-date" required>
                         </div>
 
@@ -125,6 +122,7 @@
                             <label>Staff Name</label>
                             <select name="staff_name" required>
                                 <option value="">Select Staff</option>
+
                                 {% for staff in staff_list %}
                                 <option>{{ staff["staff_name"] }}</option>
                                 {% endfor %}

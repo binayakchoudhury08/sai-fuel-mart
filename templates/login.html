@@ -1,98 +1,146 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>SAI FUEL MART Login</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <title>Sai Fuel Mart Login</title>
+
+    <style>
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family:Inter, Arial, sans-serif;
+        }
+
+        body{
+            min-height:100vh;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:
+                linear-gradient(rgba(7,18,12,.68), rgba(7,18,12,.68)),
+                url("/static/images/petrol-pump-bg.jpg");
+            background-size:cover;
+            background-position:center;
+            overflow:hidden;
+        }
+
+        body::before{
+            content:"";
+            position:fixed;
+            inset:0;
+            backdrop-filter:blur(1px);
+            z-index:0;
+        }
+
+        .login-box{
+            position:relative;
+            z-index:1;
+            width:420px;
+            background:rgba(255,255,255,.92);
+            border-radius:28px;
+            padding:34px;
+            box-shadow:0 30px 80px rgba(0,0,0,.35);
+        }
+
+        .login-box h1{
+            font-size:30px;
+            margin-bottom:8px;
+            color:#07120c;
+        }
+
+        .login-box p{
+            color:#667085;
+            margin-bottom:28px;
+        }
+
+        .input-group{
+            margin-bottom:18px;
+        }
+
+        .input-group label{
+            display:block;
+            margin-bottom:8px;
+            color:#344054;
+            font-weight:600;
+            font-size:14px;
+        }
+
+        .input-group input{
+            width:100%;
+            padding:14px 16px;
+            border-radius:16px;
+            border:1px solid #d0d5dd;
+            outline:none;
+            font-size:15px;
+        }
+
+        .input-group input:focus{
+            border-color:#16a34a;
+            box-shadow:0 0 0 4px rgba(22,163,74,.10);
+        }
+
+        .remember{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:#475467;
+            font-size:14px;
+            margin-bottom:22px;
+        }
+
+        button{
+            width:100%;
+            border:none;
+            background:#07120c;
+            color:white;
+            padding:15px;
+            border-radius:16px;
+            font-size:15px;
+            font-weight:700;
+            cursor:pointer;
+            transition:.25s;
+        }
+
+        button:hover{
+            background:#0f2a18;
+            transform:translateY(-2px);
+        }
+
+        .error{
+            color:#b91c1c;
+            margin-top:14px;
+            font-size:14px;
+        }
+    </style>
 </head>
+
 <body>
 
-<div class="main-box">
+    <form method="POST" class="login-box">
 
-    <div class="left-box">
+        <h1>SAI FUEL MART</h1>
+        <p>Login to fuel operations dashboard</p>
 
-        <div class="brand">
-            <div class="fuel-logo">
-                <div class="pump-body"></div>
-                <div class="pump-hose"></div>
-            </div>
-
-            <div>
-                <h1>SAI FUEL MART</h1>
-                <p>FUELING YOUR TRUST</p>
-            </div>
-        </div>
-
-        <h2>Welcome <span>back</span></h2>
-        <p class="sub-text">Sign in to continue to your account</p>
-
-        <form method="POST">
-
+        <div class="input-group">
             <label>Username</label>
-            <div class="input-box">
-                <span>👤</span>
-                <input type="text" name="username" placeholder="Enter your username" required>
-            </div>
-
-            <label>Password</label>
-            <div class="input-box">
-                <span>🔒</span>
-                <input type="password" name="password" placeholder="Enter your password" required>
-                <span>👁</span>
-            </div>
-
-            <div class="remember">
-                <input type="checkbox" name="remember">
-                <span>Remember me</span>
-            </div>
-
-            <button type="submit">Sign In →</button>
-
-            {% if error %}
-            <p class="error">{{ error }}</p>
-            {% endif %}
-
-        </form>
-
-        <p class="footer">© 2025 <span>SAI FUEL MART.</span> All rights reserved.</p>
-
-    </div>
-
-    <div class="right-box">
-
-        <img src="{{ url_for('static', filename='images/pump.jpg') }}" class="pump-img">
-
-        <div class="overlay">
-            <h2>Welcome!</h2>
-            <p>Manage your petrol pump<br>operations efficiently</p>
-
-            <div class="feature">
-                📊
-                <div>
-                    <b>Daily Closing Reports</b><br>
-                    <small>View daily sales and closing reports</small>
-                </div>
-            </div>
-
-            <div class="feature">
-                🚚
-                <div>
-                    <b>Transport Management</b><br>
-                    <small>Manage transport and credit</small>
-                </div>
-            </div>
-
-            <div class="feature">
-                📈
-                <div>
-                    <b>Stock & Sales Tracking</b><br>
-                    <small>Track stock, sales and inventory</small>
-                </div>
-            </div>
+            <input name="username" required>
         </div>
 
-    </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" name="password" required>
+        </div>
 
-</div>
+        <label class="remember">
+            <input type="checkbox" name="remember">
+            Remember me
+        </label>
+
+        <button type="submit">Login</button>
+
+        <div class="error">{{ error }}</div>
+
+    </form>
 
 </body>
 </html>

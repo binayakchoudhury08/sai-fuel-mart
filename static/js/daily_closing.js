@@ -1,5 +1,5 @@
 const MS_RATE_DEFAULT = parseFloat(document.querySelector("#ms-rate")?.value) || 102.46;
-const HSD_RATE_DEFAULT = parseFloat(document.querySelector("#hsd-rate")?.value) || 93.98;
+const HSD_RATE_DEFAULT = parseFloat(document.querySelector("#hsd-rate")?.value) || 93.72;
 
 const formatMoney = (value) => {
     return "₹ " + (Number(value) || 0).toFixed(2);
@@ -12,9 +12,11 @@ function getNumber(selector) {
 
 function sumInputs(selector) {
     let total = 0;
+
     document.querySelectorAll(selector).forEach(input => {
         total += parseFloat(input.value) || 0;
     });
+
     return total;
 }
 
@@ -25,12 +27,15 @@ function setupNozzleCalculation() {
         const testing = row.querySelector(".testing");
         const sale = row.querySelector(".sale");
 
+        if (!opening || !closing || !testing || !sale) return;
+
         function calculateSale() {
             const open = parseFloat(opening.value) || 0;
             const close = parseFloat(closing.value) || 0;
             const test = parseFloat(testing.value) || 0;
 
             const total = close - open - test;
+
             sale.value = total > 0 ? total.toFixed(2) : "0.00";
 
             updateAllTotals();
@@ -48,6 +53,8 @@ function setupCreditRow(row) {
     const amount = row.querySelector(".amount");
     const litres = row.querySelector(".litres");
 
+    if (!fuel || !rate || !amount || !litres) return;
+
     function updateRate() {
         rate.value = fuel.value === "MS"
             ? MS_RATE_DEFAULT.toFixed(2)
@@ -61,6 +68,7 @@ function setupCreditRow(row) {
         const rt = parseFloat(rate.value) || 0;
 
         litres.value = rt > 0 ? (amt / rt).toFixed(2) : "0.00";
+
         updateAllTotals();
     }
 
@@ -70,11 +78,34 @@ function setupCreditRow(row) {
     updateRate();
 }
 
+function collectCreditTransportSales() {
+    const creditSales = [];
+
+    document.querySelectorAll(".credit-row").forEach(row => {
+        const transporter = row.querySelector(".transporter");
+        const amount = row.querySelector(".amount");
+
+        const transporterId = transporter ? transporter.value : "";
+        const amountValue = amount ? parseFloat(amount.value) || 0 : 0;
+
+        if (transporterId && amountValue > 0) {
+            creditSales.push({
+                transporter_id: transporterId,
+                amount: amountValue
+            });
+        }
+    });
+
+    return creditSales;
+}
+
 function setupLubeRow(row) {
     const product = row.querySelector(".lube-product");
     const qty = row.querySelector(".qty");
     const rate = row.querySelector(".lube-rate");
     const amount = row.querySelector(".lube-amount");
+
+    if (!product || !qty || !rate || !amount) return;
 
     function calculate() {
         const selected = product.options[product.selectedIndex];
@@ -94,8 +125,32 @@ function setupLubeRow(row) {
     calculate();
 }
 
+function collectLubeSales() {
+    const lubeSales = [];
+
+    document.querySelectorAll(".lube-row").forEach(row => {
+        const product = row.querySelector(".lube-product");
+        const qty = row.querySelector(".qty");
+
+        const productId = product ? product.value : "";
+        const qtyValue = qty ? parseFloat(qty.value) || 0 : 0;
+
+        if (productId && qtyValue > 0) {
+            lubeSales.push({
+                product_id: productId,
+                qty: qtyValue
+            });
+        }
+    });
+
+    return lubeSales;
+}
+
 function setupExpenseRow(row) {
     const amount = row.querySelector(".expense-amount");
+
+    if (!amount) return;
+
     amount.addEventListener("input", updateAllTotals);
 }
 
@@ -103,20 +158,34 @@ function setupAddButtons() {
     document.querySelector("#add-credit")?.addEventListener("click", () => {
         const tbody = document.querySelector("#credit-table tbody");
 
+        const firstTransporter = document.querySelector(".transporter");
+        const transporterOptions = firstTransporter
+            ? firstTransporter.innerHTML
+            : `<option value="">Select Transporter</option>`;
+
+        if (!tbody) return;
+
         const tr = document.createElement("tr");
         tr.className = "credit-row";
 
         tr.innerHTML = `
-            <td><input type="text" placeholder="Party Name"></td>
+            <td>
+                <select class="transporter">
+                    ${transporterOptions}
+                </select>
+            </td>
+
             <td>
                 <select class="fuel">
                     <option>MS</option>
                     <option selected>HSD</option>
                 </select>
             </td>
+
             <td><input type="number" class="rate" readonly></td>
             <td><input type="number" class="amount" placeholder="Amount"></td>
             <td><input type="number" class="litres" readonly></td>
+
             <td>
                 <select>
                     <option>Pending</option>
@@ -132,19 +201,23 @@ function setupAddButtons() {
     document.querySelector("#add-lube")?.addEventListener("click", () => {
         const tbody = document.querySelector("#lube-table tbody");
 
+        const firstSelect = document.querySelector(".lube-product");
+        const optionsHTML = firstSelect
+            ? firstSelect.innerHTML
+            : `<option value="" data-rate="0">Select Product</option>`;
+
+        if (!tbody) return;
+
         const tr = document.createElement("tr");
         tr.className = "lube-row";
 
         tr.innerHTML = `
             <td>
                 <select class="lube-product">
-                    <option value="" data-rate="0">Select Product</option>
-                    <option value="HP Racer 2T" data-rate="210">HP Racer 2T</option>
-                    <option value="HP Petrol Plus" data-rate="300">HP Petrol Plus</option>
-                    <option value="HP Long Life Grease" data-rate="450">HP Long Life Grease</option>
-                    <option value="HP Milcy" data-rate="190">HP Milcy</option>
+                    ${optionsHTML}
                 </select>
             </td>
+
             <td><input type="number" class="qty"></td>
             <td><input type="number" class="lube-rate" readonly></td>
             <td><input type="number" class="lube-amount" readonly></td>
@@ -156,6 +229,8 @@ function setupAddButtons() {
 
     document.querySelector("#add-expense")?.addEventListener("click", () => {
         const tbody = document.querySelector("#expense-table tbody");
+
+        if (!tbody) return;
 
         const tr = document.createElement("tr");
         tr.className = "expense-row";
@@ -183,6 +258,7 @@ function updateStock(msSale, hsdSale) {
 
     const msOpening = getNumber("#ms-stock-opening");
     const msReceived = getNumber("#ms-stock-received");
+
     const hsdOpening = getNumber("#hsd-stock-opening");
     const hsdReceived = getNumber("#hsd-stock-received");
 
@@ -196,13 +272,16 @@ function updateAllTotals() {
 
     const msAmount = msLitres * MS_RATE_DEFAULT;
     const hsdAmount = hsdLitres * HSD_RATE_DEFAULT;
+
     const totalFuelSale = msAmount + hsdAmount;
 
     const lubeSale = sumInputs(".lube-amount");
     const digitalCollection = sumInputs(".digital-input");
     const transportReceived = getNumber("#transport-received");
+
     const creditGiven = sumInputs(".credit-row .amount");
     const netCreditDue = Math.max(creditGiven - transportReceived, 0);
+
     const totalExpense = sumInputs(".expense-amount");
 
     const cashInHand =
@@ -212,21 +291,38 @@ function updateAllTotals() {
         netCreditDue -
         totalExpense;
 
-    document.querySelector("#ms-sale-card").innerText = formatMoney(msAmount);
-    document.querySelector("#hsd-sale-card").innerText = formatMoney(hsdAmount);
-    document.querySelector("#total-sale-card").innerText = formatMoney(totalFuelSale + lubeSale);
+    const cardMap = {
+        "#ms-sale-card": msAmount,
+        "#hsd-sale-card": hsdAmount,
+        "#total-sale-card": totalFuelSale + lubeSale,
+        "#summary-fuel-sale": totalFuelSale,
+        "#summary-lube-sale": lubeSale,
+        "#summary-digital": digitalCollection,
+        "#summary-credit": creditGiven,
+        "#summary-transport-received": transportReceived,
+        "#summary-net-credit": netCreditDue,
+        "#summary-expense": totalExpense,
+        "#summary-cash": cashInHand
+    };
 
-    document.querySelector("#ms-litres-card").innerText = msLitres.toFixed(2) + " Ltrs";
-    document.querySelector("#hsd-litres-card").innerText = hsdLitres.toFixed(2) + " Ltrs";
+    Object.keys(cardMap).forEach(selector => {
+        const el = document.querySelector(selector);
 
-    document.querySelector("#summary-fuel-sale").innerText = formatMoney(totalFuelSale);
-    document.querySelector("#summary-lube-sale").innerText = formatMoney(lubeSale);
-    document.querySelector("#summary-digital").innerText = formatMoney(digitalCollection);
-    document.querySelector("#summary-credit").innerText = formatMoney(creditGiven);
-    document.querySelector("#summary-transport-received").innerText = formatMoney(transportReceived);
-    document.querySelector("#summary-net-credit").innerText = formatMoney(netCreditDue);
-    document.querySelector("#summary-expense").innerText = formatMoney(totalExpense);
-    document.querySelector("#summary-cash").innerText = formatMoney(cashInHand);
+        if (el) {
+            el.innerText = formatMoney(cardMap[selector]);
+        }
+    });
+
+    const msLitresCard = document.querySelector("#ms-litres-card");
+    const hsdLitresCard = document.querySelector("#hsd-litres-card");
+
+    if (msLitresCard) {
+        msLitresCard.innerText = msLitres.toFixed(2) + " Ltrs";
+    }
+
+    if (hsdLitresCard) {
+        hsdLitresCard.innerText = hsdLitres.toFixed(2) + " Ltrs";
+    }
 
     updateStock(msLitres, hsdLitres);
 }
@@ -240,61 +336,89 @@ function setupDateLoad() {
         dateInput.value = new Date().toISOString().split("T")[0];
     }
 
-    dateInput.addEventListener("change", function () {
-        const selectedDate = this.value;
+    function loadTransportReceived() {
+        const selectedDate = dateInput.value;
 
         fetch(`/get-daily-closing/${selectedDate}`)
             .then(response => response.json())
             .then(data => {
-                if (!data.id) {
-                    alert("No saved data found for this date");
-                    return;
+                const transportTotal = Number(data.transport_total) || 0;
+
+                const transportInput = document.querySelector("#transport-received");
+
+                if (transportInput) {
+                    transportInput.value = transportTotal.toFixed(2);
                 }
 
-                document.querySelector("#ms-litres-card").innerText = data.ms_litres + " Ltrs";
-                document.querySelector("#hsd-litres-card").innerText = data.hsd_litres + " Ltrs";
+                updateAllTotals();
 
-                document.querySelector("#ms-sale-card").innerText = "Saved";
-                document.querySelector("#hsd-sale-card").innerText = "Saved";
-                document.querySelector("#total-sale-card").innerText =
-                    formatMoney((Number(data.total_fuel_sale) || 0) + (Number(data.lube_sale) || 0));
+                if (data.id) {
+                    const savedFields = {
+                        "#summary-fuel-sale": data.total_fuel_sale,
+                        "#summary-lube-sale": data.lube_sale,
+                        "#summary-digital": data.digital_collection,
+                        "#summary-credit": data.credit_given,
+                        "#summary-transport-received": transportTotal,
+                        "#summary-net-credit": data.net_credit_due,
+                        "#summary-expense": data.total_expense,
+                        "#summary-cash": data.cash_in_hand
+                    };
 
-                document.querySelector("#summary-fuel-sale").innerText = formatMoney(data.total_fuel_sale);
-                document.querySelector("#summary-lube-sale").innerText = formatMoney(data.lube_sale);
-                document.querySelector("#summary-digital").innerText = formatMoney(data.digital_collection);
-                document.querySelector("#summary-credit").innerText = formatMoney(data.credit_given);
-                document.querySelector("#summary-transport-received").innerText = formatMoney(data.transport_received);
-                document.querySelector("#summary-net-credit").innerText = formatMoney(data.net_credit_due);
-                document.querySelector("#summary-expense").innerText = formatMoney(data.total_expense);
-                document.querySelector("#summary-cash").innerText = formatMoney(data.cash_in_hand);
+                    Object.keys(savedFields).forEach(selector => {
+                        const el = document.querySelector(selector);
 
-                alert("Saved report loaded");
+                        if (el) {
+                            el.innerText = formatMoney(savedFields[selector]);
+                        }
+                    });
+                }
             })
             .catch(error => {
                 console.log(error);
-                alert("Error loading saved report");
             });
-    });
+    }
+
+    dateInput.addEventListener("change", loadTransportReceived);
+
+    loadTransportReceived();
 }
 
 function setupSaveClosing() {
     document.querySelector("#save-closing")?.addEventListener("click", () => {
+        updateAllTotals();
+
         const data = {
-            date: document.querySelector("#closing-date").value,
+            date: document.querySelector("#closing-date")?.value || new Date().toISOString().split("T")[0],
+
             ms_litres: sumInputs(".ms-sale"),
             hsd_litres: sumInputs(".hsd-sale"),
+
             total_fuel_sale:
                 (sumInputs(".ms-sale") * MS_RATE_DEFAULT) +
                 (sumInputs(".hsd-sale") * HSD_RATE_DEFAULT),
+
             lube_sale: sumInputs(".lube-amount"),
             digital_collection: sumInputs(".digital-input"),
+            phonepe: getNumber("#phonepe"),
+            card_swipe: getNumber("#card-swipe"),
+            hp_pay: getNumber("#hp-pay"),
+            hpcl_otp: getNumber("#hpcl-otp"),
+            upi_other: getNumber("#upi-other"),
             credit_given: sumInputs(".credit-row .amount"),
             transport_received: getNumber("#transport-received"),
+
             net_credit_due: Math.max(
-                sumInputs(".credit-row .amount") - getNumber("#transport-received"), 0
+                sumInputs(".credit-row .amount") - getNumber("#transport-received"),
+                0
             ),
+
             total_expense: sumInputs(".expense-amount"),
-            cash_in_hand: document.querySelector("#summary-cash").innerText.replace("₹", "").trim()
+
+            cash_in_hand:
+                document.querySelector("#summary-cash")?.innerText.replace("₹", "").trim() || 0,
+
+            lube_sales: collectLubeSales(),
+            credit_transport_sales: collectCreditTransportSales()
         };
 
         fetch("/save-daily-closing", {
@@ -304,14 +428,14 @@ function setupSaveClosing() {
             },
             body: JSON.stringify(data)
         })
-        .then(res => res.json())
-        .then(result => {
-            alert(result.message);
-        })
-        .catch(error => {
-            console.log(error);
-            alert("Save failed");
-        });
+            .then(res => res.json())
+            .then(result => {
+                alert(result.message);
+            })
+            .catch(error => {
+                console.log(error);
+                alert("Save failed");
+            });
     });
 }
 
@@ -329,10 +453,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.querySelector("#ms-stock-opening")?.addEventListener("input", updateAllTotals);
     document.querySelector("#ms-stock-received")?.addEventListener("input", updateAllTotals);
+
     document.querySelector("#hsd-stock-opening")?.addEventListener("input", updateAllTotals);
     document.querySelector("#hsd-stock-received")?.addEventListener("input", updateAllTotals);
 
     setupAddButtons();
     setupSaveClosing();
+
     updateAllTotals();
 });

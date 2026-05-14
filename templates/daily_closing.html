@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Daily Closing - Sai Fuel Mart</title>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -19,17 +20,20 @@
 
         <nav>
             <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a><i class="fa-solid fa-gauge"></i> Dip Entry</a>
-            <a><i class="fa-solid fa-gas-pump"></i> Nozzle Sales</a>
-            <a><i class="fa-solid fa-oil-can"></i> Tank Stock</a>
-            <a><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a class="active" href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
             <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
             <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
         </nav>
     </aside>
 
     <main class="main-content">
+
+        <input type="hidden" id="ms-rate" value="{{ settings['ms_rate'] }}">
+        <input type="hidden" id="hsd-rate" value="{{ settings['hsd_rate'] }}">
 
         <div class="topbar">
             <div>
@@ -37,32 +41,25 @@
                 <p>Complete petrol pump daily closing account</p>
             </div>
 
-            <button class="save-btn-top"
-            id="save-closing">  
+            <button class="save-btn-top" id="save-closing">
                 <i class="fa-solid fa-floppy-disk"></i> Save Closing
             </button>
         </div>
 
         <div class="box date-box">
-
-    <div class="date-picker-row">
-
-        <div class="input-group date-group">
-
-            <label>
-                <i class="fa-solid fa-calendar-days"></i>
-                Closing Date
-            </label>
-
-            <input type="date" id="closing-date">
-
+            <div class="date-picker-row">
+                <div class="input-group date-group">
+                    <label>
+                        <i class="fa-solid fa-calendar-days"></i>
+                        Closing Date
+                    </label>
+                    <input type="date" id="closing-date">
+                </div>
+            </div>
         </div>
 
-    </div>
-
-</div>
-
         <div class="cards">
+
             <div class="card petrol">
                 <h3>MS SALE</h3>
                 <h2 id="ms-sale-card">₹ 0.00</h2>
@@ -80,11 +77,13 @@
                 <h2 id="total-sale-card">₹ 0.00</h2>
                 <p>Fuel + Lube</p>
             </div>
+
         </div>
 
         <div class="box">
             <div class="box-title">
-                <i class="fa-solid fa-gas-pump"></i> Nozzle Sales Entry
+                <i class="fa-solid fa-gas-pump"></i>
+                Nozzle Sales Entry
             </div>
 
             <h3 class="section-heading">MS Nozzles</h3>
@@ -101,29 +100,15 @@
                 </thead>
 
                 <tbody>
+                    {% for n in [1,2,3] %}
                     <tr>
-                        <td>MS-1</td>
+                        <td>MS-{{ n }}</td>
                         <td><input type="number" class="opening"></td>
                         <td><input type="number" class="closing"></td>
                         <td><input type="number" class="testing"></td>
                         <td><input type="number" class="sale ms-sale" readonly></td>
                     </tr>
-
-                    <tr>
-                        <td>MS-2</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale ms-sale" readonly></td>
-                    </tr>
-
-                    <tr>
-                        <td>MS-3</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale ms-sale" readonly></td>
-                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
 
@@ -141,29 +126,15 @@
                 </thead>
 
                 <tbody>
+                    {% for n in [1,2,3] %}
                     <tr>
-                        <td>HSD-1</td>
+                        <td>HSD-{{ n }}</td>
                         <td><input type="number" class="opening"></td>
                         <td><input type="number" class="closing"></td>
                         <td><input type="number" class="testing"></td>
                         <td><input type="number" class="sale hsd-sale" readonly></td>
                     </tr>
-
-                    <tr>
-                        <td>HSD-2</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale hsd-sale" readonly></td>
-                    </tr>
-
-                    <tr>
-                        <td>HSD-3</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale hsd-sale" readonly></td>
-                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
@@ -172,45 +143,49 @@
 
             <div class="box">
                 <div class="box-title">
-                    <i class="fa-solid fa-wallet"></i> Digital Collection
+                    <i class="fa-solid fa-wallet"></i>
+                    Digital Collection
                 </div>
 
                 <div class="form-grid">
+
                     <div class="input-group">
                         <label>PhonePe</label>
-                        <input type="number" class="digital-input">
+                        <input type="number" id="phonepe" class="digital-input">
                     </div>
 
                     <div class="input-group">
                         <label>Card Swipe</label>
-                        <input type="number" class="digital-input">
+                        <input type="number" id="card-swipe" class="digital-input">
                     </div>
 
                     <div class="input-group">
                         <label>HP Pay</label>
-                        <input type="number" class="digital-input">
+                        <input type="number" id="hp-pay" class="digital-input">
                     </div>
 
                     <div class="input-group">
                         <label>HPCL OTP</label>
-                        <input type="number" class="digital-input">
+                        <input type="number" id="hpcl-otp" class="digital-input">
                     </div>
 
                     <div class="input-group">
                         <label>UPI Other</label>
-                        <input type="number" class="digital-input">
+                        <input type="number" id="upi-other" class="digital-input">
                     </div>
 
                     <div class="input-group">
                         <label>Transport Collection Received</label>
-                        <input type="number" id="transport-received" class="digital-input">
+                        <input type="number" id="transport-received" readonly>
                     </div>
+
                 </div>
             </div>
 
             <div class="box">
                 <div class="box-title">
-                    <i class="fa-solid fa-database"></i> Tank Stock
+                    <i class="fa-solid fa-database"></i>
+                    Tank Stock
                 </div>
 
                 <table class="entry-table">
@@ -244,13 +219,14 @@
 
         <div class="box">
             <div class="box-title">
-                <i class="fa-solid fa-truck"></i> Credit Transport Entry
+                <i class="fa-solid fa-truck"></i>
+                Credit Transport Entry
             </div>
 
             <table class="entry-table" id="credit-table">
                 <thead>
                     <tr>
-                        <th>Party Name</th>
+                        <th>Transporter</th>
                         <th>Fuel</th>
                         <th>Rate</th>
                         <th>Amount</th>
@@ -261,7 +237,15 @@
 
                 <tbody>
                     <tr class="credit-row">
-                        <td><input type="text" placeholder="Party Name"></td>
+                        <td>
+                            <select class="transporter">
+                                <option value="">Select Transporter</option>
+
+                                {% for t in transporters %}
+                                <option value="{{ t['id'] }}">{{ t['party_name'] }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
 
                         <td>
                             <select class="fuel">
@@ -291,7 +275,8 @@
 
             <div class="box">
                 <div class="box-title">
-                    <i class="fa-solid fa-oil-can"></i> Lube Sales
+                    <i class="fa-solid fa-oil-can"></i>
+                    Lube Sales
                 </div>
 
                 <table class="entry-table" id="lube-table">
@@ -309,10 +294,12 @@
                             <td>
                                 <select class="lube-product">
                                     <option value="" data-rate="0">Select Product</option>
-                                    <option value="HP Racer 2T" data-rate="210">HP Racer 2T</option>
-                                    <option value="HP Petrol Plus" data-rate="300">HP Petrol Plus</option>
-                                    <option value="HP Long Life Grease" data-rate="450">HP Long Life Grease</option>
-                                    <option value="HP Milcy" data-rate="190">HP Milcy</option>
+
+                                    {% for item in lube_items %}
+                                    <option value="{{ item['id'] }}" data-rate="{{ item['selling_rate'] }}">
+                                        {{ item['product_name'] }} | Stock: {{ item['closing_stock'] }}
+                                    </option>
+                                    {% endfor %}
                                 </select>
                             </td>
 
@@ -328,7 +315,8 @@
 
             <div class="box">
                 <div class="box-title">
-                    <i class="fa-solid fa-money-bill-wave"></i> Expenses
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                    Expenses
                 </div>
 
                 <table class="entry-table" id="expense-table">
@@ -353,36 +341,13 @@
         </div>
 
         <div class="box">
-
-    <div class="box-title">
-        <i class="fa-solid fa-money-bill-transfer"></i>
-        Cash Carry Forward
-    </div>
-
-    <div class="form-grid">
-
-        <div class="input-group">
-            <label>Opening Cash</label>
-            <input type="number" id="opening-cash">
-        </div>
-
-        <div class="input-group">
-            <label>Final Cash Balance</label>
-            <input type="number" id="final-cash-balance" readonly>
-        </div>
-
-    </div>
-
-</div>
-
-
-
-        <div class="box">
             <div class="box-title">
-                <i class="fa-solid fa-chart-line"></i> Final Summary
+                <i class="fa-solid fa-chart-line"></i>
+                Final Summary
             </div>
 
             <div class="summary-grid">
+
                 <div class="summary-card">
                     <span>Total Fuel Sale</span>
                     <h2 id="summary-fuel-sale">₹ 0.00</h2>
@@ -422,17 +387,13 @@
                     <span>Cash In Hand</span>
                     <h2 id="summary-cash">₹ 0.00</h2>
                 </div>
+
             </div>
         </div>
 
     </main>
 
 </div>
-
-<input type="hidden" id="ms-rate" value="{{ settings['ms_rate'] }}">
-<input type="hidden" id="hsd-rate" value="{{ settings['hsd_rate'] }}">
-
-
 
 <script src="{{ url_for('static', filename='js/daily_closing.js') }}"></script>
 

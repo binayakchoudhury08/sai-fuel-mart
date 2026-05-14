@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tank Level - Sai Fuel Mart</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+.kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:24px;
+}
+
+.kpi-card{
+    background:white;
+    border-radius:24px;
+    padding:22px;
+    box-shadow:0 14px 35px rgba(0,0,0,.06);
+    transition:.25s;
+}
+
+.kpi-card:hover{
+    transform:translateY(-5px);
+    box-shadow:0 24px 55px rgba(16,24,40,.12);
+}
+
+.kpi-card h4{
+    color:#667085;
+    margin-bottom:12px;
+}
+
+.kpi-card h2{
+    font-size:30px;
+}
+
+.green{border-left:5px solid #16a34a;}
+.red{border-left:5px solid #dc2626;}
+.blue{border-left:5px solid #2563eb;}
+.orange{border-left:5px solid #f97316;}
+
+.gain{
+    color:#16a34a;
+    font-weight:700;
+}
+
+.shortage{
+    color:#dc2626;
+    font-weight:700;
+}
+
+.action-flex{
+    display:flex;
+    gap:10px;
+}
+
+.edit-btn{
+    background:#2563eb;
+    color:white;
+    text-decoration:none;
+    padding:8px 14px;
+    border-radius:10px;
+    font-size:12px;
+    font-weight:600;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:white;
+    text-decoration:none;
+    padding:8px 14px;
+    border-radius:10px;
+    font-size:12px;
+    font-weight:600;
+}
+
+.preview-box{
+    background:#f8fafc;
+    border:1px solid #edf0f4;
+    border-radius:20px;
+    padding:18px;
+    margin-top:18px;
+}
+
+.preview-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+}
+
+.preview-item{
+    background:white;
+    border:1px solid #e5e7eb;
+    border-radius:16px;
+    padding:14px;
+}
+
+.preview-item small{
+    color:#667085;
+}
+
+.preview-item h3{
+    margin-top:8px;
+}
+
+@media(max-width:900px){
+    .kpi-grid,
+    .preview-grid{
+        grid-template-columns:1fr;
+    }
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<aside class="sidebar">
+
+    <div class="logo">
+        <h2>SAI FUEL MART</h2>
+        <p>FUELING YOUR TRUST</p>
+    </div>
+
+    <nav>
+        <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+        <a class="active" href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
+        <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+        <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+        <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+        <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+        <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+        <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+    </nav>
+
+</aside>
+
+<main class="main-content">
+
+<div class="topbar">
+    <div>
+        <h1>Tank Level Management</h1>
+        <p>Stock receiving, own tanker, auto sale qty, gain and shortage monitor</p>
+    </div>
+</div>
+
+<div class="kpi-grid">
+
+    <div class="kpi-card green">
+        <h4>Total Gain Qty</h4>
+        <h2>{{ monthly["total_gain_qty"] if monthly and monthly["total_gain_qty"] else 0 }} L</h2>
+    </div>
+
+    <div class="kpi-card red">
+        <h4>Total Shortage Qty</h4>
+        <h2>{{ monthly["total_shortage_qty"] if monthly and monthly["total_shortage_qty"] else 0 }} L</h2>
+    </div>
+
+    <div class="kpi-card blue">
+        <h4>Total Gain Amount</h4>
+        <h2>₹ {{ monthly["total_gain_amount"] if monthly and monthly["total_gain_amount"] else 0 }}</h2>
+    </div>
+
+    <div class="kpi-card orange">
+        <h4>Total Shortage Amount</h4>
+        <h2>₹ {{ monthly["total_shortage_amount"] if monthly and monthly["total_shortage_amount"] else 0 }}</h2>
+    </div>
+
+</div>
+
+<div class="box">
+
+    <div class="box-title">
+        <i class="fa-solid fa-plus"></i>
+        Add Tank Entry
+    </div>
+
+    <form method="POST" action="/save-tank-level">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Date</label>
+                <input type="date" name="date" id="tank-date" required>
+            </div>
+
+            <div class="input-group">
+                <label>Fuel Type</label>
+                <select name="fuel_type" id="fuel-type">
+                    <option>MS</option>
+                    <option>HSD</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Opening Stock</label>
+                <input type="number" step="0.01" name="opening_stock" id="opening-stock" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Received Stock</label>
+                <input type="number" step="0.01" name="received_stock" id="received-stock" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Own Tanker Qty</label>
+                <input type="number" step="0.01" name="own_tanker_stock" id="own-tanker-stock" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Sale Qty Auto From Daily Closing</label>
+                <input type="number" step="0.01" id="sale-display" readonly style="background:#f3f4f6;font-weight:700;">
+            </div>
+
+            <div class="input-group">
+                <label>Actual Dip Stock</label>
+                <input type="number" step="0.01" name="dip_stock" id="dip-stock" value="0">
+            </div>
+
+        </div>
+
+        <div class="preview-box">
+            <div class="preview-grid">
+
+                <div class="preview-item">
+                    <small>Theoretical Stock</small>
+                    <h3 id="theoretical-preview">0 L</h3>
+                </div>
+
+                <div class="preview-item">
+                    <small>Difference</small>
+                    <h3 id="difference-preview">0 L</h3>
+                </div>
+
+                <div class="preview-item">
+                    <small>Gain</small>
+                    <h3 id="gain-preview" class="gain">0 L</h3>
+                </div>
+
+                <div class="preview-item">
+                    <small>Shortage</small>
+                    <h3 id="shortage-preview" class="shortage">0 L</h3>
+                </div>
+
+            </div>
+        </div>
+
+        <br>
+
+        <button class="save-btn-top">
+            <i class="fa-solid fa-floppy-disk"></i>
+            Save Tank Level
+        </button>
+
+    </form>
+
+</div>
+
+<div class="box">
+
+    <div class="box-title">
+        <i class="fa-solid fa-chart-column"></i>
+        Tank History
+    </div>
+
+    <table class="entry-table">
+
+        <tr>
+            <th>Date</th>
+            <th>Fuel</th>
+            <th>Opening</th>
+            <th>Received</th>
+            <th>Own Tanker</th>
+            <th>Sale</th>
+            <th>Current</th>
+            <th>Gain</th>
+            <th>Shortage</th>
+            <th>Actions</th>
+        </tr>
+
+        {% for row in rows %}
+        <tr>
+            <td>{{ row["date"] }}</td>
+            <td>{{ row["fuel_type"] }}</td>
+            <td>{{ row["opening_stock"] }}</td>
+            <td>{{ row["received_stock"] }}</td>
+            <td>{{ row["own_tanker_stock"] }}</td>
+            <td>{{ row["sale_stock"] }}</td>
+            <td><b>{{ row["current_stock"] }}</b></td>
+
+            <td class="gain">
+                {% if row["gain_qty"] > 0 %}
+                    +{{ row["gain_qty"] }} L<br>
+                    ₹ {{ row["gain_amount"] }}
+                {% endif %}
+            </td>
+
+            <td class="shortage">
+                {% if row["shortage_qty"] > 0 %}
+                    -{{ row["shortage_qty"] }} L<br>
+                    ₹ {{ row["shortage_amount"] }}
+                {% endif %}
+            </td>
+
+            <td>
+                <div class="action-flex">
+                    <a href="/edit-tank-level/{{ row['id'] }}" class="edit-btn">Edit</a>
+                    <a href="/delete-tank-level/{{ row['id'] }}" class="delete-btn"
+                       onclick="return confirm('Delete this tank entry?')">Delete</a>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+
+    </table>
+
+</div>
+
+</main>
+</div>
+
+<script>
+const dateInput = document.getElementById("tank-date");
+const fuelInput = document.getElementById("fuel-type");
+const saleDisplay = document.getElementById("sale-display");
+
+const openingInput = document.getElementById("opening-stock");
+const receivedInput = document.getElementById("received-stock");
+const ownTankerInput = document.getElementById("own-tanker-stock");
+const dipInput = document.getElementById("dip-stock");
+
+const theoreticalPreview = document.getElementById("theoretical-preview");
+const differencePreview = document.getElementById("difference-preview");
+const gainPreview = document.getElementById("gain-preview");
+const shortagePreview = document.getElementById("shortage-preview");
+
+dateInput.value = new Date().toISOString().split("T")[0];
+
+function num(value){
+    return parseFloat(value) || 0;
+}
+
+async function fetchSaleQty(){
+    const date = dateInput.value;
+    const fuel = fuelInput.value;
+
+    if(!date){
+        saleDisplay.value = 0;
+        updatePreview();
+        return;
+    }
+
+    try{
+        const response = await fetch(`/get-daily-closing/${date}`);
+        const data = await response.json();
+
+        let sale = 0;
+
+        if(fuel === "MS"){
+            sale = data.ms_litres || 0;
+        }else{
+            sale = data.hsd_litres || 0;
+        }
+
+        saleDisplay.value = Number(sale).toFixed(2);
+        updatePreview();
+
+    }catch(error){
+        saleDisplay.value = 0;
+        updatePreview();
+    }
+}
+
+function updatePreview(){
+    const opening = num(openingInput.value);
+    const received = num(receivedInput.value);
+    const ownTanker = num(ownTankerInput.value);
+    const sale = num(saleDisplay.value);
+    const dip = num(dipInput.value);
+
+    const theoretical = opening + received + ownTanker - sale;
+    const difference = dip - theoretical;
+
+    theoreticalPreview.innerText = theoretical.toFixed(2) + " L";
+    differencePreview.innerText = difference.toFixed(2) + " L";
+
+    if(difference > 0){
+        gainPreview.innerText = "+" + difference.toFixed(2) + " L";
+        shortagePreview.innerText = "0 L";
+    }else if(difference < 0){
+        gainPreview.innerText = "0 L";
+        shortagePreview.innerText = Math.abs(difference).toFixed(2) + " L";
+    }else{
+        gainPreview.innerText = "0 L";
+        shortagePreview.innerText = "0 L";
+    }
+}
+
+dateInput.addEventListener("change", fetchSaleQty);
+fuelInput.addEventListener("change", fetchSaleQty);
+
+openingInput.addEventListener("input", updatePreview);
+receivedInput.addEventListener("input", updatePreview);
+ownTankerInput.addEventListener("input", updatePreview);
+dipInput.addEventListener("input", updatePreview);
+
+fetchSaleQty();
+updatePreview();
+</script>
+
+</body>
+</html>

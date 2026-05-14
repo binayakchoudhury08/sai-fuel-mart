@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Transporter - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+</head>
+
+<body>
+
+<div class="main-content">
+
+    <div class="topbar">
+        <div>
+            <h1>Edit Transporter</h1>
+            <p>Manual balance update</p>
+        </div>
+    </div>
+
+    <form method="POST" action="/update-transporter/{{ transporter['id'] }}" class="box">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Party Name</label>
+                <input type="text" name="party_name" value="{{ transporter['party_name'] }}" required>
+            </div>
+
+            <div class="input-group">
+                <label>Opening Balance</label>
+                <input type="number" step="0.01" name="opening_balance" value="{{ transporter['opening_balance'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Credit Given</label>
+                <input type="number" step="0.01" name="credit_given" value="{{ transporter['credit_given'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Payment Received</label>
+                <input type="number" step="0.01" name="payment_received" value="{{ transporter['payment_received'] }}">
+            </div>
+
+            <div class="input-group">
+                <label>Status</label>
+                <select name="status">
+                    <option {% if transporter['status'] == 'Active' %}selected{% endif %}>Active</option>
+                    <option {% if transporter['status'] == 'Inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+
+        </div>
+
+        <br>
+
+        <button class="save-btn-top" type="submit">Update Transporter</button>
+        <a href="/credit-transport" class="add-btn">Back</a>
+
+    </form>
+
+</div>
+
+</body>
+</html>

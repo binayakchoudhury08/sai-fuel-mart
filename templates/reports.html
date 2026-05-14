@@ -19,7 +19,12 @@
         <nav>
             <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
             <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
             <a class="active" href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
         </nav>
     </aside>
 
@@ -27,12 +32,13 @@
 
         <div class="topbar">
             <div>
-                <a href="/export-reports" class="save-btn-top">
-    <i class="fa-solid fa-file-excel"></i> Export Excel
-</a>
                 <h1>Reports</h1>
                 <p>Saved daily closing records</p>
             </div>
+
+            <a href="/export-reports" class="save-btn-top">
+                <i class="fa-solid fa-file-excel"></i> Export Excel
+            </a>
         </div>
 
         <div class="box">
@@ -48,7 +54,7 @@
                     <th>Fuel Sale</th>
                     <th>Lube</th>
                     <th>Digital</th>
-                    <th>Credit</th>
+                    <th>Credit Due</th>
                     <th>Expense</th>
                     <th>Cash</th>
                     <th>Action</th>
@@ -65,13 +71,11 @@
                     <td>₹ {{ row["net_credit_due"] }}</td>
                     <td>₹ {{ row["total_expense"] }}</td>
                     <td>₹ {{ row["cash_in_hand"] }}</td>
+
                     <td>
                         <a href="/edit-report/{{ row['id'] }}" class="add-btn">Edit</a>
-
                         <a href="/delete-report/{{ row['id'] }}" class="add-btn"
-                           onclick="return confirm('Are you sure you want to delete this report?')">
-                           Delete
-                        </a>
+                           onclick="return confirm('Are you sure?')">Delete</a>
                     </td>
                 </tr>
                 {% endfor %}

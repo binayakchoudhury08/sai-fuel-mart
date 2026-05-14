@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Digital Collection - Sai Fuel Mart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        .kpi-grid{
+            display:grid;
+            grid-template-columns:repeat(4,1fr);
+            gap:18px;
+            margin-bottom:24px;
+        }
+
+        .kpi-card{
+            background:white;
+            border:1px solid #edf0f4;
+            border-radius:24px;
+            padding:20px;
+            box-shadow:0 16px 40px rgba(16,24,40,.07);
+            transition:.25s;
+        }
+
+        .kpi-card:hover{
+            transform:translateY(-5px);
+            box-shadow:0 24px 55px rgba(16,24,40,.12);
+        }
+
+        .kpi-card h4{
+            color:#667085;
+            font-size:13px;
+            margin-bottom:10px;
+        }
+
+        .kpi-card h2{
+            font-size:28px;
+        }
+
+        .green{border-left:5px solid #16a34a;}
+        .blue{border-left:5px solid #2563eb;}
+        .orange{border-left:5px solid #f97316;}
+        .purple{border-left:5px solid #7c3aed;}
+        .red{border-left:5px solid #dc2626;}
+        .cyan{border-left:5px solid #0891b2;}
+
+        @media(max-width:1200px){
+            .kpi-grid{
+                grid-template-columns:repeat(2,1fr);
+            }
+        }
+
+        @media(max-width:700px){
+            .kpi-grid{
+                grid-template-columns:1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <aside class="sidebar">
+        <div class="logo">
+            <h2>SAI FUEL MART</h2>
+            <p>FUELING YOUR TRUST</p>
+        </div>
+
+        <nav>
+            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+            <a class="active" href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+
+        <div class="topbar">
+            <div>
+                <h1>Digital Collection</h1>
+                <p>Month-wise payment collection summary</p>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+
+            <div class="kpi-card green">
+                <h4>Total Digital This Month</h4>
+                <h2>₹ {{ monthly["total_digital"] if monthly and monthly["total_digital"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card blue">
+                <h4>PhonePe</h4>
+                <h2>₹ {{ monthly["total_phonepe"] if monthly and monthly["total_phonepe"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card orange">
+                <h4>Card Swipe</h4>
+                <h2>₹ {{ monthly["total_card"] if monthly and monthly["total_card"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card purple">
+                <h4>HP Pay</h4>
+                <h2>₹ {{ monthly["total_hp_pay"] if monthly and monthly["total_hp_pay"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card red">
+                <h4>HPCL OTP</h4>
+                <h2>₹ {{ monthly["total_hpcl_otp"] if monthly and monthly["total_hpcl_otp"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card cyan">
+                <h4>UPI Other</h4>
+                <h2>₹ {{ monthly["total_upi"] if monthly and monthly["total_upi"] else 0 }}</h2>
+            </div>
+
+            <div class="kpi-card green">
+                <h4>Transport Received</h4>
+                <h2>₹ {{ monthly["total_transport"] if monthly and monthly["total_transport"] else 0 }}</h2>
+            </div>
+
+        </div>
+
+        <div class="box">
+            <div class="box-title">
+                <i class="fa-solid fa-credit-card"></i> Digital Collection Register
+            </div>
+
+            <table class="entry-table">
+                <tr>
+                    <th>Date</th>
+                    <th>PhonePe</th>
+                    <th>Card</th>
+                    <th>HP Pay</th>
+                    <th>HPCL OTP</th>
+                    <th>UPI Other</th>
+                    <th>Total Digital</th>
+                    <th>Transport Received</th>
+                </tr>
+
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row["date"] }}</td>
+                    <td>₹ {{ row["phonepe"] }}</td>
+                    <td>₹ {{ row["card_swipe"] }}</td>
+                    <td>₹ {{ row["hp_pay"] }}</td>
+                    <td>₹ {{ row["hpcl_otp"] }}</td>
+                    <td>₹ {{ row["upi_other"] }}</td>
+                    <td><b>₹ {{ row["digital_collection"] }}</b></td>
+                    <td>₹ {{ row["transport_received"] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+    </main>
+
+</div>
+
+</body>
+</html>
