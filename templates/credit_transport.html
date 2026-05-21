@@ -244,6 +244,47 @@ body{
         grid-template-columns:1fr 1fr;
     }
 }
+.box{
+    max-width:100%;
+    overflow:hidden;
+}
+
+.title-flex{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    margin-bottom:20px;
+}
+
+.title-actions{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.title-actions input{
+    width:260px;
+    padding:10px 14px;
+    border:1px solid #d1d5db;
+    border-radius:12px;
+    outline:none;
+}
+
+.toggle-btn{
+    border:none;
+    background:#07120C;
+    color:white;
+    padding:10px 16px;
+    border-radius:12px;
+    font-size:13px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.toggle-btn:hover{
+    background:#16a34a;
+}
 
 </style>
 
@@ -557,14 +598,26 @@ Save Entry
 
 <div class="box">
 
+<div class="title-flex">
+
 <div class="box-title">
 <i class="fa-solid fa-users"></i>
 Transporters
 </div>
 
+<div class="title-actions">
+<input type="text" id="transporterSearch" placeholder="Search transporter...">
+
+<button class="toggle-btn" onclick="toggleTransporters()" id="toggleTransportersBtn">
+<i class="fa-solid fa-eye-slash"></i> Hide Data
+</button>
+</div>
+
+</div>
+
 <div class="table-wrap">
 
-<table class="entry-table">
+<table class="entry-table" id="transportersTable">
 
 <tr>
 
@@ -637,14 +690,26 @@ Delete
 
 <div class="box">
 
+<div class="title-flex">
+
 <div class="box-title">
 <i class="fa-solid fa-table"></i>
 Transport Entry History
 </div>
 
+<div class="title-actions">
+<input type="text" id="entrySearch" placeholder="Search date/vehicle/slip...">
+
+<button class="toggle-btn" onclick="toggleEntryHistory()" id="toggleEntryBtn">
+<i class="fa-solid fa-eye-slash"></i> Hide Data
+</button>
+</div>
+
+</div>
+
 <div class="table-wrap">
 
-<table class="entry-table">
+<table class="entry-table" id="entryHistoryTable">
 
 <tr>
 
@@ -777,6 +842,50 @@ document.getElementById(
 );
 
 calculateTransportAmount();
+
+function toggleTransporters(){
+    const table = document.getElementById("transportersTable");
+    const btn = document.getElementById("toggleTransportersBtn");
+
+    if(table.style.display === "none"){
+        table.style.display = "table";
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Data';
+    }else{
+        table.style.display = "none";
+        btn.innerHTML = '<i class="fa-solid fa-eye"></i> Show Data';
+    }
+}
+
+function toggleEntryHistory(){
+    const table = document.getElementById("entryHistoryTable");
+    const btn = document.getElementById("toggleEntryBtn");
+
+    if(table.style.display === "none"){
+        table.style.display = "table";
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Data';
+    }else{
+        table.style.display = "none";
+        btn.innerHTML = '<i class="fa-solid fa-eye"></i> Show Data';
+    }
+}
+
+document.getElementById("transporterSearch").addEventListener("input", function(){
+    const value = this.value.toLowerCase();
+
+    document.querySelectorAll("#transportersTable tr").forEach(function(row, index){
+        if(index === 0) return;
+        row.style.display = row.innerText.toLowerCase().includes(value) ? "table-row" : "none";
+    });
+});
+
+document.getElementById("entrySearch").addEventListener("input", function(){
+    const value = this.value.toLowerCase();
+
+    document.querySelectorAll("#entryHistoryTable tr").forEach(function(row, index){
+        if(index === 0) return;
+        row.style.display = row.innerText.toLowerCase().includes(value) ? "table-row" : "none";
+    });
+});
 
 </script>
 

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from datetime import timedelta, datetime
 import sqlite3
 import os
+import json
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -687,6 +688,85 @@ def get_daily_closing(date):
 # =========================================
 # EDIT DAILY CLOSING
 # =========================================
+
+@app.route("/edit-attendance/<int:id>")
+def edit_attendance(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM attendance
+        WHERE id=?
+    """, (id,))
+    att = cur.fetchone()
+
+    cur.execute("""
+        SELECT *
+        FROM staff_master
+        ORDER BY staff_name ASC
+    """)
+    staff_list = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "edit_attendance.html",
+        att=att,
+        staff_list=staff_list
+    )
+
+
+@app.route("/update-attendance/<int:id>", methods=["POST"])
+def update_attendance(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE attendance
+        SET date=?,
+            staff_name=?,
+            attendance_status=?
+        WHERE id=?
+    """, (
+        request.form["date"],
+        request.form["staff_name"],
+        request.form["attendance_status"],
+        id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+
+@app.route("/delete-attendance/<int:id>")
+def delete_attendance(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM attendance
+        WHERE id=?
+    """, (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
 
 @app.route("/edit-daily-closing/<int:id>")
 def edit_daily_closing(id):
@@ -2494,99 +2574,6 @@ def save_settings():
 
     return redirect(url_for("settings"))
 
-@app.route("/attendance")
-def attendance():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM staff_master ORDER BY id DESC")
-    staff_list = cur.fetchall()
-
-    cur.execute("SELECT * FROM attendance ORDER BY id DESC LIMIT 20")
-    attendance_list = cur.fetchall()
-
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    cur.execute("SELECT COUNT(*) AS total_staff FROM staff_master WHERE status='Active'")
-    total_staff = cur.fetchone()["total_staff"]
-
-    cur.execute("""
-        SELECT COUNT(*) AS present_today
-        FROM attendance
-        WHERE date=? AND attendance_status='Present'
-    """, (today,))
-    present_today = cur.fetchone()["present_today"]
-
-    cur.execute("""
-        SELECT COUNT(*) AS absent_leave
-        FROM attendance
-        WHERE date=? AND attendance_status IN ('Absent','Leave')
-    """, (today,))
-    absent_leave = cur.fetchone()["absent_leave"]
-
-    conn.close()
-
-    return render_template(
-        "attendance.html",
-        staff_list=staff_list,
-        attendance_list=attendance_list,
-        total_staff=total_staff,
-        present_today=present_today,
-        absent_leave=absent_leave
-    )
-
-
-@app.route("/save-staff", methods=["POST"])
-def save_staff():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO staff_master (
-            staff_name, role, status
-        )
-        VALUES (?, ?, ?)
-    """, (
-        request.form["staff_name"],
-        request.form["role"],
-        request.form["status"]
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("attendance"))
-
-
-@app.route("/save-attendance", methods=["POST"])
-def save_attendance():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO attendance (
-            date, staff_name, attendance_status
-        )
-        VALUES (?, ?, ?)
-    """, (
-        request.form["date"],
-        request.form["staff_name"],
-        request.form["attendance_status"]
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("attendance"))
 
 
 @app.route("/lube-stock")
@@ -2681,6 +2668,364 @@ def update_lube(id):
 
     return redirect(url_for("lube_stock"))
 
+# =========================================
+# ATTENDANCE PAGE
+# =========================================
+
+@app.route("/attendance")
+def attendance():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # STAFF LIST
+
+    cur.execute("""
+        SELECT *
+        FROM staff_master
+        ORDER BY
+            CASE
+                WHEN status='Active' THEN 1
+                ELSE 2
+            END,
+            staff_name ASC
+    """)
+    staff_list = cur.fetchall()
+
+    # ATTENDANCE HISTORY
+
+    cur.execute("""
+        SELECT *
+        FROM attendance
+        ORDER BY date DESC, id DESC
+    """)
+    attendance_list = cur.fetchall()
+
+    # KPI
+
+    cur.execute("""
+        SELECT COUNT(*) AS total_staff
+        FROM staff_master
+        WHERE status='Active'
+    """)
+    total_staff = cur.fetchone()["total_staff"]
+
+    cur.execute("""
+        SELECT COUNT(*) AS present_today
+        FROM attendance
+        WHERE date=?
+        AND attendance_status='Present'
+    """, (today,))
+    present_today = cur.fetchone()["present_today"]
+
+    cur.execute("""
+        SELECT COUNT(*) AS absent_today
+        FROM attendance
+        WHERE date=?
+        AND attendance_status='Absent'
+    """, (today,))
+    absent_today = cur.fetchone()["absent_today"]
+
+    cur.execute("""
+        SELECT COUNT(*) AS leave_today
+        FROM attendance
+        WHERE date=?
+        AND attendance_status='Leave'
+    """, (today,))
+    leave_today = cur.fetchone()["leave_today"]
+
+    absent_leave = absent_today + leave_today
+
+    # STAFF WISE ATTENDANCE
+
+    staff_attendance = {}
+
+    for staff in staff_list:
+
+        staff_name = staff["staff_name"]
+
+        cur.execute("""
+            SELECT *
+            FROM attendance
+            WHERE staff_name=?
+            ORDER BY date DESC
+            LIMIT 50
+        """, (staff_name,))
+
+        records = cur.fetchall()
+
+        present_count = 0
+        absent_count = 0
+        leave_count = 0
+
+        for r in records:
+
+            if r["attendance_status"] == "Present":
+                present_count += 1
+
+            elif r["attendance_status"] == "Absent":
+                absent_count += 1
+
+            elif r["attendance_status"] == "Leave":
+                leave_count += 1
+
+        staff_attendance[staff_name] = {
+            "records": records,
+            "present": present_count,
+            "absent": absent_count,
+            "leave": leave_count
+        }
+
+    conn.close()
+
+    return render_template(
+        "attendance.html",
+
+        current_date=today,
+
+        staff_list=staff_list,
+
+        attendance_list=attendance_list,
+
+        staff_attendance=staff_attendance,
+
+        total_staff=total_staff,
+
+        present_today=present_today,
+
+        absent_today=absent_today,
+
+        leave_today=leave_today,
+
+        absent_leave=absent_leave
+    )
+
+
+# =========================================
+# SAVE STAFF
+# =========================================
+
+@app.route("/save-staff", methods=["POST"])
+def save_staff():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    staff_name = request.form.get("staff_name", "").strip()
+    role = request.form.get("role", "").strip()
+    status = request.form.get("status", "Active").strip()
+
+    if not staff_name:
+        return redirect(url_for("attendance"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id
+        FROM staff_master
+        WHERE LOWER(staff_name)=LOWER(?)
+    """, (staff_name,))
+
+    existing = cur.fetchone()
+
+    if not existing:
+
+        cur.execute("""
+            INSERT INTO staff_master (
+                staff_name,
+                role,
+                status
+            )
+            VALUES (?, ?, ?)
+        """, (
+            staff_name,
+            role,
+            status
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+
+# =========================================
+# SAVE ATTENDANCE
+# =========================================
+
+@app.route("/save-attendance", methods=["POST"])
+def save_attendance():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    date = request.form.get("date")
+    staff_name = request.form.get("staff_name")
+    attendance_status = request.form.get("attendance_status")
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    # UPDATE IF ALREADY EXISTS
+
+    cur.execute("""
+        SELECT id
+        FROM attendance
+        WHERE date=? AND staff_name=?
+    """, (
+        date,
+        staff_name
+    ))
+
+    existing = cur.fetchone()
+
+    if existing:
+
+        cur.execute("""
+            UPDATE attendance
+            SET attendance_status=?
+            WHERE id=?
+        """, (
+            attendance_status,
+            existing["id"]
+        ))
+
+    else:
+
+        cur.execute("""
+            INSERT INTO attendance (
+                date,
+                staff_name,
+                attendance_status
+            )
+            VALUES (?, ?, ?)
+        """, (
+            date,
+            staff_name,
+            attendance_status
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+@app.route("/edit-staff/<int:id>")
+def edit_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    staff = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "edit_staff.html",
+        staff=staff
+    )
+
+
+@app.route("/update-staff/<int:id>", methods=["POST"])
+def update_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    staff_name = request.form.get("staff_name", "").strip()
+    role = request.form.get("role", "").strip()
+    status = request.form.get("status", "Active").strip()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT staff_name
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    old = cur.fetchone()
+    old_name = old["staff_name"] if old else ""
+
+    cur.execute("""
+        UPDATE staff_master
+        SET staff_name=?,
+            role=?,
+            status=?
+        WHERE id=?
+    """, (
+        staff_name,
+        role,
+        status,
+        id
+    ))
+
+    if old_name and old_name != staff_name:
+        cur.execute("""
+            UPDATE attendance
+            SET staff_name=?
+            WHERE staff_name=?
+        """, (
+            staff_name,
+            old_name
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+
+@app.route("/delete-staff/<int:id>")
+def delete_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT staff_name
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    staff = cur.fetchone()
+
+    if staff:
+        staff_name = staff["staff_name"]
+
+        cur.execute("""
+            DELETE FROM attendance
+            WHERE staff_name=?
+        """, (staff_name,))
+
+        cur.execute("""
+            DELETE FROM staff_master
+            WHERE id=?
+        """, (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
 
 @app.route("/delete-lube/<int:id>")
 def delete_lube(id):

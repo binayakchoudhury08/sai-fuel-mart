@@ -81,11 +81,33 @@ Nozzle Management
         </div>
 
         <div class="box">
+    <div class="box-title">
+        <i class="fa-solid fa-magnifying-glass"></i> Search & Filter
+    </div>
+
+    <div class="form-grid">
+        <div class="input-group">
+            <label>Search Product</label>
+            <input type="text" id="lubeSearch" placeholder="Search by product name...">
+        </div>
+
+        <div class="input-group">
+            <label>Status Filter</label>
+            <select id="stockFilter">
+                <option value="all">All Stock</option>
+                <option value="low">Low Stock</option>
+                <option value="available">Available</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+        <div class="box">
             <div class="box-title">
                 <i class="fa-solid fa-boxes-stacked"></i> Lube Stock Register
             </div>
 
-            <table class="entry-table">
+            <table class="entry-table" id="lubeTable">
                 <tr>
                     <th>Product</th>
                     <th>Rate</th>
@@ -98,7 +120,9 @@ Nozzle Management
                 </tr>
 
                 {% for item in lube_items %}
-                <tr>
+                <tr class="lube-row-data"
+    data-name="{{ item['product_name']|lower }}"
+    data-status="{% if item['closing_stock'] <= 5 %}low{% else %}available{% endif %}">
                     <td>{{ item["product_name"] }}</td>
                     <td>₹ {{ item["selling_rate"] }}</td>
                     <td>{{ item["opening_stock"] }}</td>
@@ -127,6 +151,26 @@ Nozzle Management
     </main>
 
 </div>
+
+<script>
+function filterLubeStock(){
+    const searchValue = document.getElementById("lubeSearch").value.toLowerCase();
+    const statusValue = document.getElementById("stockFilter").value;
+
+    document.querySelectorAll(".lube-row-data").forEach(function(row){
+        const name = row.dataset.name || "";
+        const status = row.dataset.status || "";
+
+        const searchMatch = name.includes(searchValue);
+        const statusMatch = statusValue === "all" || status === statusValue;
+
+        row.style.display = searchMatch && statusMatch ? "table-row" : "none";
+    });
+}
+
+document.getElementById("lubeSearch").addEventListener("input", filterLubeStock);
+document.getElementById("stockFilter").addEventListener("change", filterLubeStock);
+</script>
 
 </body>
 </html>

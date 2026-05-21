@@ -22,6 +22,75 @@
 }
 .edit-btn{background:#2563eb;}
 .delete-btn{background:#dc2626;}
+
+.title-flex{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:20px;
+}
+
+.toggle-btn{
+    border:none;
+    background:#07120C;
+    color:white;
+    padding:10px 16px;
+    border-radius:12px;
+    font-size:13px;
+    font-weight:800;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:.2s;
+}
+
+.toggle-btn:hover{
+    background:#16a34a;
+}
+
+.history-actions{
+    display:flex;
+    gap:12px;
+    align-items:center;
+}
+
+.history-actions input{
+    width:260px;
+    padding:10px 14px;
+    border:1px solid #d1d5db;
+    border-radius:12px;
+    outline:none;
+    font-size:13px;
+}
+
+.compact-table th{
+    padding:10px 12px;
+    font-size:12px;
+}
+
+.compact-table td{
+    padding:9px 12px;
+    font-size:13px;
+}
+
+.compact-table .edit-btn,
+.compact-table .delete-btn{
+    padding:7px 10px;
+    font-size:11px;
+}
+
+.box{
+    max-width:100%;
+    overflow:hidden;
+}
+
+.table-scroll{
+    width:100%;
+    max-width:100%;
+    overflow-x:auto;
+}
+
 </style>
 </head>
 
@@ -167,83 +236,121 @@
 </div>
 
 <div class="box">
-    <div class="box-title">
-        <i class="fa-solid fa-list"></i>
-        Nozzle Master List
-    </div>
 
-    <table class="entry-table">
-        <tr>
-            <th>Nozzle</th>
-            <th>Machine</th>
-            <th>Fuel</th>
-            <th>Status</th>
-            <th>Action</th>
-        </tr>
+<div class="title-flex">
 
-        {% for nozzle in nozzle_master_rows %}
-        <tr>
-            <td>{{ nozzle["nozzle_name"] }}</td>
-            <td>{{ nozzle["machine_no"] }}</td>
-            <td>{{ nozzle["fuel_type"] }}</td>
-            <td>{{ nozzle["status"] }}</td>
-            <td>
-                <div class="action-flex">
-                    <a href="/edit-nozzle-master/{{ nozzle['id'] }}" class="edit-btn">Edit</a>
-                    <a href="/delete-nozzle-master/{{ nozzle['id'] }}" class="delete-btn"
-                       onclick="return confirm('Delete this nozzle and all its entries?')">
-                        Delete
-                    </a>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+<div class="box-title">
+    <i class="fa-solid fa-list"></i>
+    Nozzle Master List
+</div>
+
+<button class="toggle-btn"
+onclick="toggleNozzleMaster()"
+id="toggleMasterBtn">
+<i class="fa-solid fa-eye-slash"></i>
+Hide Data
+</button>
+
+</div>
+
+<div class="table-scroll">
+
+<table class="entry-table" id="nozzleMasterTable">
+<tr>
+<th>Nozzle</th>
+<th>Machine</th>
+<th>Fuel</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+{% for nozzle in nozzle_master_rows %}
+<tr>
+<td>{{ nozzle["nozzle_name"] }}</td>
+<td>{{ nozzle["machine_no"] }}</td>
+<td>{{ nozzle["fuel_type"] }}</td>
+<td>{{ nozzle["status"] }}</td>
+<td>
+<div class="action-flex">
+<a href="/edit-nozzle-master/{{ nozzle['id'] }}" class="edit-btn">Edit</a>
+<a href="/delete-nozzle-master/{{ nozzle['id'] }}" class="delete-btn"
+onclick="return confirm('Delete this nozzle and all its entries?')">
+Delete
+</a>
+</div>
+</td>
+</tr>
+{% endfor %}
+
+</table>
+
+</div>
+
 </div>
 
 <div class="box">
-    <div class="box-title">
-        <i class="fa-solid fa-table"></i>
-        Nozzle Entry History
-    </div>
 
-    <table class="entry-table">
-        <tr>
-            <th>Date</th>
-            <th>Nozzle</th>
-            <th>Machine</th>
-            <th>Fuel</th>
-            <th>Opening</th>
-            <th>Closing</th>
-            <th>Testing</th>
-            <th>Total Sale</th>
-            <th>Updated</th>
-            <th>Action</th>
-        </tr>
+<div class="title-flex">
 
-        {% for row in nozzle_rows %}
-        <tr>
-            <td>{{ row["entry_date"] }}</td>
-            <td>{{ row["nozzle_name"] }}</td>
-            <td>{{ row["machine_no"] }}</td>
-            <td>{{ row["fuel_type"] }}</td>
-            <td>{{ row["opening_reading"] }}</td>
-            <td>{{ row["closing_reading"] }}</td>
-            <td>{{ row["testing_qty"] }}</td>
-            <td><b>{{ row["total_sale"] }}</b></td>
-            <td>{{ row["created_at"] if row["created_at"] else "-" }}</td>
-            <td>
-                <div class="action-flex">
-                    <a href="/edit-nozzle-entry/{{ row['id'] }}" class="edit-btn">Edit</a>
-                    <a href="/delete-nozzle-entry/{{ row['id'] }}" class="delete-btn"
-                       onclick="return confirm('Delete this nozzle entry?')">
-                        Delete
-                    </a>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
+<div class="box-title">
+    <i class="fa-solid fa-table"></i>
+    Nozzle Entry History
+</div>
+
+<div class="history-actions">
+<input type="text" id="historySearch" placeholder="Search nozzle/date/fuel...">
+
+<button class="toggle-btn" onclick="toggleNozzleHistory()" id="toggleHistoryBtn">
+<i class="fa-solid fa-eye-slash"></i>
+Hide Data
+</button>
+</div>
+
+</div>
+
+<div class="table-scroll">
+
+<table class="entry-table compact-table" id="nozzleHistoryTable">
+<tr>
+<th>Date</th>
+<th>Nozzle</th>
+<th>Machine</th>
+<th>Fuel</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Total Sale</th>
+<th>Updated</th>
+<th>Action</th>
+</tr>
+
+{% for row in nozzle_rows %}
+<tr>
+<td>{{ row["entry_date"] }}</td>
+<td>{{ row["nozzle_name"] }}</td>
+<td>{{ row["machine_no"] }}</td>
+<td>{{ row["fuel_type"] }}</td>
+<td>{{ row["opening_reading"] }}</td>
+<td>{{ row["closing_reading"] }}</td>
+<td>{{ row["testing_qty"] }}</td>
+<td><b>{{ row["total_sale"] }}</b></td>
+<td>{{ row["created_at"] if row["created_at"] else "-" }}</td>
+<td>
+<div class="action-flex">
+<a href="/edit-nozzle-entry/{{ row['id'] }}" class="edit-btn">Edit</a>
+<a href="/delete-nozzle-entry/{{ row['id'] }}" class="delete-btn"
+onclick="return confirm('Delete this nozzle entry?')">
+Delete
+</a>
+</div>
+</td>
+</tr>
+{% endfor %}
+
+</table>
+
+</div>
+
 </div>
 
 </main>
@@ -272,6 +379,63 @@ document.getElementById("closing").addEventListener("input", calculateNozzleSale
 document.getElementById("testing").addEventListener("input", calculateNozzleSale);
 
 calculateNozzleSale();
+
+function toggleNozzleMaster(){
+
+    const table =
+    document.getElementById(
+        "nozzleMasterTable"
+    );
+
+    const btn =
+    document.getElementById(
+        "toggleMasterBtn"
+    );
+
+    if(table.style.display === "none"){
+
+        table.style.display = "table";
+
+        btn.innerHTML = `
+        <i class="fa-solid fa-eye-slash"></i>
+        Hide Data
+        `;
+
+    }else{
+
+        table.style.display = "none";
+
+        btn.innerHTML = `
+        <i class="fa-solid fa-eye"></i>
+        Show Data
+        `;
+    }
+}
+function toggleNozzleHistory(){
+    const table = document.getElementById("nozzleHistoryTable");
+    const btn = document.getElementById("toggleHistoryBtn");
+
+    if(table.style.display === "none"){
+        table.style.display = "table";
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Data';
+    }else{
+        table.style.display = "none";
+        btn.innerHTML = '<i class="fa-solid fa-eye"></i> Show Data';
+    }
+}
+
+document.getElementById("historySearch").addEventListener("input", function(){
+    const value = this.value.toLowerCase();
+
+    document.querySelectorAll("#nozzleHistoryTable tr").forEach(function(row, index){
+        if(index === 0) return;
+
+        row.style.display = row.innerText.toLowerCase().includes(value)
+            ? "table-row"
+            : "none";
+    });
+});
+
 </script>
 
 </body>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Edit Staff</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+</head>
+
+<body>
+
+<div class="main-content" style="margin:40px auto;max-width:700px;">
+
+<div class="box">
+<div class="box-title">Edit Staff</div>
+
+<form method="POST" action="/update-staff/{{ staff['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Staff Name</label>
+<input type="text" name="staff_name" value="{{ staff['staff_name'] }}" required>
+</div>
+
+<div class="input-group">
+<label>Role</label>
+<select name="role" required>
+<option {% if staff['role']=='Manager' %}selected{% endif %}>Manager</option>
+<option {% if staff['role']=='Supervisor' %}selected{% endif %}>Supervisor</option>
+<option {% if staff['role']=='Cashier' %}selected{% endif %}>Cashier</option>
+<option {% if staff['role']=='Salesman' %}selected{% endif %}>Salesman</option>
+<option {% if staff['role']=='Security' %}selected{% endif %}>Security</option>
+<option {% if staff['role']=='Cleaner' %}selected{% endif %}>Cleaner</option>
+<option {% if staff['role']=='Operator' %}selected{% endif %}>Operator</option>
+<option {% if staff['role']=='Other' %}selected{% endif %}>Other</option>
+</select>
+</div>
+
+<div class="input-group">
+<label>Status</label>
+<select name="status">
+<option {% if staff['status']=='Active' %}selected{% endif %}>Active</option>
+<option {% if staff['status']=='Inactive' %}selected{% endif %}>Inactive</option>
+</select>
+</div>
+
+</div>
+
+<br>
+
+<button class="save-btn-top" type="submit">Update Staff</button>
+<a href="/attendance" class="add-btn">Cancel</a>
+
+</form>
+</div>
+
+</div>
+
+</body>
+</html>
