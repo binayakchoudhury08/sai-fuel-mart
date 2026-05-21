@@ -370,6 +370,33 @@ body{
     }
 }
 
+.summary-strip{
+    display:flex;
+    gap:16px;
+    margin-bottom:18px;
+}
+
+.summary-mini{
+    background:#ecfdf3;
+    padding:14px 18px;
+    border-radius:16px;
+    min-width:180px;
+}
+
+.summary-mini span{
+    display:block;
+    color:#64748b;
+    font-size:13px;
+    font-weight:700;
+}
+
+.summary-mini b{
+    display:block;
+    margin-top:6px;
+    color:#07120C;
+    font-size:20px;
+}
+
 </style>
 
 </head>
@@ -396,7 +423,7 @@ body{
 Dashboard
 </a>
 
-<a href="/reports">
+<a class="active" href="/reports">
 <i class="fa-solid fa-chart-line"></i>
 Reports
 </a>
@@ -616,7 +643,9 @@ id="dailyTable">
 <th>Expense</th>
 <th>Cash</th>
 <th>Print</th>
+{% if session.get("role") == "manager" %}
 <th>Action</th>
+{% endif %}
 
 </tr>
 
@@ -1065,6 +1094,18 @@ Export Excel
 
 <div class="table-wrapper">
 
+<div class="summary-strip">
+    <div class="summary-mini">
+        <span>Total HSD Qty</span>
+        <b id="entryQtyTotal">0</b>
+    </div>
+
+    <div class="summary-mini">
+        <span>Total Amount</span>
+        <b id="entryAmountTotal">₹ 0</b>
+    </div>
+</div>
+
 <table class="entry-table" id="entryTable">
 
 <thead>
@@ -1194,6 +1235,7 @@ function paginateTable(tableId, rowsPerPage = 10){
             ()=>showPage(i);
 
             pager.appendChild(btn);
+            updateTransportEntryTotals();
         }
     }
 
@@ -1214,11 +1256,50 @@ function initAllPagination(){
 window.onload =
 initAllPagination;
 
+function updateTransportEntryTotals(){
+
+    let qty = 0;
+    let amount = 0;
+
+    document
+    .querySelectorAll("#entryTable tbody tr")
+    .forEach(function(row){
+
+        if(row.style.display === "none"){
+            return;
+        }
+
+        let qtyText =
+        row.children[6].innerText
+        .replace(/,/g,'');
+
+        let amountText =
+        row.children[10].innerText
+        .replace("₹","")
+        .replace(/,/g,'');
+
+        qty += parseFloat(qtyText) || 0;
+        amount += parseFloat(amountText) || 0;
+
+    });
+
+    document.getElementById(
+        "entryQtyTotal"
+    ).innerText = Math.round(qty);
+
+    document.getElementById(
+        "entryAmountTotal"
+    ).innerText =
+
+    "₹ " + Math.round(amount);
+}
+
 </script>
 
 </main>
 
 </div>
+
 
 </body>
 </html>

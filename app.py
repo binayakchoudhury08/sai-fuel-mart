@@ -464,6 +464,13 @@ def daily_closing():
 
     lube_items = cur.fetchall()
 
+    cur.execute("""
+    SELECT *
+    FROM credit_transporters
+    ORDER BY party_name ASC
+""")
+    transporters = cur.fetchall()
+
     # SETTINGS
 
     cur.execute("""
@@ -527,7 +534,7 @@ def daily_closing():
         "daily_closing.html",
 
         settings=settings,
-
+        transporters=transporters,
         ms_nozzles=ms_nozzles,
         hsd_nozzles=hsd_nozzles,
         cng_nozzles=cng_nozzles,

@@ -340,51 +340,52 @@ body{
 
 /* GRID */
 
-.two-grid{
+.three-grid{
     display:grid;
     grid-template-columns:1fr 1fr;
-    gap:24px;
+    gap:22px;
+    margin-bottom:24px;
 }
 
-/* RESPONSIVE */
-
-@media(max-width:1200px){
-
-    .cards{
-        grid-template-columns:repeat(2,1fr);
-    }
-
-    .summary-grid{
-        grid-template-columns:repeat(2,1fr);
-    }
-
-    .form-grid{
-        grid-template-columns:1fr 1fr;
-    }
+.credit-wide{
+    grid-column:1 / -1;
 }
 
-@media(max-width:800px){
+.premium-box{
+    border:1px solid #e5e7eb;
+    background:linear-gradient(180deg,#ffffff,#f8fafc);
+    padding:22px;
+    border-radius:24px;
+}
 
-    .sidebar{
-        position:relative;
-        width:100%;
-        height:auto;
-    }
+.premium-box .box-title{
+    margin-bottom:18px;
+    padding-bottom:14px;
+    border-bottom:1px solid #e5e7eb;
+}
 
-    .container{
-        flex-direction:column;
-    }
+.premium-box .entry-table th{
+    padding:12px 10px;
+    font-size:13px;
+}
 
-    .main-content{
-        margin-left:0;
-        width:100%;
-    }
+.premium-box .entry-table td{
+    padding:10px;
+}
 
-    .cards,
-    .summary-grid,
-    .two-grid,
-    .form-grid{
+.premium-box .entry-table input,
+.premium-box .entry-table select{
+    padding:10px;
+    font-size:13px;
+}
+
+@media(max-width:1000px){
+    .three-grid{
         grid-template-columns:1fr;
+    }
+
+    .credit-wide{
+        grid-column:auto;
     }
 }
 
@@ -830,13 +831,70 @@ Digital Collection
 
 </div>
 
-<!-- LUBE + EXPENSE -->
+<!-- CREDIT + LUBE + EXPENSE -->
 
-<div class="two-grid">
+<div class="three-grid">
+
+<!-- CREDIT TRANSPORT -->
+
+<div class="box premium-box credit-wide">
+
+<div class="box-title">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</div>
+
+<table class="entry-table" id="credit-table">
+<thead>
+<tr>
+<th>Transporter</th>
+<th>Fuel</th>
+<th>Rate</th>
+<th>Amount</th>
+<th>Qty</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+<tr class="credit-row">
+<td>
+<select class="transporter">
+<option value="">Select Party</option>
+{% for t in transporters %}
+<option value="{{ t['id'] }}">{{ t['party_name'] }}</option>
+{% endfor %}
+</select>
+</td>
+
+<td>
+<select class="fuel">
+<option>MS</option>
+<option selected>HSD</option>
+<option>CNG</option>
+</select>
+</td>
+
+<td><input type="number" class="rate" readonly></td>
+<td><input type="number" class="amount" placeholder="Amount"></td>
+<td><input type="number" class="litres" readonly></td>
+
+<td>
+<button type="button" class="delete-row">Delete</button>
+</td>
+</tr>
+</tbody>
+</table>
+
+<button class="add-btn" id="add-credit">
++ Add Credit Entry
+</button>
+
+</div>
 
 <!-- LUBE -->
 
-<div class="box">
+<div class="box premium-box">
 
 <div class="box-title">
 <i class="fa-solid fa-oil-can"></i>
@@ -844,9 +902,7 @@ Lube Sales
 </div>
 
 <table class="entry-table" id="lube-table">
-
 <thead>
-
 <tr>
 <th>Product</th>
 <th>Qty</th>
@@ -854,145 +910,69 @@ Lube Sales
 <th>Amount</th>
 <th>Action</th>
 </tr>
-
 </thead>
 
 <tbody>
-
 <tr class="lube-row">
-
 <td>
-
 <select class="lube-product">
-
-<option value="" data-rate="0">
-Select Product
-</option>
-
+<option value="" data-rate="0">Select Product</option>
 {% for item in lube_items %}
-
-<option
-value="{{ item['id'] }}"
-data-rate="{{ item['selling_rate'] }}">
-
-{{ item['product_name'] }}
-| Stock:
-{{ item['closing_stock'] }}
-
+<option value="{{ item['id'] }}" data-rate="{{ item['selling_rate'] }}">
+{{ item['product_name'] }} | Stock: {{ item['closing_stock'] }}
 </option>
-
 {% endfor %}
-
 </select>
-
 </td>
 
-<td>
-<input type="number" class="qty">
-</td>
-
-<td>
-<input type="number"
-class="lube-rate"
-readonly>
-</td>
-
-<td>
-<input type="number"
-class="lube-amount"
-readonly>
-</td>
-
-<td>
-
-<button type="button"
-class="delete-row">
-
-Delete
-
-</button>
-
-</td>
-
+<td><input type="number" class="qty"></td>
+<td><input type="number" class="lube-rate" readonly></td>
+<td><input type="number" class="lube-amount" readonly></td>
+<td><button type="button" class="delete-row">Delete</button></td>
 </tr>
-
 </tbody>
-
 </table>
 
-<button class="add-btn"
-id="add-lube">
-
+<button class="add-btn" id="add-lube">
 + Add Lube Item
-
 </button>
 
 </div>
 
 <!-- EXPENSE -->
 
-<div class="box">
+<div class="box premium-box">
 
 <div class="box-title">
 <i class="fa-solid fa-money-bill-wave"></i>
 Expenses
 </div>
 
-<table class="entry-table"
-id="expense-table">
-
+<table class="entry-table" id="expense-table">
 <thead>
-
 <tr>
-<th>Expense Name</th>
+<th>Expense</th>
 <th>Amount</th>
 <th>Action</th>
 </tr>
-
 </thead>
 
 <tbody>
-
 <tr class="expense-row">
-
-<td>
-<input type="text"
-placeholder="Expense Name">
-</td>
-
-<td>
-<input type="number"
-class="expense-amount">
-</td>
-
-<td>
-
-<button type="button"
-class="delete-row">
-
-Delete
-
-</button>
-
-</td>
-
+<td><input type="text" placeholder="Expense Name"></td>
+<td><input type="number" class="expense-amount"></td>
+<td><button type="button" class="delete-row">Delete</button></td>
 </tr>
-
 </tbody>
-
 </table>
 
-<button class="add-btn"
-id="add-expense">
-
+<button class="add-btn" id="add-expense">
 + Add Expense
-
 </button>
 
 </div>
 
 </div>
-
 <!-- SUMMARY -->
 
 <div class="box">
