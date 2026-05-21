@@ -1,88 +1,1222 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Reports - Sai Fuel Mart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Reports - Sai Fuel Mart</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f3f4f6;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:24px 18px;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+}
+
+.logo{
+    margin-bottom:35px;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    color:#94a3b8;
+    margin-top:6px;
+    font-size:12px;
+}
+
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:14px;
+    transition:.2s;
+    font-weight:600;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active{
+    background:#16a34a;
+    color:white;
+}
+
+/* MAIN */
+
+.main-content{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+}
+
+.topbar h1{
+    font-size:34px;
+    color:#07120C;
+}
+
+.topbar p{
+    color:#64748b;
+    margin-top:6px;
+}
+
+/* FILTER */
+
+.report-filters{
+    background:white;
+    padding:24px;
+    border-radius:24px;
+    margin-bottom:28px;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.filter-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:10px;
+    font-weight:700;
+    color:#374151;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    font-size:14px;
+}
+
+.filter-btns{
+    margin-top:20px;
+    display:flex;
+    gap:14px;
+}
+
+.filter-btn{
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 22px;
+    border-radius:14px;
+    cursor:pointer;
+    font-weight:700;
+}
+
+.reset-btn{
+    background:#e2e8f0;
+    color:#07120C;
+    text-decoration:none;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+}
+
+/* TABS */
+
+.tabs{
+    display:flex;
+    gap:12px;
+    margin-bottom:24px;
+    flex-wrap:wrap;
+}
+
+.tab-btn{
+    border:none;
+    background:white;
+    padding:14px 22px;
+    border-radius:14px;
+    cursor:pointer;
+    font-weight:700;
+    box-shadow:0 6px 18px rgba(0,0,0,.05);
+}
+
+.tab-btn.active{
+    background:#16a34a;
+    color:white;
+}
+
+/* REPORT */
+
+.report-tab{
+    display:none;
+}
+
+.report-tab.active-tab{
+    display:block;
+}
+
+.report-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:18px;
+}
+
+.report-top h2{
+    font-size:24px;
+    color:#07120C;
+}
+
+.export-btn{
+    background:#16a34a;
+    color:white;
+    text-decoration:none;
+    padding:12px 18px;
+    border-radius:12px;
+    font-weight:700;
+}
+
+/* TABLE */
+
+.table-wrapper{
+    width:100%;
+    overflow-x:auto;
+    background:white;
+    border-radius:24px;
+    padding:18px;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.entry-table{
+    width:100%;
+    min-width:1200px;
+    border-collapse:collapse;
+}
+
+.entry-table th{
+    background:#f8fafc;
+    padding:14px;
+    text-align:left;
+    color:#475569;
+}
+
+.entry-table td{
+    padding:14px;
+    border-top:1px solid #e5e7eb;
+}
+
+/* BUTTONS */
+
+.action-flex{
+    display:flex;
+    gap:8px;
+}
+
+.edit-btn{
+    background:#2563eb;
+    color:white;
+    padding:8px 14px;
+    border-radius:10px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:white;
+    padding:8px 14px;
+    border-radius:10px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.print-btn{
+    background:#0f172a;
+    color:white;
+    padding:8px 14px;
+    border-radius:10px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+/* PAGINATION */
+
+.pagination{
+    display:flex;
+    justify-content:center;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:20px;
+    margin-bottom:20px;
+}
+
+.page-btn{
+    min-width:40px;
+    height:40px;
+    border:none;
+    border-radius:10px;
+    background:white;
+    cursor:pointer;
+    font-weight:700;
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+
+.page-btn.active{
+    background:#16a34a;
+    color:white;
+}
+
+@media(max-width:1100px){
+
+    .filter-grid{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+/* HOVER DETAIL */
+
+.hover-detail{
+    position:relative;
+    cursor:pointer;
+    font-weight:700;
+    color:#2563eb;
+}
+
+.hover-card{
+    position:absolute;
+    top:110%;
+    left:0;
+    min-width:220px;
+    background:#07120C;
+    color:white;
+    padding:14px;
+    border-radius:16px;
+    box-shadow:0 15px 40px rgba(0,0,0,.18);
+    z-index:999;
+    display:none;
+    animation:fadeIn .15s ease;
+}
+
+.hover-detail:hover .hover-card{
+    display:block;
+}
+
+.hover-card h4{
+    margin-bottom:10px;
+    font-size:13px;
+    color:#86efac;
+}
+
+.hover-line{
+    display:flex;
+    justify-content:space-between;
+    padding:6px 0;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    font-size:13px;
+}
+
+.hover-line:last-child{
+    border-bottom:none;
+}
+
+@keyframes fadeIn{
+    from{
+        opacity:0;
+        transform:translateY(6px);
+    }
+    to{
+        opacity:1;
+        transform:translateY(0);
+    }
+}
+
+</style>
+
 </head>
 
 <body>
 
 <div class="container">
 
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>SAI FUEL MART</h2>
-            <p>FUELING YOUR TRUST</p>
-        </div>
+<!-- SIDEBAR -->
 
-        <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a class="active" href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
-    </aside>
+<aside class="sidebar">
 
-    <main class="main-content">
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>Fueling Your Trust</p>
+</div>
 
-        <div class="topbar">
-            <div>
-                <h1>Reports</h1>
-                <p>Saved daily closing records</p>
-            </div>
+<nav>
 
-            <a href="/export-reports" class="save-btn-top">
-                <i class="fa-solid fa-file-excel"></i> Export Excel
-            </a>
-        </div>
+{% if session.get("role") == "admin" %}
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-table"></i> Daily Closing Report
-            </div>
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
 
-            <table class="entry-table">
-                <tr>
-                    <th>Date</th>
-                    <th>MS Ltrs</th>
-                    <th>HSD Ltrs</th>
-                    <th>Fuel Sale</th>
-                    <th>Lube</th>
-                    <th>Digital</th>
-                    <th>Credit Due</th>
-                    <th>Expense</th>
-                    <th>Cash</th>
-                    <th>Action</th>
-                </tr>
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
 
-                {% for row in rows %}
-                <tr>
-                    <td>{{ row["date"] }}</td>
-                    <td>{{ row["ms_litres"] }}</td>
-                    <td>{{ row["hsd_litres"] }}</td>
-                    <td>₹ {{ row["total_fuel_sale"] }}</td>
-                    <td>₹ {{ row["lube_sale"] }}</td>
-                    <td>₹ {{ row["digital_collection"] }}</td>
-                    <td>₹ {{ row["net_credit_due"] }}</td>
-                    <td>₹ {{ row["total_expense"] }}</td>
-                    <td>₹ {{ row["cash_in_hand"] }}</td>
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
 
-                    <td>
-                        <a href="/edit-report/{{ row['id'] }}" class="add-btn">Edit</a>
-                        <a href="/delete-report/{{ row['id'] }}" class="add-btn"
-                           onclick="return confirm('Are you sure?')">Delete</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
 
-    </main>
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+</nav>
+</aside>
+
+<!-- MAIN -->
+
+<main class="main-content">
+
+<div class="topbar">
+
+<div>
+<h1>Reports</h1>
+<p>Complete reports and exports</p>
+</div>
+
+</div>
+
+<!-- FILTERS -->
+
+<div class="report-filters">
+
+<form method="GET" action="/reports">
+
+<div class="filter-grid">
+
+<div class="input-group">
+<label>From Date</label>
+<input type="date" name="from_date">
+</div>
+
+<div class="input-group">
+<label>To Date</label>
+<input type="date" name="to_date">
+</div>
+
+<div class="input-group">
+<label>Fuel Type</label>
+
+<select name="fuel_type">
+
+<option value="">All</option>
+<option value="MS">MS</option>
+<option value="HSD">HSD</option>
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Search</label>
+<input type="text"
+name="search"
+placeholder="Search anything...">
+</div>
+
+</div>
+
+<div class="filter-btns">
+
+<button class="filter-btn">
+Apply Filters
+</button>
+
+<a href="/reports"
+class="reset-btn">
+Reset
+</a>
+
+</div>
+
+</form>
+
+</div>
+
+<!-- TABS -->
+
+<div class="tabs">
+
+<button class="tab-btn active"
+onclick="openTab('daily-tab',this)">
+Daily Closing
+</button>
+
+<button class="tab-btn"
+onclick="openTab('nozzle-tab',this)">
+Nozzle
+</button>
+
+<button class="tab-btn"
+onclick="openTab('tank-tab',this)">
+Tank
+</button>
+
+<button class="tab-btn"
+onclick="openTab('lube-tab',this)">
+Lube
+</button>
+
+<button class="tab-btn"
+onclick="openTab('transport-tab',this)">
+Transporters
+</button>
+
+<button class="tab-btn"
+onclick="openTab('entry-tab',this)">
+Transport Entry
+</button>
+
+</div>
+
+<!-- DAILY -->
+
+<div class="report-tab active-tab"
+id="daily-tab">
+
+<div class="report-top">
+
+<h2>Daily Closing Reports</h2>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/export-reports" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table"
+id="dailyTable">
+
+<thead>
+
+<tr>
+
+<th>Date</th>
+<th>MS</th>
+<th>HSD</th>
+<th>CNG</th>
+<th>Fuel Sale</th>
+<th>Lube</th>
+<th>Digital</th>
+<th>Expense</th>
+<th>Cash</th>
+<th>Print</th>
+<th>Action</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for row in daily_rows %}
+
+<tr>
+
+<td>{{ row["date"] }}</td>
+<td>
+
+<div class="hover-detail">
+
+{{ row["ms_litres"] }}
+
+<div class="hover-card">
+
+<h4>MS Nozzle Details</h4>
+
+<div class="hover-line">
+<span>MS1</span>
+<span>{{ row["ms1"] or 0 }}</span>
+</div>
+
+<div class="hover-line">
+<span>MS2</span>
+<span>{{ row["ms2"] or 0 }}</span>
+</div>
+
+<div class="hover-line">
+<span>MS3</span>
+<span>{{ row["ms3"] or 0 }}</span>
+</div>
+
+</div>
+
+</div>
+
+</td>
+<td>
+
+<div class="hover-detail">
+
+{{ row["hsd_litres"] }}
+
+<div class="hover-card">
+
+<h4>HSD Nozzle Details</h4>
+
+<div class="hover-line">
+<span>HSD1</span>
+<span>{{ row["hsd1"] or 0 }}</span>
+</div>
+
+<div class="hover-line">
+<span>HSD2</span>
+<span>{{ row["hsd2"] or 0 }}</span>
+</div>
+
+<div class="hover-line">
+<span>HSD3</span>
+<span>{{ row["hsd3"] or 0 }}</span>
+</div>
+
+</div>
+
+</div>
+
+</td>
+
+<td>
+
+<div class="hover-detail">
+
+{{ row["cng_sale"] }}
+
+<div class="hover-card">
+
+<h4>CNG Nozzle Details</h4>
+
+<div class="hover-line">
+<span>CNG1</span>
+<span>{{ row["cng1"] or 0 }}</span>
+</div>
+
+<div class="hover-line">
+<span>CNG2</span>
+<span>{{ row["cng2"] or 0 }}</span>
+</div>
+
+</div>
+
+</div>
+
+</td>
+
+<td>₹ {{ row["total_fuel_sale"] }}</td>
+<td>₹ {{ row["lube_sale"] }}</td>
+<td>₹ {{ row["digital_collection"] }}</td>
+<td>₹ {{ row["total_expense"] }}</td>
+
+<td>
+<b>
+₹ {{ row["cash_in_hand"] }}
+</b>
+</td>
+
+<td>
+
+<a href="/print-daily-report/{{ row['date'] }}"
+target="_blank"
+class="print-btn">
+
+Print
+
+</a>
+
+</td>
+
+<td>
+
+<div class="action-flex">
+
+<a href="/edit-daily-closing/{{ row['id'] }}"
+class="edit-btn">
+
+Edit
+
+</a>
+
+<a href="/delete-daily-closing/{{ row['id'] }}"
+class="delete-btn"
+onclick="return confirm('Delete daily closing report?')">
+
+Delete
+
+</a>
+
+</div>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination"
+data-table="dailyTable">
+</div>
+
+</div>
+
+<!-- NOZZLE -->
+
+<div class="report-tab"
+id="nozzle-tab">
+
+<div class="report-top">
+
+<h2>Nozzle Reports</h2>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/export-nozzle-report" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table"
+id="nozzleTable">
+
+<thead>
+
+<tr>
+
+<th>Date</th>
+<th>Nozzle</th>
+<th>Machine</th>
+<th>Fuel</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Sale</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for row in nozzle_rows %}
+
+<tr>
+
+<td>{{ row["entry_date"] }}</td>
+<td>{{ row["nozzle_name"] }}</td>
+<td>{{ row["machine_no"] }}</td>
+<td>{{ row["fuel_type"] }}</td>
+<td>{{ row["opening_reading"] }}</td>
+<td>{{ row["closing_reading"] }}</td>
+<td>{{ row["testing_qty"] }}</td>
+
+<td>
+<b>
+{{ row["total_sale"] }}
+</b>
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination"
+data-table="nozzleTable">
+</div>
+
+</div>
+
+<!-- TANK -->
+
+<div class="report-tab"
+id="tank-tab">
+
+<div class="report-top">
+
+<h2>Tank Reports</h2>
+{% if session.get("role") == "admin" %}
+
+<a href="/export-tank-report" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table"
+id="tankTable">
+
+<thead>
+
+<tr>
+
+<th>Date</th>
+<th>Fuel</th>
+<th>Opening</th>
+<th>Received</th>
+<th>Sale</th>
+<th>Current</th>
+<th>Gain</th>
+<th>Shortage</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for row in tank_rows %}
+
+<tr>
+
+<td>{{ row["date"] }}</td>
+<td>{{ row["fuel_type"] }}</td>
+<td>{{ row["opening_stock"] }}</td>
+<td>{{ row["received_stock"] }}</td>
+<td>{{ row["sale_stock"] }}</td>
+<td>{{ row["current_stock"] }}</td>
+<td>{{ row["gain_qty"] }}</td>
+<td>{{ row["shortage_qty"] }}</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination"
+data-table="tankTable">
+</div>
+
+</div>
+
+<!-- LUBE -->
+
+<div class="report-tab"
+id="lube-tab">
+
+<div class="report-top">
+
+<h2>Lube Reports</h2>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/export-lube-report" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table"
+id="lubeTable">
+
+<thead>
+
+<tr>
+
+<th>Product</th>
+<th>Rate</th>
+<th>Opening</th>
+<th>Purchase</th>
+<th>Sale</th>
+<th>Closing</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for row in lube_rows %}
+
+<tr>
+
+<td>{{ row["product_name"] }}</td>
+<td>{{ row["selling_rate"] }}</td>
+<td>{{ row["opening_stock"] }}</td>
+<td>{{ row["purchase_qty"] }}</td>
+<td>{{ row["sale_qty"] }}</td>
+<td>{{ row["closing_stock"] }}</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination"
+data-table="lubeTable">
+</div>
+
+</div>
+
+<!-- TRANSPORTERS -->
+
+<div class="report-tab" id="transport-tab">
+
+<div class="report-top">
+<h2>Transporter Reports</h2>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/export-transport-report" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table" id="transportTable">
+
+<thead>
+<tr>
+<th>Party</th>
+<th>Opening</th>
+<th>Credit Given</th>
+<th>Payment Received</th>
+<th>Balance Due</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody>
+{% for row in transporter_rows %}
+<tr>
+<td>{{ row["party_name"] }}</td>
+<td>₹ {{ row["opening_balance"] }}</td>
+<td>₹ {{ row["credit_given"] }}</td>
+<td>₹ {{ row["payment_received"] }}</td>
+<td><b>₹ {{ row["balance_due"] }}</b></td>
+<td>{{ row["status"] }}</td>
+</tr>
+{% endfor %}
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination" data-table="transportTable"></div>
+
+</div>
+
+
+<!-- TRANSPORT ENTRY -->
+
+<div class="report-tab" id="entry-tab">
+
+<div class="report-top">
+<h2>Transport Entry Reports</h2>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/export-transport-entry-report" class="export-btn">
+Export Excel
+</a>
+
+{% endif %}
+</div>
+
+<div class="table-wrapper">
+
+<table class="entry-table" id="entryTable">
+
+<thead>
+<tr>
+<th>Date</th>
+<th>SL</th>
+<th>Transporter</th>
+<th>Challan</th>
+<th>Vehicle</th>
+<th>Slip</th>
+<th>HSD Qty</th>
+<th>Rate</th>
+<th>HSD Amount</th>
+<th>Cash</th>
+<th>Total</th>
+</tr>
+</thead>
+
+<tbody>
+{% for row in transport_entry_rows %}
+<tr>
+<td>{{ row["entry_date"] }}</td>
+<td>{{ row["sl_no"] }}</td>
+<td>{{ row["transporter_name"] }}</td>
+<td>{{ row["challan_no"] }}</td>
+<td>{{ row["vehicle_no"] }}</td>
+<td>{{ row["slip_no"] }}</td>
+<td>{{ row["hsd_qty"] }}</td>
+<td>₹ {{ row["rate"] }}</td>
+<td>₹ {{ row["hsd_amount"] }}</td>
+<td>₹ {{ row["cash_taken"] }}</td>
+<td><b>₹ {{ row["total_amount"] }}</b></td>
+</tr>
+{% endfor %}
+</tbody>
+
+</table>
+
+</div>
+
+<div class="pagination" data-table="entryTable"></div>
+
+</div>
+
+<!-- JS -->
+
+<script>
+
+function openTab(tabId, btn){
+
+    document.querySelectorAll(".report-tab")
+    .forEach(tab=>{
+
+        tab.classList.remove("active-tab");
+    });
+
+    document.querySelectorAll(".tab-btn")
+    .forEach(button=>{
+
+        button.classList.remove("active");
+    });
+
+    document.getElementById(tabId)
+    .classList.add("active-tab");
+
+    btn.classList.add("active");
+
+    setTimeout(initAllPagination,100);
+}
+
+function paginateTable(tableId, rowsPerPage = 10){
+
+    const table =
+    document.getElementById(tableId);
+
+    if(!table) return;
+
+    const rows =
+    Array.from(
+        table.querySelectorAll("tbody tr")
+    );
+
+    const pager =
+    document.querySelector(
+        `.pagination[data-table="${tableId}"]`
+    );
+
+    if(!pager || rows.length===0) return;
+
+    const totalPages =
+    Math.ceil(rows.length / rowsPerPage);
+
+    function showPage(page){
+
+        rows.forEach((row,index)=>{
+
+            row.style.display =
+
+            index >= (page-1)*rowsPerPage
+            &&
+            index < page*rowsPerPage
+
+            ? "table-row"
+
+            : "none";
+
+        });
+
+        pager.innerHTML = "";
+
+        for(let i=1;i<=totalPages;i++){
+
+            const btn =
+            document.createElement("button");
+
+            btn.className =
+            "page-btn";
+
+            if(i===page){
+
+                btn.classList.add("active");
+            }
+
+            btn.innerText = i;
+
+            btn.onclick =
+            ()=>showPage(i);
+
+            pager.appendChild(btn);
+        }
+    }
+
+    showPage(1);
+}
+
+function initAllPagination(){
+
+    paginateTable("dailyTable");
+    paginateTable("nozzleTable");
+    paginateTable("tankTable");
+    paginateTable("lubeTable");
+    paginateTable("transportTable");
+    paginateTable("entryTable");
+
+}
+
+window.onload =
+initAllPagination;
+
+</script>
+
+</main>
 
 </div>
 

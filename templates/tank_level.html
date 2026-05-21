@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Tank Level - Sai Fuel Mart</title>
+<meta charset="UTF-8">
+<title>Tank Level - Sai Fuel Mart</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
 .kpi-grid{
@@ -15,25 +17,20 @@
 }
 
 .kpi-card{
-    background:white;
+    background:#fff;
     border-radius:24px;
     padding:22px;
     box-shadow:0 14px 35px rgba(0,0,0,.06);
-    transition:.25s;
-}
-
-.kpi-card:hover{
-    transform:translateY(-5px);
-    box-shadow:0 24px 55px rgba(16,24,40,.12);
 }
 
 .kpi-card h4{
     color:#667085;
-    margin-bottom:12px;
+    margin-bottom:10px;
+    font-size:14px;
 }
 
 .kpi-card h2{
-    font-size:30px;
+    font-size:28px;
 }
 
 .green{border-left:5px solid #16a34a;}
@@ -41,45 +38,113 @@
 .blue{border-left:5px solid #2563eb;}
 .orange{border-left:5px solid #f97316;}
 
-.gain{
-    color:#16a34a;
-    font-weight:700;
+.live-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:18px;
+    margin-bottom:24px;
 }
 
-.shortage{
-    color:#dc2626;
-    font-weight:700;
+.live-card{
+    background:#fff;
+    border-radius:26px;
+    padding:22px;
+    box-shadow:0 14px 35px rgba(0,0,0,.06);
 }
 
-.action-flex{
+.live-top{
     display:flex;
-    gap:10px;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:14px;
 }
 
-.edit-btn{
-    background:#2563eb;
-    color:white;
-    text-decoration:none;
-    padding:8px 14px;
-    border-radius:10px;
-    font-size:12px;
-    font-weight:600;
+.live-title{
+    display:flex;
+    align-items:center;
+    gap:12px;
 }
 
-.delete-btn{
-    background:#dc2626;
-    color:white;
-    text-decoration:none;
-    padding:8px 14px;
-    border-radius:10px;
+.live-icon{
+    width:48px;
+    height:48px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+}
+
+.ms-icon{
+    background:#dbeafe;
+    color:#2563eb;
+}
+
+.hsd-icon{
+    background:#dcfce7;
+    color:#16a34a;
+}
+
+.progress{
+    width:100%;
+    height:14px;
+    background:#e5e7eb;
+    border-radius:999px;
+    overflow:hidden;
+    margin:15px 0;
+}
+
+.progress-fill{
+    height:100%;
+    border-radius:999px;
+    transition:.6s;
+}
+
+.ms-fill{
+    background:linear-gradient(to right,#2563eb,#60a5fa);
+}
+
+.hsd-fill{
+    background:linear-gradient(to right,#16a34a,#4ade80);
+}
+
+.live-bottom{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.stock-value{
+    font-size:28px;
+    font-weight:800;
+}
+
+.badge{
+    padding:7px 13px;
+    border-radius:999px;
     font-size:12px;
-    font-weight:600;
+    font-weight:700;
+}
+
+.badge-gain{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.badge-short{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.badge-neutral{
+    background:#e5e7eb;
+    color:#374151;
 }
 
 .preview-box{
     background:#f8fafc;
     border:1px solid #edf0f4;
-    border-radius:20px;
+    border-radius:22px;
     padding:18px;
     margin-top:18px;
 }
@@ -91,7 +156,7 @@
 }
 
 .preview-item{
-    background:white;
+    background:#fff;
     border:1px solid #e5e7eb;
     border-radius:16px;
     padding:14px;
@@ -105,14 +170,65 @@
     margin-top:8px;
 }
 
-@media(max-width:900px){
+.gain-text{
+    color:#16a34a;
+    font-weight:800;
+}
+
+.shortage-text{
+    color:#dc2626;
+    font-weight:800;
+}
+
+.action-flex{
+    display:flex;
+    gap:8px;
+}
+
+.edit-btn,.delete-btn{
+    text-decoration:none;
+    padding:8px 13px;
+    border-radius:10px;
+    color:white;
+    font-size:12px;
+    font-weight:700;
+}
+
+.edit-btn{
+    background:#2563eb;
+}
+
+.delete-btn{
+    background:#dc2626;
+}
+
+.search-row{
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom:18px;
+}
+
+.search-row input,
+.search-row select{
+    padding:12px 14px;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    outline:none;
+}
+
+@media(max-width:1000px){
     .kpi-grid,
+    .live-grid,
     .preview-grid{
         grid-template-columns:1fr;
     }
+
+    .search-row{
+        flex-direction:column;
+    }
 }
 </style>
-
 </head>
 
 <body>
@@ -120,7 +236,6 @@
 <div class="container">
 
 <aside class="sidebar">
-
     <div class="logo">
         <h2>SAI FUEL MART</h2>
         <p>FUELING YOUR TRUST</p>
@@ -129,6 +244,10 @@
     <nav>
         <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
         <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+        <a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
         <a class="active" href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
         <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
         <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
@@ -137,7 +256,6 @@
         <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
         <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
     </nav>
-
 </aside>
 
 <main class="main-content">
@@ -145,7 +263,7 @@
 <div class="topbar">
     <div>
         <h1>Tank Level Management</h1>
-        <p>Stock receiving, own tanker, auto sale qty, gain and shortage monitor</p>
+        <p>Auto sale from daily closing, unloading, own tanker, gain and shortage tracking</p>
     </div>
 </div>
 
@@ -169,6 +287,88 @@
     <div class="kpi-card orange">
         <h4>Total Shortage Amount</h4>
         <h2>₹ {{ monthly["total_shortage_amount"] if monthly and monthly["total_shortage_amount"] else 0 }}</h2>
+    </div>
+
+</div>
+
+<div class="live-grid">
+
+    <div class="live-card">
+        <div class="live-top">
+            <div class="live-title">
+                <div class="live-icon ms-icon">
+                    <i class="fa-solid fa-gas-pump"></i>
+                </div>
+                <div>
+                    <h3>MS Tank</h3>
+                    <p>Capacity: 22,000 L</p>
+                </div>
+            </div>
+
+            {% set ms_percent = 0 %}
+            {% if ms_latest and ms_latest["current_stock"] %}
+                {% set ms_percent = ((ms_latest["current_stock"] / 22000) * 100) | round(1) %}
+            {% endif %}
+
+            <b>{{ ms_percent }}%</b>
+        </div>
+
+        <div class="progress">
+            <div class="progress-fill ms-fill" data-percent="{{ ms_percent }}"></div>
+        </div>
+
+        <div class="live-bottom">
+            <div class="stock-value">
+                {{ ms_latest["current_stock"] if ms_latest else 0 }} L
+            </div>
+
+            {% if ms_latest and ms_latest["gain_qty"] > 0 %}
+                <span class="badge badge-gain">+{{ ms_latest["gain_qty"] }} L Gain</span>
+            {% elif ms_latest and ms_latest["shortage_qty"] > 0 %}
+                <span class="badge badge-short">-{{ ms_latest["shortage_qty"] }} L Short</span>
+            {% else %}
+                <span class="badge badge-neutral">Balanced</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="live-card">
+        <div class="live-top">
+            <div class="live-title">
+                <div class="live-icon hsd-icon">
+                    <i class="fa-solid fa-oil-can"></i>
+                </div>
+                <div>
+                    <h3>HSD Tank</h3>
+                    <p>Capacity: 35,000 L</p>
+                </div>
+            </div>
+
+            {% set hsd_percent = 0 %}
+            {% if hsd_latest and hsd_latest["current_stock"] %}
+                {% set hsd_percent = ((hsd_latest["current_stock"] / 35000) * 100) | round(1) %}
+            {% endif %}
+
+            <b>{{ hsd_percent }}%</b>
+        </div>
+
+        <div class="progress">
+            <div class="progress-fill hsd-fill" data-percent="{{ hsd_percent }}"></div>
+        </div>
+
+        <div class="live-bottom">
+            <div class="stock-value">
+                {{ hsd_latest["current_stock"] if hsd_latest else 0 }} L
+            </div>
+
+            {% if hsd_latest and hsd_latest["gain_qty"] > 0 %}
+                <span class="badge badge-gain">+{{ hsd_latest["gain_qty"] }} L Gain</span>
+            {% elif hsd_latest and hsd_latest["shortage_qty"] > 0 %}
+                <span class="badge badge-short">-{{ hsd_latest["shortage_qty"] }} L Short</span>
+            {% else %}
+                <span class="badge badge-neutral">Balanced</span>
+            {% endif %}
+        </div>
     </div>
 
 </div>
@@ -239,12 +439,12 @@
 
                 <div class="preview-item">
                     <small>Gain</small>
-                    <h3 id="gain-preview" class="gain">0 L</h3>
+                    <h3 id="gain-preview" class="gain-text">0 L</h3>
                 </div>
 
                 <div class="preview-item">
                     <small>Shortage</small>
-                    <h3 id="shortage-preview" class="shortage">0 L</h3>
+                    <h3 id="shortage-preview" class="shortage-text">0 L</h3>
                 </div>
 
             </div>
@@ -264,11 +464,21 @@
 <div class="box">
 
     <div class="box-title">
-        <i class="fa-solid fa-chart-column"></i>
+        <i class="fa-solid fa-table"></i>
         Tank History
     </div>
 
-    <table class="entry-table">
+    <div class="search-row">
+        <input type="text" id="table-search" placeholder="Search by date or fuel type...">
+
+        <select id="fuel-filter">
+            <option value="">All Fuel</option>
+            <option value="MS">MS</option>
+            <option value="HSD">HSD</option>
+        </select>
+    </div>
+
+    <table class="entry-table" id="tank-table">
 
         <tr>
             <th>Date</th>
@@ -280,6 +490,7 @@
             <th>Current</th>
             <th>Gain</th>
             <th>Shortage</th>
+            <th>Updated</th>
             <th>Actions</th>
         </tr>
 
@@ -293,19 +504,21 @@
             <td>{{ row["sale_stock"] }}</td>
             <td><b>{{ row["current_stock"] }}</b></td>
 
-            <td class="gain">
+            <td class="gain-text">
                 {% if row["gain_qty"] > 0 %}
                     +{{ row["gain_qty"] }} L<br>
                     ₹ {{ row["gain_amount"] }}
                 {% endif %}
             </td>
 
-            <td class="shortage">
+            <td class="shortage-text">
                 {% if row["shortage_qty"] > 0 %}
                     -{{ row["shortage_qty"] }} L<br>
                     ₹ {{ row["shortage_amount"] }}
                 {% endif %}
             </td>
+
+            <td>{{ row["created_at"] if row["created_at"] else "-" }}</td>
 
             <td>
                 <div class="action-flex">
@@ -325,19 +538,19 @@
 </div>
 
 <script>
-const dateInput = document.getElementById("tank-date");
-const fuelInput = document.getElementById("fuel-type");
-const saleDisplay = document.getElementById("sale-display");
+var dateInput = document.getElementById("tank-date");
+var fuelInput = document.getElementById("fuel-type");
+var saleDisplay = document.getElementById("sale-display");
 
-const openingInput = document.getElementById("opening-stock");
-const receivedInput = document.getElementById("received-stock");
-const ownTankerInput = document.getElementById("own-tanker-stock");
-const dipInput = document.getElementById("dip-stock");
+var openingInput = document.getElementById("opening-stock");
+var receivedInput = document.getElementById("received-stock");
+var ownTankerInput = document.getElementById("own-tanker-stock");
+var dipInput = document.getElementById("dip-stock");
 
-const theoreticalPreview = document.getElementById("theoretical-preview");
-const differencePreview = document.getElementById("difference-preview");
-const gainPreview = document.getElementById("gain-preview");
-const shortagePreview = document.getElementById("shortage-preview");
+var theoreticalPreview = document.getElementById("theoretical-preview");
+var differencePreview = document.getElementById("difference-preview");
+var gainPreview = document.getElementById("gain-preview");
+var shortagePreview = document.getElementById("shortage-preview");
 
 dateInput.value = new Date().toISOString().split("T")[0];
 
@@ -345,9 +558,27 @@ function num(value){
     return parseFloat(value) || 0;
 }
 
+function setProgressBars(){
+    var bars = document.querySelectorAll(".progress-fill");
+
+    bars.forEach(function(bar){
+        var percent = parseFloat(bar.getAttribute("data-percent")) || 0;
+
+        if(percent > 100){
+            percent = 100;
+        }
+
+        if(percent < 0){
+            percent = 0;
+        }
+
+        bar.style.width = percent + "%";
+    });
+}
+
 async function fetchSaleQty(){
-    const date = dateInput.value;
-    const fuel = fuelInput.value;
+    var date = dateInput.value;
+    var fuel = fuelInput.value;
 
     if(!date){
         saleDisplay.value = 0;
@@ -356,10 +587,10 @@ async function fetchSaleQty(){
     }
 
     try{
-        const response = await fetch(`/get-daily-closing/${date}`);
-        const data = await response.json();
+        var response = await fetch("/get-daily-closing/" + date);
+        var data = await response.json();
 
-        let sale = 0;
+        var sale = 0;
 
         if(fuel === "MS"){
             sale = data.ms_litres || 0;
@@ -377,14 +608,14 @@ async function fetchSaleQty(){
 }
 
 function updatePreview(){
-    const opening = num(openingInput.value);
-    const received = num(receivedInput.value);
-    const ownTanker = num(ownTankerInput.value);
-    const sale = num(saleDisplay.value);
-    const dip = num(dipInput.value);
+    var opening = num(openingInput.value);
+    var received = num(receivedInput.value);
+    var ownTanker = num(ownTankerInput.value);
+    var sale = num(saleDisplay.value);
+    var dip = num(dipInput.value);
 
-    const theoretical = opening + received + ownTanker - sale;
-    const difference = dip - theoretical;
+    var theoretical = opening + received + ownTanker - sale;
+    var difference = dip - theoretical;
 
     theoreticalPreview.innerText = theoretical.toFixed(2) + " L";
     differencePreview.innerText = difference.toFixed(2) + " L";
@@ -401,16 +632,46 @@ function updatePreview(){
     }
 }
 
+function setupSearch(){
+    var search = document.getElementById("table-search");
+    var fuelFilter = document.getElementById("fuel-filter");
+    var table = document.getElementById("tank-table");
+
+    function filterTable(){
+        var searchValue = search.value.toLowerCase();
+        var fuelValue = fuelFilter.value.toLowerCase();
+        var rows = table.querySelectorAll("tr");
+
+        rows.forEach(function(row,index){
+            if(index === 0){
+                return;
+            }
+
+            var text = row.innerText.toLowerCase();
+            var fuelText = row.cells[1].innerText.toLowerCase();
+
+            var matchSearch = text.includes(searchValue);
+            var matchFuel = fuelValue === "" || fuelText === fuelValue;
+
+            row.style.display = matchSearch && matchFuel ? "" : "none";
+        });
+    }
+
+    search.addEventListener("input", filterTable);
+    fuelFilter.addEventListener("change", filterTable);
+}
+
 dateInput.addEventListener("change", fetchSaleQty);
 fuelInput.addEventListener("change", fetchSaleQty);
-
 openingInput.addEventListener("input", updatePreview);
 receivedInput.addEventListener("input", updatePreview);
 ownTankerInput.addEventListener("input", updatePreview);
 dipInput.addEventListener("input", updatePreview);
 
+setProgressBars();
 fetchSaleQty();
 updatePreview();
+setupSearch();
 </script>
 
 </body>

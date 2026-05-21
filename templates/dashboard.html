@@ -2,1035 +2,350 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sai Fuel Mart Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Sai Fuel Mart</title>
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Inter,sans-serif;
-}
-
-body{
-    background:#f3f6fb;
-    color:#111827;
-}
-
-.app{
-    display:flex;
-    min-height:100vh;
-}
-
-/* SIDEBAR */
-
-.sidebar{
-    width:260px;
-    background:#07120c;
-    color:white;
-    padding:24px;
-    position:sticky;
-    top:0;
-    height:100vh;
-    border-radius:0 30px 30px 0;
-}
-
-.logo h2{
-    font-size:24px;
-}
-
-.logo p{
-    color:#9ca3af;
-    margin-top:6px;
-    font-size:12px;
-}
-
-.sidebar nav{
-    margin-top:35px;
-}
-
-.sidebar a{
-    display:flex;
-    align-items:center;
-    gap:14px;
-    text-decoration:none;
-    color:#d1d5db;
-    padding:14px;
-    border-radius:18px;
-    margin-bottom:10px;
-    transition:.3s;
-    font-size:14px;
-}
-
-.sidebar a:hover,
-.sidebar a.active{
-    background:#10251a;
-    color:#4ade80;
-    transform:translateX(4px);
-}
-
-/* MAIN */
-
-.main{
-    flex:1;
-    padding:28px;
-}
-
-.topbar{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:28px;
-}
-
-.page-title h1{
-    font-size:34px;
-}
-
-.page-title p{
-    color:#6b7280;
-    margin-top:8px;
-}
-
-.top-actions{
-    display:flex;
-    gap:14px;
-}
-
-.top-btn{
-    background:white;
-    border:none;
-    width:48px;
-    height:48px;
-    border-radius:18px;
-    box-shadow:0 10px 25px rgba(0,0,0,.06);
-    cursor:pointer;
-}
-
-/* KPI */
-
-.kpi-grid{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:18px;
-    margin-bottom:28px;
-}
-
-.kpi-card{
-    background:white;
-    border-radius:28px;
-    padding:22px;
-    box-shadow:0 18px 40px rgba(0,0,0,.05);
-    transition:.3s;
-}
-
-.kpi-card:hover{
-    transform:translateY(-5px);
-}
-
-.kpi-top{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:18px;
-}
-
-.kpi-icon{
-    width:54px;
-    height:54px;
-    border-radius:18px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:22px;
-}
-
-.blue-bg{
-    background:#dbeafe;
-    color:#2563eb;
-}
-
-.green-bg{
-    background:#dcfce7;
-    color:#16a34a;
-}
-
-.orange-bg{
-    background:#ffedd5;
-    color:#ea580c;
-}
-
-.red-bg{
-    background:#fee2e2;
-    color:#dc2626;
-}
-
-.kpi-card h2{
-    font-size:28px;
-    margin-top:6px;
-}
-
-.kpi-card p{
-    color:#6b7280;
-    font-size:13px;
-}
-
-/* GRID */
-
-.dashboard-grid{
-    display:grid;
-    grid-template-columns:1.4fr 1fr;
-    gap:24px;
-}
-
-.panel{
-    background:white;
-    border-radius:30px;
-    padding:24px;
-    box-shadow:0 18px 40px rgba(0,0,0,.05);
-    margin-bottom:24px;
-}
-
-.panel-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:22px;
-}
-
-.panel-head h3{
-    font-size:20px;
-}
-
-.panel-head a{
-    text-decoration:none;
-    color:#16a34a;
-    font-size:13px;
-    font-weight:700;
-}
-
-/* OPERATIONS */
-
-.operations-grid{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:16px;
-}
-
-.operation-card{
-    background:#f8fafc;
-    border-radius:22px;
-    padding:18px;
-    transition:.3s;
-    text-decoration:none;
-    color:#111827;
-    border:1px solid #eef2f7;
-}
-
-.operation-card:hover{
-    background:white;
-    transform:translateY(-5px);
-    box-shadow:0 15px 35px rgba(0,0,0,.06);
-}
-
-.operation-top{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:14px;
-}
-
-.operation-icon{
-    width:48px;
-    height:48px;
-    border-radius:16px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:18px;
-}
-
-.operation-card h4{
-    margin-bottom:8px;
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+body{background:#f3f4f6;color:#07120C}
+.container{display:flex;min-height:100vh}
+
+.sidebar{width:270px;background:#07120C;color:white;padding:26px 18px;position:fixed;left:0;top:0;bottom:0;overflow-y:auto}
+.logo{margin-bottom:35px}
+.logo h2{font-size:24px;font-weight:800}
+.logo p{color:#94a3b8;margin-top:5px;font-size:13px}
+.sidebar nav{display:flex;flex-direction:column;gap:8px}
+.sidebar nav a{color:#d1d5db;text-decoration:none;padding:14px 16px;border-radius:14px;display:flex;align-items:center;gap:12px;transition:.2s;font-weight:600}
+.sidebar nav a:hover,.sidebar nav a.active{background:#16a34a;color:white}
+
+.menu-badge{margin-left:auto;min-width:22px;height:22px;border-radius:999px;background:#dc2626;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;padding:0 6px}
+.menu-badge.orange{background:#f59e0b}
+.menu-badge.blue{background:#2563eb}
+.menu-badge.green{background:#16a34a}
+
+.main-content{margin-left:270px;width:calc(100% - 270px);padding:30px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+.topbar h1{font-size:32px;color:#07120C}
+.topbar p{color:#64748b;margin-top:6px}
+
+.live-badge{background:#dcfce7;color:#16a34a;padding:10px 16px;border-radius:999px;font-weight:800;font-size:13px}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;margin-bottom:28px}
+.kpi-card{background:white;border-radius:24px;padding:20px;box-shadow:0 12px 35px rgba(0,0,0,.05);position:relative;overflow:hidden;min-height:145px}
+.kpi-card::after{content:"";position:absolute;right:-35px;top:-35px;width:100px;height:100px;border-radius:50%;background:#ecfdf3}
+.kpi-top{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:2}
+.kpi-label{color:#64748b;font-size:13px;font-weight:700}
+.kpi-card h2{margin-top:14px;font-size:26px;color:#07120C;line-height:1.1}
+.kpi-card p{color:#64748b;margin-top:8px;font-size:13px}
+.kpi-icon{width:48px;height:48px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:20px;background:#dcfce7;color:#16a34a;flex-shrink:0}
+.kpi-badge{display:inline-block;margin-top:12px;padding:6px 10px;border-radius:999px;background:#ecfdf3;color:#16a34a;font-size:12px;font-weight:800}
+.kpi-alert{position:absolute;top:14px;right:14px;width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.15);z-index:3}
+.kpi-danger .kpi-icon{background:#fee2e2;color:#dc2626}
+.kpi-danger .kpi-badge{background:#fef2f2;color:#dc2626}
+.kpi-warning .kpi-icon{background:#fef3c7;color:#d97706}
+.kpi-warning .kpi-badge{background:#fffbeb;color:#d97706}
+
+.content-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+.box{background:white;border-radius:28px;padding:24px;box-shadow:0 12px 35px rgba(0,0,0,.05)}
+.box-title{display:flex;align-items:center;gap:10px;margin-bottom:24px;font-size:18px;font-weight:800;color:#07120C}
+.chart-grid{display:grid;grid-template-columns:2fr 1fr;gap:20px}
+.chart-box{background:#fff;border-radius:20px;padding:10px;min-height:260px}
+
+.table-wrap{overflow:auto}
+.entry-table{width:100%;border-collapse:collapse}
+.entry-table th{background:#f8fafc;color:#475569;padding:14px;text-align:left;font-size:13px}
+.entry-table td{padding:14px;border-top:1px solid #e5e7eb;font-size:14px}
+
+.tank-card{margin-bottom:24px}
+.tank-head{display:flex;justify-content:space-between;margin-bottom:12px}
+.tank-progress{height:16px;border-radius:20px;background:#e5e7eb;overflow:hidden}
+.tank-fill{height:100%;border-radius:20px}
+.petrol-fill{background:linear-gradient(to right,#16a34a,#22c55e)}
+.hsd-fill{background:linear-gradient(to right,#2563eb,#3b82f6)}
+
+.alert-box{padding:16px;border-radius:18px;margin-bottom:14px;background:#fef2f2;color:#dc2626;font-weight:600}
+
+.backup-popup-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(6px)}
+.backup-popup{width:420px;background:white;border-radius:30px;padding:35px;text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.18)}
+.backup-icon{width:90px;height:90px;margin:auto;border-radius:50%;background:#ecfdf3;display:flex;align-items:center;justify-content:center;font-size:38px;color:#16a34a;margin-bottom:18px}
+.backup-btn-row{margin-top:25px;display:flex;gap:12px;justify-content:center}
+.backup-download-btn{background:#16a34a;color:white;padding:14px 22px;border-radius:14px;text-decoration:none;font-weight:700}
+.backup-close-btn{border:none;background:#e5e7eb;padding:14px 22px;border-radius:14px;cursor:pointer;font-weight:700}
+
+@media(max-width:1100px){
+.sidebar{position:relative;width:100%;height:auto}
+.container{flex-direction:column}
+.main-content{margin-left:0;width:100%}
+.content-grid,.chart-grid{grid-template-columns:1fr}
 }
-
-.operation-card p{
-    color:#6b7280;
-    font-size:13px;
-}
-
-/* TANK */
-
-.tank-grid{
-    display:flex;
-    flex-direction:column;
-    gap:18px;
-}
-
-.tank-card{
-    background:#f8fafc;
-    border:1px solid #edf2f7;
-    border-radius:26px;
-    padding:18px;
-    transition:.3s;
-    position:relative;
-    overflow:hidden;
-}
-
-.tank-card:hover{
-    transform:translateY(-4px);
-    background:white;
-    box-shadow:0 18px 40px rgba(0,0,0,.06);
-}
-
-.tank-top{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:16px;
-}
-
-.tank-left{
-    display:flex;
-    align-items:center;
-    gap:14px;
-}
-
-.tank-icon{
-    width:52px;
-    height:52px;
-    border-radius:18px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:20px;
-}
-
-.petrol-icon{
-    background:#dbeafe;
-    color:#2563eb;
-}
-
-.diesel-icon{
-    background:#dcfce7;
-    color:#16a34a;
-}
-
-.tank-title h3{
-    font-size:18px;
-    margin-bottom:4px;
-}
-
-.tank-title p{
-    font-size:12px;
-    color:#6b7280;
-}
-
-.tank-percent{
-    font-size:14px;
-    font-weight:700;
-    color:#16a34a;
-}
-
-.tank-progress{
-    width:100%;
-    height:14px;
-    background:#e5e7eb;
-    border-radius:999px;
-    overflow:hidden;
-    margin-bottom:16px;
-}
-
-.tank-fill{
-    height:100%;
-    border-radius:999px;
-    transition:1s ease;
-}
-
-.petrol-fill{
-    background:linear-gradient(to right,#2563eb,#60a5fa);
-}
-
-.diesel-fill{
-    background:linear-gradient(to right,#16a34a,#4ade80);
-}
-
-.tank-bottom{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-top:6px;
-}
-
-.tank-stock{
-    font-size:24px;
-    font-weight:700;
-}
-
-.tank-chip{
-    padding:8px 14px;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:700;
-}
-
-.gain{
-    background:#dcfce7;
-    color:#15803d;
-}
-
-.loss{
-    background:#fee2e2;
-    color:#dc2626;
-}
-
-.tank-hover{
-    position:absolute;
-    top:20px;
-    right:20px;
-    width:180px;
-    background:#111827;
-    color:white;
-    padding:15px;
-    border-radius:18px;
-    opacity:0;
-    visibility:hidden;
-    transition:.3s;
-    z-index:100;
-    box-shadow:0 20px 50px rgba(0,0,0,.25);
-}
-
-.tank-card:hover .tank-hover{
-    opacity:1;
-    visibility:visible;
-}
-
-.tank-hover p{
-    font-size:12px;
-    margin-bottom:7px;
-}
-
-/* ALERT */
-
-.alert{
-    background:#fff7ed;
-    border:1px solid #fed7aa;
-    padding:15px;
-    border-radius:18px;
-    margin-bottom:14px;
-    color:#9a3412;
-    font-size:13px;
-}
-
-/* TABLE */
-
-.transport-table{
-    width:100%;
-    border-collapse:separate;
-    border-spacing:0 10px;
-}
-
-.transport-table th{
-    text-align:left;
-    font-size:12px;
-    color:#6b7280;
-    padding:0 12px;
-}
-
-.transport-table td{
-    background:#f8fafc;
-    padding:14px 12px;
-}
-
-.transport-table tr td:first-child{
-    border-radius:14px 0 0 14px;
-}
-
-.transport-table tr td:last-child{
-    border-radius:0 14px 14px 0;
-}
-
-/* RESPONSIVE */
-
-@media(max-width:1200px){
-
-.kpi-grid{
-    grid-template-columns:repeat(2,1fr);
-}
-
-.dashboard-grid{
-    grid-template-columns:1fr;
-}
-
-}
-
-@media(max-width:700px){
-
-.kpi-grid{
-    grid-template-columns:1fr;
-}
-
-.operations-grid{
-    grid-template-columns:1fr;
-}
-
-}
-
 </style>
 </head>
 
 <body>
 
-<div class="app">
-
-<!-- SIDEBAR -->
+<div class="container">
 
 <aside class="sidebar">
-
 <div class="logo">
-    <h2>SAI FUEL MART</h2>
-    <p>Fuel Operations System</p>
+<h2>SAI FUEL MART</h2>
+<p>Fueling Your Trust</p>
 </div>
-
 <nav>
 
+{% if session.get("role") == "admin" %}
+
 <a class="active" href="/dashboard">
-    <i class="fa-solid fa-house"></i>
-    Dashboard
-</a>
-
-<a href="/daily-closing">
-    <i class="fa-solid fa-file-invoice-dollar"></i>
-    Daily Closing
-</a>
-
-<a href="/tank-level">
-    <i class="fa-solid fa-oil-well"></i>
-    Tank Level
-</a>
-
-<a href="/credit-transport">
-    <i class="fa-solid fa-truck"></i>
-    Credit Transport
-</a>
-
-<a href="/digital-collection">
-    <i class="fa-solid fa-credit-card"></i>
-    Digital Collection
-</a>
-
-<a href="/lube-stock">
-    <i class="fa-solid fa-bottle-droplet"></i>
-    Lube Stock
-</a>
-
-<a href="/attendance">
-    <i class="fa-solid fa-user-check"></i>
-    Attendance
+<i class="fa-solid fa-house"></i>
+Dashboard
 </a>
 
 <a href="/reports">
-    <i class="fa-solid fa-chart-line"></i>
-    Reports
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
 </a>
 
 <a href="/settings">
-    <i class="fa-solid fa-gear"></i>
-    Settings
+<i class="fa-solid fa-gear"></i>
+Settings
 </a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
 
 </nav>
-
 </aside>
 
-<!-- MAIN -->
-
-<main class="main">
+<main class="main-content">
 
 <div class="topbar">
-
-<div class="page-title">
-    <h1>Fuel Operations Dashboard</h1>
-    <p>Connected operations and live fuel monitoring</p>
+<div>
+<h1>Dashboard</h1>
+<p>Welcome back to Sai Fuel Mart</p>
+</div>
+<div class="live-badge">LIVE TODAY</div>
 </div>
 
-<div class="top-actions">
-    <button class="top-btn"><i class="fa-regular fa-bell"></i></button>
-    <button class="top-btn"><i class="fa-regular fa-user"></i></button>
-</div>
-
-</div>
-
-<!-- KPI -->
-
-<section class="kpi-grid">
+<div class="kpi-grid">
 
 <div class="kpi-card">
-
 <div class="kpi-top">
-
 <div>
-    <p>MS Sale</p>
-    <h2>{{ latest["ms_litres"] if latest else 0 }}</h2>
+<div class="kpi-label">Monthly Fuel Sale</div>
+<h2>₹ {{ "%.2f"|format((monthly["monthly_sale"] or 0)/10000000) }} Cr</h2>
+<p>MS + HSD + CNG revenue</p>
+<span class="kpi-badge">Revenue</span>
 </div>
-
-<div class="kpi-icon blue-bg">
-    <i class="fa-solid fa-gas-pump"></i>
+<div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
 </div>
-
-</div>
-
-<p>Latest petrol sale litres</p>
-
 </div>
 
 <div class="kpi-card">
-
 <div class="kpi-top">
-
 <div>
-    <p>HSD Sale</p>
-    <h2>{{ latest["hsd_litres"] if latest else 0 }}</h2>
+<div class="kpi-label">Monthly CNG Sale</div>
+<h2>₹ {{ (monthly["monthly_cng"] or 0)|round|int }}</h2>
+<p>CNG revenue in ₹</p>
+<span class="kpi-badge">CNG</span>
+</div>
+<div class="kpi-icon"><i class="fa-solid fa-fire-flame-simple"></i></div>
+</div>
 </div>
 
-<div class="kpi-icon green-bg">
-    <i class="fa-solid fa-oil-can"></i>
+<div class="kpi-card kpi-warning">
+<div class="kpi-top">
+<div>
+<div class="kpi-label">Monthly Expense</div>
+<h2>₹ {{ (monthly["monthly_expense"] or 0)|round|int }}</h2>
+<p>Total expenses this month</p>
+<span class="kpi-badge">Expense</span>
+</div>
+<div class="kpi-icon"><i class="fa-solid fa-wallet"></i></div>
+</div>
 </div>
 
+<div class="kpi-card kpi-danger">
+{% if monthly["monthly_credit"] and monthly["monthly_credit"] > 0 %}
+<div class="kpi-alert"></div>
+{% endif %}
+<div class="kpi-top">
+<div>
+<div class="kpi-label">Credit Due</div>
+<h2>₹ {{ (monthly["monthly_credit"] or 0)|round|int }}</h2>
+<p>Outstanding transporter dues</p>
+<span class="kpi-badge">Pending</span>
 </div>
-
-<p>Latest diesel sale litres</p>
-
+<div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+</div>
 </div>
 
 <div class="kpi-card">
-
+{% if low_lube|length > 0 %}
+<div class="kpi-alert"></div>
+{% endif %}
 <div class="kpi-top">
-
 <div>
-    <p>Monthly Sale</p>
-
-    <h2>
-
-    ₹
-
-    {% set sale = monthly["monthly_sale"] if monthly and monthly["monthly_sale"] else 0 %}
-
-    {% if sale >= 10000000 %}
-
-    {{ "%.2f"|format(sale / 10000000) }} Cr
-
-    {% elif sale >= 100000 %}
-
-    {{ "%.2f"|format(sale / 100000) }} L
-
-    {% else %}
-
-    {{ "%.0f"|format(sale) }}
-
-    {% endif %}
-
-    </h2>
-
+<div class="kpi-label">Low Lube Alerts</div>
+<h2>{{ low_lube|length }}</h2>
+<p>Products running low</p>
+<span class="kpi-badge">Stock</span>
 </div>
-
-<div class="kpi-icon orange-bg">
-    <i class="fa-solid fa-chart-line"></i>
+<div class="kpi-icon"><i class="fa-solid fa-bottle-droplet"></i></div>
+</div>
 </div>
 
 </div>
 
-<p>Total monthly fuel revenue</p>
-
-</div>
-
-<div class="kpi-card">
-
-<div class="kpi-top">
-
-<div>
-    <p>Credit Due</p>
-    <h2>₹ {{ monthly["monthly_credit"] if monthly and monthly["monthly_credit"] else 0 }}</h2>
-</div>
-
-<div class="kpi-icon red-bg">
-    <i class="fa-solid fa-truck"></i>
-</div>
-
-</div>
-
-<p>Outstanding transport credit</p>
-
-</div>
-
-</section>
-
-<div class="dashboard-grid">
-
-<!-- LEFT -->
+<div class="content-grid">
 
 <div>
 
-<div class="panel">
+<div class="box">
+<div class="box-title"><i class="fa-solid fa-chart-line"></i>Fuel & CNG Sales Overview</div>
 
-<div class="panel-head">
-    <h3>Fuel Sales Trend</h3>
-    <a href="/reports">View Reports</a>
-</div>
-
+<div class="chart-grid">
+<div class="chart-box">
 <canvas id="salesChart"></canvas>
-
 </div>
 
-<div class="panel">
-
-<div class="panel-head">
-    <h3>Live Tank Levels</h3>
-    <a href="/tank-level">Manage</a>
+<div class="chart-box">
+<canvas id="cngChart"></canvas>
+</div>
+</div>
 </div>
 
-<div class="tank-grid">
+<br>
 
-<!-- MS -->
+<div class="box">
+<div class="box-title"><i class="fa-solid fa-truck"></i>Transporter Summary</div>
 
-{% if ms_tank %}
-
-{% set ms_percent = 0 %}
-
-{% if ms_tank["current_stock"] %}
-    {% set ms_percent = ((ms_tank["current_stock"] / 22000) * 100) | round(1) %}
-{% endif %}
-
-<div class="tank-card">
-
-<div class="tank-top">
-
-<div class="tank-left">
-
-<div class="tank-icon petrol-icon">
-    <i class="fa-solid fa-gas-pump"></i>
-</div>
-
-<div class="tank-title">
-    <h3>MS Tank</h3>
-    <p>Petrol Stock</p>
-</div>
-
-</div>
-
-<div class="tank-percent">
-    {{ ms_percent }}%
-</div>
-
-</div>
-
-<div class="tank-progress">
-
-<div class="tank-fill petrol-fill" data-percent="{{ ms_percent }}"></div>
-
-</div>
-
-<div class="tank-bottom">
-
-<div class="tank-stock">
-    {{ ms_tank["current_stock"] or 0 }} L
-</div>
-
-{% if (ms_tank["gain_qty"] or 0) > 0 %}
-
-<div class="tank-chip gain">
-+ {{ ms_tank["gain_qty"] }} L
-</div>
-
-{% elif (ms_tank["shortage_qty"] or 0) > 0 %}
-
-<div class="tank-chip loss">
-- {{ ms_tank["shortage_qty"] }} L
-</div>
-
-{% endif %}
-
-</div>
-
-<div class="tank-hover">
-
-<p><b>Opening:</b> {{ ms_tank["opening_stock"] }}</p>
-
-<p><b>Received:</b> {{ ms_tank["received_stock"] }}</p>
-
-<p><b>Sale:</b> {{ ms_tank["sale_stock"] }}</p>
-
-<p><b>Date:</b> {{ ms_tank["date"] }}</p>
-
-</div>
-
-</div>
-
-{% endif %}
-
-<!-- HSD -->
-
-{% if hsd_tank %}
-
-{% set hsd_percent = 0 %}
-
-{% if hsd_tank["current_stock"] %}
-    {% set hsd_percent = ((hsd_tank["current_stock"] / 35000) * 100) | round(1) %}
-{% endif %}
-
-<div class="tank-card">
-
-<div class="tank-top">
-
-<div class="tank-left">
-
-<div class="tank-icon diesel-icon">
-    <i class="fa-solid fa-oil-can"></i>
-</div>
-
-<div class="tank-title">
-    <h3>HSD Tank</h3>
-    <p>Diesel Stock</p>
-</div>
-
-</div>
-
-<div class="tank-percent">
-    {{ hsd_percent }}%
-</div>
-
-</div>
-
-<div class="tank-progress">
-
-<div class="tank-fill diesel-fill" data-percent="{{ hsd_percent }}"></div>
-
-</div>
-
-<div class="tank-bottom">
-
-<div class="tank-stock">
-    {{ hsd_tank["current_stock"] or 0 }} L
-</div>
-
-{% if (hsd_tank["gain_qty"] or 0) > 0 %}
-
-<div class="tank-chip gain">
-+ {{ hsd_tank["gain_qty"] }} L
-</div>
-
-{% elif (hsd_tank["shortage_qty"] or 0) > 0 %}
-
-<div class="tank-chip loss">
-- {{ hsd_tank["shortage_qty"] }} L
-</div>
-
-{% endif %}
-
-</div>
-
-<div class="tank-hover">
-
-<p><b>Opening:</b> {{ hsd_tank["opening_stock"] }}</p>
-
-<p><b>Received:</b> {{ hsd_tank["received_stock"] }}</p>
-
-<p><b>Sale:</b> {{ hsd_tank["sale_stock"] }}</p>
-
-<p><b>Date:</b> {{ hsd_tank["date"] }}</p>
-
-</div>
-
-</div>
-
-{% endif %}
-
-</div>
-
-</div>
-
-</div>
-
-<!-- RIGHT -->
-
-<div>
-
-<div class="panel">
-
-<div class="panel-head">
-    <h3>Connected Operations</h3>
-</div>
-
-<div class="operations-grid">
-
-<a href="/daily-closing" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon blue-bg">
-    <i class="fa-solid fa-file-invoice-dollar"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Daily Closing</h4>
-<p>Fuel sales and expenses.</p>
-
-</a>
-
-<a href="/tank-level" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon green-bg">
-    <i class="fa-solid fa-oil-well"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Tank Level</h4>
-<p>Stock and gain shortage.</p>
-
-</a>
-
-<a href="/credit-transport" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon red-bg">
-    <i class="fa-solid fa-truck"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Transport</h4>
-<p>Credit parties and payments.</p>
-
-</a>
-
-<a href="/digital-collection" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon orange-bg">
-    <i class="fa-solid fa-credit-card"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Collections</h4>
-<p>UPI and digital collection.</p>
-
-</a>
-
-<a href="/lube-stock" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon green-bg">
-    <i class="fa-solid fa-bottle-droplet"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Lube Stock</h4>
-<p>Lubricant inventory tracking.</p>
-
-</a>
-
-<a href="/attendance" class="operation-card">
-
-<div class="operation-top">
-
-<div class="operation-icon blue-bg">
-    <i class="fa-solid fa-user-check"></i>
-</div>
-
-<i class="fa-solid fa-arrow-up-right-from-square"></i>
-
-</div>
-
-<h4>Attendance</h4>
-<p>Staff attendance management.</p>
-
-</a>
-
-</div>
-
-</div>
-
-<div class="panel">
-
-<div class="panel-head">
-    <h3>Low Stock Alerts</h3>
-    <a href="/lube-stock">Open</a>
-</div>
-
-{% if low_lube %}
-
-{% for item in low_lube %}
-
-<div class="alert">
-{{ item["product_name"] }} stock running low.
-</div>
-
-{% endfor %}
-
-{% else %}
-
-<div class="alert">
-All lube stock levels normal.
-</div>
-
-{% endif %}
-
-</div>
-
-<div class="panel">
-
-<div class="panel-head">
-    <h3>Transport Overview</h3>
-    <a href="/credit-transport">Manage</a>
-</div>
-
-<table class="transport-table">
-
+<div class="table-wrap">
+<table class="entry-table">
 <tr>
-    <th>Party</th>
-    <th>Due</th>
+<th>Transporter</th>
+<th>Credit</th>
+<th>Received</th>
+<th>Balance</th>
 </tr>
 
 {% for t in transporter_summary %}
-
 <tr>
-
 <td>{{ t["party_name"] }}</td>
-
-<td>₹ {{ t["balance_due"] }}</td>
-
+<td>₹ {{ t["credit_given"]|round|int }}</td>
+<td>₹ {{ t["payment_received"]|round|int }}</td>
+<td><b>₹ {{ t["balance_due"]|round|int }}</b></td>
 </tr>
-
 {% endfor %}
-
 </table>
+</div>
+</div>
 
+</div>
+
+<div>
+
+<div class="box">
+<div class="box-title"><i class="fa-solid fa-oil-well"></i>Tank Levels</div>
+
+<div class="tank-card">
+<div class="tank-head">
+<strong>MS Tank</strong>
+<span>{{ (ms_tank["current_stock"] if ms_tank else 0)|round|int }} L</span>
+</div>
+<div class="tank-progress">
+<div class="tank-fill petrol-fill" data-width="{{ (((ms_tank['current_stock'] or 0) / 22000) * 100) if ms_tank else 0 }}"></div>
+</div>
+</div>
+
+<div class="tank-card">
+<div class="tank-head">
+<strong>HSD Tank</strong>
+<span>{{ (hsd_tank["current_stock"] if hsd_tank else 0)|round|int }} L</span>
+</div>
+<div class="tank-progress">
+<div class="tank-fill hsd-fill" data-width="{{ (((hsd_tank['current_stock'] or 0) / 35000) * 100) if hsd_tank else 0 }}"></div>
+</div>
+</div>
+
+</div>
+
+<br>
+
+<div class="box">
+<div class="box-title"><i class="fa-solid fa-bell"></i>Alerts</div>
+
+{% if low_lube %}
+{% for item in low_lube %}
+<div class="alert-box">
+⚠ {{ item["product_name"] }} stock low ({{ item["closing_stock"]|round|int }})
+</div>
+{% endfor %}
+{% else %}
+<div class="alert-box" style="background:#ecfdf3;color:#16a34a;">All stocks healthy</div>
+{% endif %}
 </div>
 
 </div>
@@ -1038,57 +353,78 @@ All lube stock levels normal.
 </div>
 
 </main>
-
 </div>
-<script type="application/json" id="chart-labels">
-{{ chart_rows|map(attribute='date')|list|tojson }}
-</script>
 
-<script type="application/json" id="chart-sales">
-{{ chart_rows|map(attribute='total_fuel_sale')|list|tojson }}
-</script>
+{% if show_backup_popup %}
+<div id="backupPopup" class="backup-popup-overlay">
+<div class="backup-popup">
+<div class="backup-icon"><i class="fa-solid fa-database"></i></div>
+<h2>Monthly Backup Reminder</h2>
+<p>Please backup Sai Fuel Mart database for monthly safety and records.</p>
+
+<div class="backup-btn-row">
+<a href="/backup-database" class="backup-download-btn"><i class="fa-solid fa-download"></i> Backup Now</a>
+<button onclick="closeBackupPopup()" class="backup-close-btn">Later</button>
+</div>
+</div>
+</div>
+{% endif %}
 
 <script>
-var tankFills = document.querySelectorAll(".tank-fill");
-
-tankFills.forEach(function(fill){
-    var percent = fill.getAttribute("data-percent") || 0;
-    fill.style.width = percent + "%";
+document.querySelectorAll(".tank-fill").forEach(function(bar){
+    let width = parseFloat(bar.dataset.width || 0);
+    if(width > 100) width = 100;
+    if(width < 0) width = 0;
+    bar.style.width = width + "%";
 });
 
-var labels = JSON.parse(document.getElementById("chart-labels").textContent || "[]");
-var sales = JSON.parse(document.getElementById("chart-sales").textContent || "[]");
-
-var chartCanvas = document.getElementById("salesChart");
-
-if(chartCanvas){
-    new Chart(chartCanvas, {
-        type: "line",
-        data: {
-            labels: labels,
-            datasets: [{
-                label: "Fuel Sale",
-                data: sales,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37,99,235,.10)",
-                fill: true,
-                tension: 0.4,
-                borderWidth: 3,
-                pointRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { display: true }
-            },
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
-    });
+function closeBackupPopup(){
+    let popup = document.getElementById("backupPopup");
+    if(popup) popup.style.display = "none";
 }
-</script>
 
+var chartLabels = JSON.parse('{{ chart_labels|tojson|safe }}');
+var chartSales = JSON.parse('{{ chart_sales|tojson|safe }}');
+var cngData = JSON.parse('{{ cng_data|tojson|safe }}');
+
+new Chart(document.getElementById("salesChart"), {
+    type: "line",
+    data: {
+        labels: chartLabels,
+        datasets: [{
+            label: "Fuel Sale",
+            data: chartSales,
+            tension: 0.4,
+            fill: true,
+            borderColor: "#16a34a",
+            backgroundColor: "rgba(34,197,94,0.10)",
+            borderWidth: 3
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+new Chart(document.getElementById("cngChart"), {
+    type: "bar",
+    data: {
+        labels: chartLabels,
+        datasets: [{
+            label: "CNG Revenue",
+            data: cngData,
+            borderRadius: 10,
+            backgroundColor: "#16a34a"
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+</script>
 </body>
 </html>

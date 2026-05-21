@@ -1,81 +1,337 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<title>Edit Tank Level - Sai Fuel Mart</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Edit Tank Level</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
 
-.edit-box{
-    max-width:900px;
-    margin:auto;
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Inter,sans-serif;
+}
+
+body{
+    background:#f3f6fb;
+    color:#111827;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:260px;
+    background:#07120c;
+    color:white;
+    padding:24px;
+    position:sticky;
+    top:0;
+    height:100vh;
+    border-radius:0 30px 30px 0;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    color:#9ca3af;
+    margin-top:6px;
+    font-size:12px;
+}
+
+.sidebar nav{
+    margin-top:35px;
+}
+
+.sidebar a{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    text-decoration:none;
+    color:#d1d5db;
+    padding:14px;
+    border-radius:18px;
+    margin-bottom:10px;
+    transition:.3s;
+    font-size:14px;
+}
+
+.sidebar a:hover,
+.sidebar a.active{
+    background:#10251a;
+    color:#4ade80;
+    transform:translateX(4px);
+}
+
+/* MAIN */
+
+.main-content{
+    flex:1;
+    padding:28px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+}
+
+.topbar h1{
+    font-size:34px;
+}
+
+.topbar p{
+    color:#6b7280;
+    margin-top:8px;
+}
+
+/* CARD */
+
+.edit-card{
     background:white;
-    padding:35px;
-    border-radius:28px;
-    box-shadow:0 20px 55px rgba(0,0,0,.08);
-    margin-top:40px;
+    border-radius:30px;
+    padding:28px;
+    box-shadow:0 18px 40px rgba(0,0,0,.05);
 }
 
 .form-grid{
     display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:20px;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    font-size:13px;
+    margin-bottom:8px;
+    color:#667085;
+    font-weight:700;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border-radius:16px;
+    border:1px solid #e5e7eb;
+    outline:none;
+    font-size:14px;
+}
+
+.input-group input:focus,
+.input-group select:focus{
+    border-color:#2563eb;
+}
+
+/* PREVIEW */
+
+.preview-box{
+    background:#f8fafc;
+    border:1px solid #edf0f4;
+    border-radius:22px;
+    padding:18px;
+    margin-top:24px;
+}
+
+.preview-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+}
+
+.preview-item{
+    background:white;
+    border-radius:18px;
+    padding:16px;
+    border:1px solid #eef2f7;
+}
+
+.preview-item small{
+    color:#667085;
+}
+
+.preview-item h3{
+    margin-top:8px;
+    font-size:24px;
+}
+
+.gain-text{
+    color:#16a34a;
+    font-weight:800;
+}
+
+.shortage-text{
+    color:#dc2626;
+    font-weight:800;
+}
+
+/* BUTTONS */
+
+.button-row{
+    display:flex;
+    gap:14px;
+    margin-top:28px;
 }
 
 .save-btn{
-    margin-top:30px;
     background:#16a34a;
     color:white;
     border:none;
-    padding:14px 30px;
+    padding:15px 24px;
     border-radius:16px;
-    font-size:15px;
+    font-weight:700;
     cursor:pointer;
+    transition:.3s;
+}
+
+.save-btn:hover{
+    transform:translateY(-3px);
+}
+
+.cancel-btn{
+    background:#e5e7eb;
+    color:#111827;
+    text-decoration:none;
+    padding:15px 24px;
+    border-radius:16px;
+    font-weight:700;
+    transition:.3s;
+}
+
+.cancel-btn:hover{
+    background:#d1d5db;
+}
+
+@media(max-width:1000px){
+
+.form-grid,
+.preview-grid{
+    grid-template-columns:1fr;
+}
+
 }
 
 </style>
-
 </head>
 
 <body>
 
-<div class="edit-box">
+<div class="container">
 
-<h1>Edit Tank Level</h1>
+<!-- SIDEBAR -->
 
-<br>
+<aside class="sidebar">
 
-<form method="POST"
-      action="/update-tank-level/{{ row['id'] }}">
+<div class="logo">
+    <h2>SAI FUEL MART</h2>
+    <p>FUELING YOUR TRUST</p>
+</div>
+
+<nav>
+
+<a href="/dashboard">
+    <i class="fa-solid fa-house"></i>
+    Dashboard
+</a>
+
+<a href="/daily-closing">
+    <i class="fa-solid fa-file-invoice-dollar"></i>
+    Daily Closing
+</a>
+
+<a class="active" href="/tank-level">
+    <i class="fa-solid fa-oil-well"></i>
+    Tank Level
+</a>
+
+<a href="/credit-transport">
+    <i class="fa-solid fa-truck"></i>
+    Credit Transport
+</a>
+
+<a href="/digital-collection">
+    <i class="fa-solid fa-credit-card"></i>
+    Digital Collection
+</a>
+
+<a href="/lube-stock">
+    <i class="fa-solid fa-bottle-droplet"></i>
+    Lube Stock
+</a>
+
+<a href="/attendance">
+    <i class="fa-solid fa-user-check"></i>
+    Attendance
+</a>
+
+<a href="/reports">
+    <i class="fa-solid fa-chart-line"></i>
+    Reports
+</a>
+
+<a href="/settings">
+    <i class="fa-solid fa-gear"></i>
+    Settings
+</a>
+
+</nav>
+
+</aside>
+
+<!-- MAIN -->
+
+<main class="main-content">
+
+<div class="topbar">
+
+<div>
+    <h1>Edit Tank Entry</h1>
+    <p>Update stock, unloading and gain shortage values</p>
+</div>
+
+</div>
+
+<div class="edit-card">
+
+<form method="POST" action="/update-tank-level/{{ row['id'] }}">
 
 <div class="form-grid">
 
 <div class="input-group">
     <label>Date</label>
-    <input type="date"
-           name="date"
-           value="{{ row['date'] }}">
+    <input type="date" name="date"
+    value="{{ row['date'] }}" required>
 </div>
 
 <div class="input-group">
     <label>Fuel Type</label>
 
-    <select name="fuel_type">
+    <select name="fuel_type" id="fuel-type">
 
         <option value="MS"
-        {% if row["fuel_type"]=="MS" %}
-        selected
-        {% endif %}
-        >MS</option>
+        {% if row["fuel_type"] == "MS" %}selected{% endif %}>
+        MS
+        </option>
 
         <option value="HSD"
-        {% if row["fuel_type"]=="HSD" %}
-        selected
-        {% endif %}
-        >HSD</option>
+        {% if row["fuel_type"] == "HSD" %}selected{% endif %}>
+        HSD
+        </option>
 
     </select>
 
@@ -84,52 +340,168 @@
 <div class="input-group">
     <label>Opening Stock</label>
     <input type="number"
-           step="0.01"
-           name="opening_stock"
-           value="{{ row['opening_stock'] }}">
+    step="0.01"
+    id="opening-stock"
+    name="opening_stock"
+    value="{{ row['opening_stock'] }}">
 </div>
 
 <div class="input-group">
     <label>Received Stock</label>
     <input type="number"
-           step="0.01"
-           name="received_stock"
-           value="{{ row['received_stock'] }}">
+    step="0.01"
+    id="received-stock"
+    name="received_stock"
+    value="{{ row['received_stock'] }}">
 </div>
 
 <div class="input-group">
-    <label>Own Tanker</label>
+    <label>Own Tanker Qty</label>
     <input type="number"
-           step="0.01"
-           name="own_tanker_stock"
-           value="{{ row['own_tanker_stock'] }}">
+    step="0.01"
+    id="own-tanker-stock"
+    name="own_tanker_stock"
+    value="{{ row['own_tanker_stock'] }}">
 </div>
 
 <div class="input-group">
     <label>Sale Qty</label>
     <input type="number"
-           step="0.01"
-           name="sale_stock"
-           value="{{ row['sale_stock'] }}">
+    step="0.01"
+    id="sale-stock"
+    name="sale_stock"
+    value="{{ row['sale_stock'] }}">
 </div>
 
 <div class="input-group">
-    <label>Actual Dip Stock</label>
+    <label>Actual Dip / Current Stock</label>
     <input type="number"
-           step="0.01"
-           name="current_stock"
-           value="{{ row['current_stock'] }}">
+    step="0.01"
+    id="current-stock"
+    name="current_stock"
+    value="{{ row['current_stock'] }}">
 </div>
 
 </div>
+
+<!-- PREVIEW -->
+
+<div class="preview-box">
+
+<div class="preview-grid">
+
+<div class="preview-item">
+    <small>Theoretical Stock</small>
+    <h3 id="theoretical-preview">0 L</h3>
+</div>
+
+<div class="preview-item">
+    <small>Difference</small>
+    <h3 id="difference-preview">0 L</h3>
+</div>
+
+<div class="preview-item">
+    <small>Gain</small>
+    <h3 id="gain-preview" class="gain-text">0 L</h3>
+</div>
+
+<div class="preview-item">
+    <small>Shortage</small>
+    <h3 id="shortage-preview" class="shortage-text">0 L</h3>
+</div>
+
+</div>
+
+</div>
+
+<div class="button-row">
 
 <button class="save-btn">
-    Update Tank Level
+    <i class="fa-solid fa-floppy-disk"></i>
+    Update Tank Entry
 </button>
+
+<a href="/tank-level" class="cancel-btn">
+    Cancel
+</a>
+
+</div>
 
 </form>
 
 </div>
+
+</main>
+
+</div>
+
+<script>
+
+function num(value){
+    return parseFloat(value) || 0;
+}
+
+const openingInput = document.getElementById("opening-stock");
+const receivedInput = document.getElementById("received-stock");
+const ownTankerInput = document.getElementById("own-tanker-stock");
+const saleInput = document.getElementById("sale-stock");
+const currentInput = document.getElementById("current-stock");
+
+const theoreticalPreview = document.getElementById("theoretical-preview");
+const differencePreview = document.getElementById("difference-preview");
+const gainPreview = document.getElementById("gain-preview");
+const shortagePreview = document.getElementById("shortage-preview");
+
+function updatePreview(){
+
+    let opening = num(openingInput.value);
+    let received = num(receivedInput.value);
+    let ownTanker = num(ownTankerInput.value);
+    let sale = num(saleInput.value);
+    let current = num(currentInput.value);
+
+    let theoretical = opening + received + ownTanker - sale;
+
+    let difference = current - theoretical;
+
+    theoreticalPreview.innerText =
+    theoretical.toFixed(2) + " L";
+
+    differencePreview.innerText =
+    difference.toFixed(2) + " L";
+
+    if(difference > 0){
+
+        gainPreview.innerText =
+        "+" + difference.toFixed(2) + " L";
+
+        shortagePreview.innerText = "0 L";
+
+    }else if(difference < 0){
+
+        gainPreview.innerText = "0 L";
+
+        shortagePreview.innerText =
+        Math.abs(difference).toFixed(2) + " L";
+
+    }else{
+
+        gainPreview.innerText = "0 L";
+        shortagePreview.innerText = "0 L";
+
+    }
+
+}
+
+openingInput.addEventListener("input", updatePreview);
+receivedInput.addEventListener("input", updatePreview);
+ownTankerInput.addEventListener("input", updatePreview);
+saleInput.addEventListener("input", updatePreview);
+currentInput.addEventListener("input", updatePreview);
+
+updatePreview();
+
+</script>
 
 </body>
 </html>

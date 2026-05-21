@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>Edit Daily Closing</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f3f4f6;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:24px 18px;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+}
+
+.logo{
+    margin-bottom:35px;
+}
+
+.logo h2{
+    font-size:24px;
+}
+
+.logo p{
+    color:#94a3b8;
+    font-size:12px;
+    margin-top:6px;
+}
+
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:14px;
+    transition:.2s;
+    font-weight:600;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active{
+    background:#16a34a;
+    color:white;
+}
+
+/* MAIN */
+
+.main-content{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.topbar{
+    margin-bottom:28px;
+}
+
+.topbar h1{
+    font-size:34px;
+    color:#07120C;
+}
+
+.topbar p{
+    margin-top:6px;
+    color:#64748b;
+}
+
+/* FORM */
+
+.form-box{
+    background:white;
+    border-radius:28px;
+    padding:30px;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:20px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:10px;
+    font-weight:700;
+    color:#374151;
+}
+
+.input-group input{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    font-size:14px;
+}
+
+.save-btn{
+    margin-top:28px;
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:16px 24px;
+    border-radius:14px;
+    cursor:pointer;
+    font-size:15px;
+    font-weight:700;
+}
+
+@media(max-width:900px){
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- SIDEBAR -->
+
+<aside class="sidebar">
+
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>Fueling Your Trust</p>
+</div>
+
+<nav>
+
+<a href="/dashboard">Dashboard</a>
+
+<a href="/daily-closing">
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+Tank Level
+</a>
+
+<a href="/credit-transport">
+Credit Transport
+</a>
+
+<a href="/lube-stock">
+Lube Stock
+</a>
+
+<a href="/attendance">
+Attendance
+</a>
+
+<a class="active"
+href="/reports">
+Reports
+</a>
+
+<a href="/settings">
+Settings
+</a>
+
+</nav>
+
+</aside>
+
+<!-- MAIN -->
+
+<main class="main-content">
+
+<div class="topbar">
+
+<h1>Edit Daily Closing</h1>
+
+<p>
+Update daily closing details
+</p>
+
+</div>
+
+<div class="form-box">
+
+<form method="POST"
+action="/update-daily-closing/{{ row['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+
+<input type="date"
+name="date"
+value="{{ row['date'] }}">
+</div>
+
+<div class="input-group">
+<label>MS Litres</label>
+
+<input type="number"
+step="0.01"
+name="ms_litres"
+value="{{ row['ms_litres'] }}">
+</div>
+
+<div class="input-group">
+<label>HSD Litres</label>
+
+<input type="number"
+step="0.01"
+name="hsd_litres"
+value="{{ row['hsd_litres'] }}">
+</div>
+
+<div class="input-group">
+<label>CNG Sale</label>
+
+<input type="number"
+step="0.01"
+name="cng_sale"
+value="{{ row['cng_sale'] }}">
+</div>
+
+<div class="input-group">
+<label>Total Fuel Sale</label>
+
+<input type="number"
+step="0.01"
+name="total_fuel_sale"
+value="{{ row['total_fuel_sale'] }}">
+</div>
+
+<div class="input-group">
+<label>Lube Sale</label>
+
+<input type="number"
+step="0.01"
+name="lube_sale"
+value="{{ row['lube_sale'] }}">
+</div>
+
+<div class="input-group">
+<label>Digital Collection</label>
+
+<input type="number"
+step="0.01"
+name="digital_collection"
+value="{{ row['digital_collection'] }}">
+</div>
+
+<div class="input-group">
+<label>Total Expense</label>
+
+<input type="number"
+step="0.01"
+name="total_expense"
+value="{{ row['total_expense'] }}">
+</div>
+
+<div class="input-group">
+<label>Cash In Hand</label>
+
+<input type="number"
+step="0.01"
+name="cash_in_hand"
+value="{{ row['cash_in_hand'] }}">
+</div>
+
+</div>
+
+<button class="save-btn">
+
+<i class="fa-solid fa-floppy-disk"></i>
+Update Daily Closing
+
+</button>
+
+</form>
+
+</div>
+
+</main>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Edit Transport Entry</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+.edit-box{
+    max-width:1100px;
+    margin:35px auto;
+    background:white;
+    padding:30px;
+    border-radius:28px;
+    box-shadow:0 18px 45px rgba(0,0,0,.08);
+}
+.button-row{
+    margin-top:24px;
+    display:flex;
+    gap:12px;
+}
+.cancel-btn{
+    background:#e5e7eb;
+    color:#111827;
+    padding:14px 20px;
+    border-radius:14px;
+    text-decoration:none;
+    font-weight:700;
+}
+</style>
+</head>
+
+<body>
+
+<div class="edit-box">
+
+<h1>Edit Transport Entry</h1>
+<br>
+
+<form method="POST" action="/update-transport-entry/{{ entry['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date" name="entry_date" value="{{ entry['entry_date'] }}" required>
+</div>
+
+<div class="input-group">
+<label>Transport Name</label>
+<select name="transporter_name" required>
+    {% for t in transporters %}
+    <option value="{{ t['party_name'] }}"
+        {% if entry['transporter_name'] == t['party_name'] %}selected{% endif %}>
+        {{ t["party_name"] }}
+    </option>
+    {% endfor %}
+</select>
+</div>
+
+<div class="input-group">
+<label>Challan No.</label>
+<input type="text" name="challan_no" value="{{ entry['challan_no'] }}">
+</div>
+
+<div class="input-group">
+<label>Vehicle No.</label>
+<input type="text" name="vehicle_no" value="{{ entry['vehicle_no'] }}">
+</div>
+
+<div class="input-group">
+<label>Slip No.</label>
+<input type="text" name="slip_no" value="{{ entry['slip_no'] }}">
+</div>
+
+<div class="input-group">
+<label>HSD Qty</label>
+<input type="number" step="0.01" id="hsd-qty" name="hsd_qty" value="{{ entry['hsd_qty'] }}">
+</div>
+
+<div class="input-group">
+<label>Rate</label>
+<input type="number" step="0.01" id="rate" name="rate" value="{{ entry['rate'] }}">
+</div>
+
+<div class="input-group">
+<label>HSD Amount</label>
+<input type="number" step="0.01" id="hsd-amount" value="{{ entry['hsd_amount'] }}" readonly>
+</div>
+
+<div class="input-group">
+<label>Cash Taken</label>
+<input type="number" step="0.01" id="cash-taken" name="cash_taken" value="{{ entry['cash_taken'] }}">
+</div>
+
+<div class="input-group">
+<label>Total Amount</label>
+<input type="number" step="0.01" id="total-amount" value="{{ entry['total_amount'] }}" readonly>
+</div>
+
+</div>
+
+<div class="button-row">
+<button class="save-btn-top">
+    <i class="fa-solid fa-floppy-disk"></i>
+    Update Entry
+</button>
+
+<a href="/credit-transport" class="cancel-btn">Cancel</a>
+</div>
+
+</form>
+
+</div>
+
+<script>
+function calcTransport(){
+    var qty = parseFloat(document.getElementById("hsd-qty").value) || 0;
+    var rate = parseFloat(document.getElementById("rate").value) || 0;
+    var cash = parseFloat(document.getElementById("cash-taken").value) || 0;
+
+    var hsdAmount = qty * rate;
+    var total = hsdAmount + cash;
+
+    document.getElementById("hsd-amount").value = hsdAmount.toFixed(2);
+    document.getElementById("total-amount").value = total.toFixed(2);
+}
+
+document.getElementById("hsd-qty").addEventListener("input", calcTransport);
+document.getElementById("rate").addEventListener("input", calcTransport);
+document.getElementById("cash-taken").addEventListener("input", calcTransport);
+</script>
+
+</body>
+</html>

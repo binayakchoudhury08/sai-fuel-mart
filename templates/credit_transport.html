@@ -1,158 +1,783 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Credit Transport - Sai Fuel Mart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Credit Transport</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f3f4f6;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:24px 18px;
+    position:fixed;
+    left:0;
+    top:0;
+    bottom:0;
+}
+
+.logo{
+    margin-bottom:35px;
+}
+
+.logo h2{
+    font-size:24px;
+    margin-bottom:6px;
+}
+
+.logo p{
+    color:#94a3b8;
+    font-size:12px;
+}
+
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:16px;
+    transition:.2s;
+    font-weight:600;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active{
+    background:#16a34a;
+    color:white;
+}
+
+/* MAIN */
+
+.main-content{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+}
+
+.topbar h1{
+    font-size:34px;
+    color:#07120C;
+}
+
+.topbar p{
+    color:#64748b;
+    margin-top:6px;
+}
+
+/* BOX */
+
+.box{
+    background:white;
+    border-radius:28px;
+    padding:28px;
+    margin-bottom:28px;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.box-title{
+    font-size:22px;
+    font-weight:800;
+    margin-bottom:24px;
+    color:#07120C;
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+/* GRID */
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:20px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:10px;
+    font-weight:700;
+    color:#374151;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    font-size:14px;
+}
+
+/* BUTTONS */
+
+.save-btn{
+    margin-top:24px;
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 24px;
+    border-radius:14px;
+    cursor:pointer;
+    font-weight:700;
+}
+
+.edit-btn{
+    background:#2563eb;
+    color:white;
+    padding:8px 14px;
+    border-radius:10px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:white;
+    padding:8px 14px;
+    border-radius:10px;
+    text-decoration:none;
+    font-size:12px;
+}
+
+/* TABLE */
+
+.table-wrap{
+    overflow:auto;
+}
+
+.entry-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.entry-table th{
+    background:#f8fafc;
+    color:#475569;
+    padding:14px;
+    text-align:left;
+}
+
+.entry-table td{
+    padding:14px;
+    border-top:1px solid #e5e7eb;
+}
+
+/* CARDS */
+
+.summary-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:20px;
+}
+
+.summary-card{
+    background:#07120C;
+    color:white;
+    padding:24px;
+    border-radius:22px;
+}
+
+.summary-card span{
+    color:#94a3b8;
+    font-size:14px;
+}
+
+.summary-card h2{
+    margin-top:12px;
+    font-size:30px;
+}
+
+/* ACTION */
+
+.action-flex{
+    display:flex;
+    gap:8px;
+}
+
+@media(max-width:1100px){
+
+    .form-grid{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .summary-grid{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+</style>
+
 </head>
 
 <body>
 
 <div class="container">
 
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>SAI FUEL MART</h2>
-            <p>FUELING YOUR TRUST</p>
-        </div>
+<!-- SIDEBAR -->
 
-        <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a class="active" href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
-    </aside>
+<aside class="sidebar">
 
-    <main class="main-content">
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>Fueling Your Trust</p>
+</div>
 
-        <div class="topbar">
-            <div>
-                <h1>Credit Transport</h1>
-                <p>Manage transporter credit balance and payments</p>
-            </div>
-        </div>
+<nav>
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-user-plus"></i> Add Transporter
-            </div>
+{% if session.get("role") == "admin" %}
 
-            <form method="POST" action="/save-transporter">
-                <div class="form-grid">
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
 
-                    <div class="input-group">
-                        <label>Transporter / Party Name</label>
-                        <input type="text" name="party_name" required>
-                    </div>
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
 
-                    <div class="input-group">
-                        <label>Opening Balance</label>
-                        <input type="number" step="0.01" name="opening_balance" value="0">
-                    </div>
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
 
-                    <div class="input-group">
-                        <label>Status</label>
-                        <select name="status">
-                            <option>Active</option>
-                            <option>Inactive</option>
-                        </select>
-                    </div>
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
 
-                </div>
+{% endif %}
 
-                <br>
 
-                <button class="save-btn-top" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Transporter
-                </button>
-            </form>
-        </div>
+{% if session.get("role") == "manager" %}
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-money-bill-transfer"></i> Payment Received
-            </div>
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
 
-            <form method="POST" action="/save-transport-payment">
-                <div class="form-grid">
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
 
-                    <div class="input-group">
-                        <label>Date</label>
-                        <input type="date" name="date" id="payment-date" required>
-                    </div>
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
 
-                    <div class="input-group">
-                        <label>Transporter</label>
-                        <select name="transporter_id" required>
-                            <option value="">Select Transporter</option>
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
 
-                            {% for t in transporters %}
-                            <option value="{{ t['id'] }}">{{ t['party_name'] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
 
-                    <div class="input-group">
-                        <label>Payment Amount</label>
-                        <input type="number" step="0.01" name="payment_amount" required>
-                    </div>
+<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
 
-                </div>
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
 
-                <br>
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
 
-                <button class="save-btn-top" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Payment
-                </button>
-            </form>
-        </div>
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-table"></i> Transporter Balance Register
-            </div>
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
 
-            <table class="entry-table">
-                <tr>
-                    <th>Party Name</th>
-                    <th>Opening</th>
-                    <th>Credit Given</th>
-                    <th>Payment Received</th>
-                    <th>Balance Due</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
 
-                {% for t in transporters %}
-                <tr>
-                    <td>{{ t["party_name"] }}</td>
-                    <td>₹ {{ t["opening_balance"] }}</td>
-                    <td>₹ {{ t["credit_given"] }}</td>
-                    <td>₹ {{ t["payment_received"] }}</td>
-                    <td><b>₹ {{ t["balance_due"] }}</b></td>
-                    <td>{{ t["status"] }}</td>
-                    <td>
-                        <a href="/edit-transporter/{{ t['id'] }}" class="add-btn">Edit</a>
-                        <a href="/delete-transporter/{{ t['id'] }}" class="add-btn"
-                           onclick="return confirm('Delete this transporter?')">Delete</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
+{% endif %}
 
-    </main>
+</nav>
+
+</aside>
+
+<!-- MAIN -->
+
+<main class="main-content">
+
+<div class="topbar">
+
+<div>
+<h1>Credit Transport</h1>
+<p>Manage transporter credits, payment and HSD entries</p>
+</div>
+
+</div>
+
+<!-- SUMMARY -->
+
+<div class="summary-grid">
+
+<div class="summary-card">
+<span>Total Transporters</span>
+<h2>{{ transporters|length }}</h2>
+</div>
+
+<div class="summary-card">
+<span>Total Entries</span>
+<h2>{{ entries|length }}</h2>
+</div>
+
+<div class="summary-card">
+<span>HSD Rate</span>
+<h2>₹ {{ hsd_rate }}</h2>
+</div>
+
+<div class="summary-card">
+<span>Status</span>
+<h2>Active</h2>
+</div>
+
+</div>
+
+<br>
+
+<!-- ADD TRANSPORTER -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-plus"></i>
+Add Transporter
+</div>
+
+<form method="POST"
+action="/save-transporter">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Transporter Name</label>
+<input type="text"
+name="party_name"
+required>
+</div>
+
+<div class="input-group">
+<label>Opening Balance</label>
+<input type="number"
+step="0.01"
+name="opening_balance"
+value="0">
+</div>
+
+<div class="input-group">
+<label>Status</label>
+
+<select name="status">
+
+<option value="Active">
+Active
+</option>
+
+<option value="Inactive">
+Inactive
+</option>
+
+</select>
+
+</div>
+
+</div>
+
+<button class="save-btn">
+Save Transporter
+</button>
+
+</form>
+
+</div>
+
+<!-- TRANSPORT ENTRY -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-truck-fast"></i>
+Transport Entry Register
+</div>
+
+<form method="POST"
+action="/save-transport-entry">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date"
+name="entry_date"
+required>
+</div>
+
+<div class="input-group">
+<label>Transporter</label>
+
+<select name="transporter_name">
+
+{% for t in transporters %}
+
+<option value="{{ t['party_name'] }}">
+{{ t["party_name"] }}
+</option>
+
+{% endfor %}
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Challan No.</label>
+<input type="text"
+name="challan_no">
+</div>
+
+<div class="input-group">
+<label>Vehicle No.</label>
+<input type="text"
+name="vehicle_no">
+</div>
+
+<div class="input-group">
+<label>Slip No.</label>
+<input type="text"
+name="slip_no">
+</div>
+
+<div class="input-group">
+<label>HSD Qty</label>
+<input type="number"
+step="0.01"
+name="hsd_qty"
+id="hsd_qty">
+</div>
+
+<div class="input-group">
+<label>Rate</label>
+<input type="number"
+step="0.01"
+name="rate"
+id="rate"
+value="{{ hsd_rate }}">
+</div>
+
+<div class="input-group">
+<label>HSD Amount</label>
+<input type="number"
+step="0.01"
+id="hsd_amount"
+readonly>
+</div>
+
+<div class="input-group">
+<label>Cash Taken</label>
+<input type="number"
+step="0.01"
+name="cash_taken"
+id="cash_taken">
+</div>
+
+<div class="input-group">
+<label>Total Amount</label>
+<input type="number"
+step="0.01"
+id="total_amount"
+readonly>
+</div>
+
+</div>
+
+<button class="save-btn">
+Save Entry
+</button>
+
+</form>
+
+</div>
+
+<!-- TRANSPORTERS -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-users"></i>
+Transporters
+</div>
+
+<div class="table-wrap">
+
+<table class="entry-table">
+
+<tr>
+
+<th>Name</th>
+<th>Opening</th>
+<th>Credit</th>
+<th>Received</th>
+<th>Balance</th>
+<th>Status</th>
+<th>Action</th>
+
+</tr>
+
+{% for row in transporters %}
+
+<tr>
+
+<td>{{ row["party_name"] }}</td>
+
+<td>
+₹ {{ row["opening_balance"] }}
+</td>
+
+<td>
+₹ {{ row["credit_given"] }}
+</td>
+
+<td>
+₹ {{ row["payment_received"] }}
+</td>
+
+<td>
+<b>
+₹ {{ row["balance_due"] }}
+</b>
+</td>
+
+<td>{{ row["status"] }}</td>
+
+<td>
+
+<div class="action-flex">
+
+<a href="/edit-transporter/{{ row['id'] }}"
+class="edit-btn">
+Edit
+</a>
+
+<a href="/delete-transporter/{{ row['id'] }}"
+class="delete-btn"
+onclick="return confirm('Delete transporter?')">
+Delete
+</a>
+
+</div>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+</div>
+
+<!-- ENTRY REPORT -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-table"></i>
+Transport Entry History
+</div>
+
+<div class="table-wrap">
+
+<table class="entry-table">
+
+<tr>
+
+<th>Date</th>
+<th>SL</th>
+<th>Transporter</th>
+<th>Vehicle</th>
+<th>Slip</th>
+<th>Qty</th>
+<th>Rate</th>
+<th>Total</th>
+<th>Action</th>
+
+</tr>
+
+{% for row in entries %}
+
+<tr>
+
+<td>{{ row["entry_date"] }}</td>
+
+<td>{{ row["sl_no"] }}</td>
+
+<td>{{ row["transporter_name"] }}</td>
+
+<td>{{ row["vehicle_no"] }}</td>
+
+<td>{{ row["slip_no"] }}</td>
+
+<td>{{ row["hsd_qty"] }}</td>
+
+<td>
+₹ {{ row["rate"] }}
+</td>
+
+<td>
+<b>
+₹ {{ row["total_amount"] }}
+</b>
+</td>
+
+<td>
+
+<div class="action-flex">
+
+<a href="/edit-transport-entry/{{ row['id'] }}"
+class="edit-btn">
+Edit
+</a>
+
+<a href="/delete-transport-entry/{{ row['id'] }}"
+class="delete-btn"
+onclick="return confirm('Delete entry?')">
+Delete
+</a>
+
+</div>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+</div>
+
+</main>
 
 </div>
 
 <script>
-    document.getElementById("payment-date").value =
-        new Date().toISOString().split("T")[0];
+
+function calculateTransportAmount(){
+
+    let qty =
+    parseFloat(
+        document.getElementById("hsd_qty").value
+    ) || 0;
+
+    let rate =
+    parseFloat(
+        document.getElementById("rate").value
+    ) || 0;
+
+    let cash =
+    parseFloat(
+        document.getElementById("cash_taken").value
+    ) || 0;
+
+    let hsdAmount =
+    qty * rate;
+
+    let total =
+    hsdAmount + cash;
+
+    document.getElementById(
+        "hsd_amount"
+    ).value =
+    hsdAmount.toFixed(2);
+
+    document.getElementById(
+        "total_amount"
+    ).value =
+    total.toFixed(2);
+}
+
+document.getElementById(
+    "hsd_qty"
+).addEventListener(
+    "input",
+    calculateTransportAmount
+);
+
+document.getElementById(
+    "rate"
+).addEventListener(
+    "input",
+    calculateTransportAmount
+);
+
+document.getElementById(
+    "cash_taken"
+).addEventListener(
+    "input",
+    calculateTransportAmount
+);
+
+calculateTransportAmount();
+
 </script>
 
 </body>

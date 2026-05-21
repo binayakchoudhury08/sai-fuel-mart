@@ -1,0 +1,263 @@
+<!-- templates/edit_nozzle_entry.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Edit Nozzle Entry</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+body{
+    background:#f3f4f6;
+    font-family:'Segoe UI',sans-serif;
+    padding:30px;
+}
+
+.box{
+    max-width:1200px;
+    margin:auto;
+    background:white;
+    padding:35px;
+    border-radius:28px;
+    box-shadow:0 15px 45px rgba(0,0,0,.06);
+}
+
+h1{
+    margin-bottom:28px;
+    color:#07120C;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:20px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:10px;
+    font-weight:700;
+    color:#374151;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    font-size:14px;
+}
+
+.btn-row{
+    margin-top:28px;
+    display:flex;
+    gap:14px;
+}
+
+.save-btn{
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.cancel-btn{
+    background:#e5e7eb;
+    color:#111827;
+    text-decoration:none;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+}
+
+@media(max-width:1100px){
+    .form-grid{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<h1>Edit Nozzle Entry</h1>
+
+<form method="POST"
+action="/update-nozzle-entry/{{ entry['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+
+<input type="date"
+name="entry_date"
+value="{{ entry['entry_date'] }}"
+required>
+</div>
+
+<div class="input-group">
+<label>Shift</label>
+
+<select name="shift_name">
+
+<option value="Morning"
+{% if entry['shift_name']=="Morning" %}selected{% endif %}>
+Morning
+</option>
+
+<option value="Evening"
+{% if entry['shift_name']=="Evening" %}selected{% endif %}>
+Evening
+</option>
+
+<option value="Night"
+{% if entry['shift_name']=="Night" %}selected{% endif %}>
+Night
+</option>
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Nozzle</label>
+
+<select name="nozzle_id">
+
+{% for nozzle in nozzles %}
+
+<option value="{{ nozzle['id'] }}"
+{% if entry['nozzle_id']==nozzle['id'] %}selected{% endif %}>
+
+{{ nozzle["nozzle_name"] }}
+| {{ nozzle["machine_no"] }}
+| {{ nozzle["fuel_type"] }}
+
+</option>
+
+{% endfor %}
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Opening</label>
+
+<input type="number"
+step="0.01"
+name="opening_reading"
+id="opening"
+value="{{ entry['opening_reading'] }}">
+</div>
+
+<div class="input-group">
+<label>Closing</label>
+
+<input type="number"
+step="0.01"
+name="closing_reading"
+id="closing"
+value="{{ entry['closing_reading'] }}">
+</div>
+
+<div class="input-group">
+<label>Testing</label>
+
+<input type="number"
+step="0.01"
+name="testing_qty"
+id="testing"
+value="{{ entry['testing_qty'] }}">
+</div>
+
+<div class="input-group">
+<label>Total Sale</label>
+
+<input type="number"
+step="0.01"
+id="sale"
+value="{{ entry['total_sale'] }}"
+readonly>
+</div>
+
+</div>
+
+<div class="btn-row">
+
+<button class="save-btn">
+<i class="fa-solid fa-floppy-disk"></i>
+Update Entry
+</button>
+
+<a href="/nozzle-management"
+class="cancel-btn">
+
+Cancel
+
+</a>
+
+</div>
+
+</form>
+
+</div>
+
+<script>
+
+function calculateSale(){
+
+    let opening =
+    parseFloat(document.getElementById("opening").value) || 0;
+
+    let closing =
+    parseFloat(document.getElementById("closing").value) || 0;
+
+    let testing =
+    parseFloat(document.getElementById("testing").value) || 0;
+
+    let sale =
+    closing - opening - testing;
+
+    if(sale < 0){
+        sale = 0;
+    }
+
+    document.getElementById("sale").value =
+    sale.toFixed(2);
+}
+
+document.getElementById("opening")
+.addEventListener("input", calculateSale);
+
+document.getElementById("closing")
+.addEventListener("input", calculateSale);
+
+document.getElementById("testing")
+.addEventListener("input", calculateSale);
+
+calculateSale();
+
+</script>
+
+</body>
+</html>

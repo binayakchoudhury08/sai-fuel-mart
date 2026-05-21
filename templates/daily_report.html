@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Daily Report - Sai Fuel Mart</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f3f4f6;
+    padding:30px;
+    color:#07120C;
+}
+
+.report-box{
+    background:white;
+    max-width:1400px;
+    margin:auto;
+    border-radius:28px;
+    padding:35px;
+    box-shadow:0 15px 45px rgba(0,0,0,.08);
+}
+
+.top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:28px;
+}
+
+.title h1{
+    font-size:34px;
+    margin-bottom:6px;
+}
+
+.title p{
+    color:#64748b;
+    margin-top:3px;
+}
+
+.print-btn{
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 24px;
+    border-radius:14px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:14px;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:30px;
+}
+
+.card{
+    background:#f8fafc;
+    border-radius:22px;
+    padding:22px;
+}
+
+.card span{
+    color:#64748b;
+    font-size:13px;
+}
+
+.card h2{
+    margin-top:10px;
+    font-size:28px;
+}
+
+.section{
+    margin-top:35px;
+}
+
+.section-title{
+    font-size:22px;
+    font-weight:800;
+    margin-bottom:18px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#07120C;
+    color:white;
+    padding:14px;
+    text-align:left;
+    font-size:14px;
+}
+
+td{
+    padding:14px;
+    border-bottom:1px solid #e5e7eb;
+    font-size:14px;
+}
+
+.green{
+    color:#16a34a;
+    font-weight:700;
+}
+
+.red{
+    color:#dc2626;
+    font-weight:700;
+}
+
+.summary-row{
+    background:#f8fafc;
+    font-weight:700;
+}
+
+@media(max-width:1000px){
+
+    .grid{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .top{
+        flex-direction:column;
+        gap:20px;
+        align-items:flex-start;
+    }
+}
+
+@media print{
+
+    body{
+        background:white;
+        padding:0;
+    }
+
+    .print-btn{
+        display:none;
+    }
+
+    .report-box{
+        box-shadow:none;
+        border-radius:0;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="report-box">
+
+<!-- TOP -->
+
+<div class="top">
+
+<div class="title">
+<h1>SAI FUEL MART</h1>
+<p>Daily Operational Report</p>
+<p>Date : {{ report_date }}</p>
+</div>
+
+<button onclick="window.print()"
+class="print-btn">
+
+<i class="fa-solid fa-print"></i>
+Print Report
+
+</button>
+
+</div>
+
+<!-- KPI -->
+
+<div class="grid">
+
+<div class="card">
+<span>Total Fuel Sale</span>
+<h2>₹ {{ closing["total_fuel_sale"] if closing else 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Digital Collection</span>
+<h2>₹ {{ closing["digital_collection"] if closing else 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Total Expense</span>
+<h2>₹ {{ closing["total_expense"] if closing else 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Cash In Hand</span>
+<h2>₹ {{ closing["cash_in_hand"] if closing else 0 }}</h2>
+</div>
+
+</div>
+
+<!-- FUEL SALES -->
+
+<div class="section">
+
+<div class="section-title">
+Fuel Sales Summary
+</div>
+
+<table>
+
+<tr>
+<th>Fuel Type</th>
+<th>Litres</th>
+<th>Amount</th>
+</tr>
+
+<tr>
+<td>MS</td>
+
+<td>
+{{ closing["ms_litres"] if closing else 0 }}
+</td>
+
+<td>
+₹
+{% if closing %}
+{{ (
+((closing["total_fuel_sale"] or 0)
+*
+(closing["ms_litres"] or 0))
+/
+(
+(closing["ms_litres"] or 0)
++
+(closing["hsd_litres"] or 0)
+)
+) | round(2) }}
+{% else %}
+0
+{% endif %}
+</td>
+
+</tr>
+
+<tr>
+
+<td>HSD</td>
+
+<td>
+{{ closing["hsd_litres"] if closing else 0 }}
+</td>
+
+<td>
+₹
+{% if closing %}
+{{ (
+((closing["total_fuel_sale"] or 0)
+*
+(closing["hsd_litres"] or 0))
+/
+(
+(closing["ms_litres"] or 0)
++
+(closing["hsd_litres"] or 0)
+)
+) | round(2) }}
+{% else %}
+0
+{% endif %}
+</td>
+
+</tr>
+
+<tr class="summary-row">
+
+<td>Total</td>
+
+<td>
+{{ (
+(closing["ms_litres"] or 0)
++
+(closing["hsd_litres"] or 0)
+) if closing else 0 }}
+</td>
+
+<td>
+₹ {{ closing["total_fuel_sale"] if closing else 0 }}
+</td>
+
+</tr>
+
+</table>
+
+</div>
+
+<!-- NOZZLE REPORT -->
+
+<div class="section">
+
+<div class="section-title">
+Nozzle Readings
+</div>
+
+<table>
+
+<tr>
+<th>Nozzle</th>
+<th>Machine</th>
+<th>Fuel</th>
+<th>Shift</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Total Sale</th>
+</tr>
+
+{% for row in nozzle_rows %}
+
+<tr>
+
+<td>{{ row["nozzle_name"] }}</td>
+
+<td>{{ row["machine_no"] }}</td>
+
+<td>{{ row["fuel_type"] }}</td>
+
+<td>{{ row["shift_name"] }}</td>
+
+<td>{{ row["opening_reading"] }}</td>
+
+<td>{{ row["closing_reading"] }}</td>
+
+<td>{{ row["testing_qty"] }}</td>
+
+<td>
+<b>{{ row["total_sale"] }}</b>
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+<!-- COLLECTION -->
+
+<div class="section">
+
+<div class="section-title">
+Collection Summary
+</div>
+
+<table>
+
+<tr>
+<th>Collection Type</th>
+<th>Amount</th>
+</tr>
+
+<tr>
+<td>PhonePe</td>
+<td>₹ {{ closing["phonepe"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Card Swipe</td>
+<td>₹ {{ closing["card_swipe"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>HP Pay</td>
+<td>₹ {{ closing["hp_pay"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>HPCL OTP</td>
+<td>₹ {{ closing["hpcl_otp"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>UPI Other</td>
+<td>₹ {{ closing["upi_other"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Transport Received</td>
+<td>₹ {{ closing["transport_received"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Lube Sale</td>
+<td>₹ {{ closing["lube_sale"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Credit Given</td>
+<td>₹ {{ closing["credit_given"] if closing else 0 }}</td>
+</tr>
+
+<tr class="summary-row">
+<td>Total Digital Collection</td>
+<td>₹ {{ closing["digital_collection"] if closing else 0 }}</td>
+</tr>
+
+</table>
+
+</div>
+
+<!-- TANK -->
+
+<div class="section">
+
+<div class="section-title">
+Tank Level Summary
+</div>
+
+<table>
+
+<tr>
+<th>Fuel</th>
+<th>Opening</th>
+<th>Received</th>
+<th>Own Tanker</th>
+<th>Sale</th>
+<th>Current</th>
+<th>Gain</th>
+<th>Shortage</th>
+</tr>
+
+{% for tank in tank_rows %}
+
+<tr>
+
+<td>{{ tank["fuel_type"] }}</td>
+
+<td>{{ tank["opening_stock"] }}</td>
+
+<td>{{ tank["received_stock"] }}</td>
+
+<td>{{ tank["own_tanker_stock"] }}</td>
+
+<td>{{ tank["sale_stock"] }}</td>
+
+<td>
+<b>{{ tank["current_stock"] }}</b>
+</td>
+
+<td class="green">
+{{ tank["gain_qty"] }}
+</td>
+
+<td class="red">
+{{ tank["shortage_qty"] }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+<!-- EXPENSE -->
+
+<div class="section">
+
+<div class="section-title">
+Expense & Cash Summary
+</div>
+
+<table>
+
+<tr>
+<th>Particular</th>
+<th>Amount</th>
+</tr>
+
+<tr>
+<td>Total Expense</td>
+<td>₹ {{ closing["total_expense"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Net Credit Due</td>
+<td>₹ {{ closing["net_credit_due"] if closing else 0 }}</td>
+</tr>
+
+<tr>
+<td>Cash In Hand</td>
+<td>
+<b>₹ {{ closing["cash_in_hand"] if closing else 0 }}</b>
+</td>
+</tr>
+
+</table>
+
+</div>
+
+</div>
+
+</body>
+</html>

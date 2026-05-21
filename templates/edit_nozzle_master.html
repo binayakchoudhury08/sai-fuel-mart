@@ -1,0 +1,181 @@
+<!-- templates/edit_nozzle_master.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Edit Nozzle Master</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+body{
+    background:#f3f4f6;
+    font-family:'Segoe UI',sans-serif;
+    padding:30px;
+}
+
+.box{
+    max-width:900px;
+    margin:auto;
+    background:white;
+    padding:35px;
+    border-radius:28px;
+    box-shadow:0 15px 45px rgba(0,0,0,.06);
+}
+
+h1{
+    margin-bottom:28px;
+    color:#07120C;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:10px;
+    font-weight:700;
+    color:#374151;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    font-size:14px;
+}
+
+.btn-row{
+    margin-top:28px;
+    display:flex;
+    gap:14px;
+}
+
+.save-btn{
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.cancel-btn{
+    background:#e5e7eb;
+    color:#111827;
+    text-decoration:none;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="box">
+
+<h1>Edit Nozzle Master</h1>
+
+<form method="POST"
+action="/update-nozzle-master/{{ nozzle['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Nozzle Name</label>
+
+<input type="text"
+name="nozzle_name"
+value="{{ nozzle['nozzle_name'] }}"
+required>
+</div>
+
+<div class="input-group">
+<label>Machine No.</label>
+
+<input type="text"
+name="machine_no"
+value="{{ nozzle['machine_no'] }}"
+required>
+</div>
+
+<div class="input-group">
+<label>Fuel Type</label>
+
+<select name="fuel_type">
+
+<option value="MS"
+{% if nozzle['fuel_type']=="MS" %}selected{% endif %}>
+MS
+</option>
+
+<option value="HSD"
+{% if nozzle['fuel_type']=="HSD" %}selected{% endif %}>
+HSD
+</option>
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Status</label>
+
+<select name="status">
+
+<option value="Active"
+{% if nozzle['status']=="Active" %}selected{% endif %}>
+Active
+</option>
+
+<option value="Inactive"
+{% if nozzle['status']=="Inactive" %}selected{% endif %}>
+Inactive
+</option>
+
+</select>
+
+</div>
+
+</div>
+
+<div class="btn-row">
+
+<button class="save-btn">
+<i class="fa-solid fa-floppy-disk"></i>
+Update
+</button>
+
+<a href="/nozzle-management"
+class="cancel-btn">
+
+Cancel
+
+</a>
+
+</div>
+
+</form>
+
+</div>
+
+</body>
+</html>

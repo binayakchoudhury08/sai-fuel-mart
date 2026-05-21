@@ -1,397 +1,1054 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Daily Closing - Sai Fuel Mart</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Daily Closing - Sai Fuel Mart</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f3f4f6;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:26px 18px;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    overflow-y:auto;
+}
+
+.logo{
+    margin-bottom:35px;
+}
+
+.logo h2{
+    font-size:24px;
+    font-weight:800;
+}
+
+.logo p{
+    color:#94a3b8;
+    margin-top:5px;
+    font-size:13px;
+}
+
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    transition:.2s;
+    font-weight:600;
+}
+
+.sidebar nav a:hover,
+.sidebar nav a.active{
+    background:#16a34a;
+    color:white;
+}
+
+/* MAIN */
+
+.main-content{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+/* TOPBAR */
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:24px;
+}
+
+.topbar h1{
+    font-size:32px;
+    color:#07120C;
+}
+
+.topbar p{
+    color:#64748b;
+    margin-top:6px;
+}
+
+.save-btn-top{
+    border:none;
+    background:#16a34a;
+    color:white;
+    padding:14px 22px;
+    border-radius:14px;
+    font-weight:700;
+    cursor:pointer;
+    font-size:15px;
+}
+
+.save-btn-top:hover{
+    background:#15803d;
+}
+
+/* BOX */
+
+.box{
+    background:white;
+    border-radius:28px;
+    padding:24px;
+    margin-bottom:24px;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.box-title{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:24px;
+    font-size:18px;
+    font-weight:800;
+    color:#07120C;
+}
+
+/* KPI */
+
+.cards{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:24px;
+}
+
+.card{
+    border-radius:24px;
+    padding:20px;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    color:white;
+    position:relative;
+    overflow:hidden;
+    min-height:115px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+}
+
+.card::after{
+    content:'';
+    position:absolute;
+    right:-25px;
+    top:-25px;
+    width:90px;
+    height:90px;
+    background:rgba(255,255,255,.08);
+    border-radius:50%;
+}
+
+.card-icon{
+    width:56px;
+    height:56px;
+    border-radius:18px;
+    background:rgba(255,255,255,.15);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+    flex-shrink:0;
+}
+
+.card-info{
+    z-index:2;
+}
+
+.card-info h4{
+    font-size:13px;
+    letter-spacing:1px;
+    opacity:.9;
+    margin-bottom:8px;
+}
+
+.card-info h2{
+    font-size:26px;
+    margin-bottom:6px;
+    font-weight:800;
+}
+
+.card-info p{
+    font-size:13px;
+    opacity:.85;
+}
+
+.petrol{
+    background:linear-gradient(135deg,#2563eb,#1d4ed8);
+}
+
+.diesel{
+    background:linear-gradient(135deg,#f59e0b,#d97706);
+}
+
+.cng{
+    background:linear-gradient(135deg,#16a34a,#15803d);
+}
+
+.total{
+    background:linear-gradient(135deg,#7c3aed,#6d28d9);
+}
+
+/* TABLE */
+
+.entry-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.entry-table th{
+    background:#f8fafc;
+    color:#475569;
+    padding:14px;
+    text-align:left;
+    font-size:13px;
+}
+
+.entry-table td{
+    padding:12px;
+    border-top:1px solid #e5e7eb;
+}
+
+.entry-table input,
+.entry-table select{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid #d1d5db;
+    border-radius:10px;
+    outline:none;
+}
+
+/* FORM GRID */
+
+.form-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    margin-bottom:8px;
+    font-size:13px;
+    font-weight:700;
+    color:#475569;
+}
+
+.input-group input{
+    padding:12px;
+    border:1px solid #d1d5db;
+    border-radius:12px;
+    outline:none;
+}
+
+/* SUMMARY */
+
+.summary-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+}
+
+.summary-card{
+    background:#f8fafc;
+    border-radius:18px;
+    padding:18px;
+}
+
+.summary-card span{
+    color:#64748b;
+    font-size:13px;
+}
+
+.summary-card h2{
+    margin-top:10px;
+    color:#07120C;
+}
+
+.cash-card{
+    background:#16a34a;
+    color:white;
+}
+
+.cash-card span,
+.cash-card h2{
+    color:white;
+}
+
+/* BUTTON */
+
+.add-btn{
+    margin-top:18px;
+    border:none;
+    background:#07120C;
+    color:white;
+    padding:12px 18px;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:700;
+}
+
+.delete-row{
+    border:none;
+    background:#fee2e2;
+    color:#dc2626;
+    padding:10px 14px;
+    border-radius:10px;
+    cursor:pointer;
+}
+
+/* GRID */
+
+.two-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:24px;
+}
+
+/* RESPONSIVE */
+
+@media(max-width:1200px){
+
+    .cards{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .summary-grid{
+        grid-template-columns:repeat(2,1fr);
+    }
+
+    .form-grid{
+        grid-template-columns:1fr 1fr;
+    }
+}
+
+@media(max-width:800px){
+
+    .sidebar{
+        position:relative;
+        width:100%;
+        height:auto;
+    }
+
+    .container{
+        flex-direction:column;
+    }
+
+    .main-content{
+        margin-left:0;
+        width:100%;
+    }
+
+    .cards,
+    .summary-grid,
+    .two-grid,
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+</style>
+
 </head>
 
 <body>
 
 <div class="container">
 
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>SAI FUEL MART</h2>
-            <p>FUELING YOUR TRUST</p>
-        </div>
-
-        <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a class="active" href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
-    </aside>
-
-    <main class="main-content">
-
-        <input type="hidden" id="ms-rate" value="{{ settings['ms_rate'] }}">
-        <input type="hidden" id="hsd-rate" value="{{ settings['hsd_rate'] }}">
-
-        <div class="topbar">
-            <div>
-                <h1>Daily Closing</h1>
-                <p>Complete petrol pump daily closing account</p>
-            </div>
-
-            <button class="save-btn-top" id="save-closing">
-                <i class="fa-solid fa-floppy-disk"></i> Save Closing
-            </button>
-        </div>
-
-        <div class="box date-box">
-            <div class="date-picker-row">
-                <div class="input-group date-group">
-                    <label>
-                        <i class="fa-solid fa-calendar-days"></i>
-                        Closing Date
-                    </label>
-                    <input type="date" id="closing-date">
-                </div>
-            </div>
-        </div>
-
-        <div class="cards">
-
-            <div class="card petrol">
-                <h3>MS SALE</h3>
-                <h2 id="ms-sale-card">₹ 0.00</h2>
-                <p id="ms-litres-card">0 Ltrs</p>
-            </div>
-
-            <div class="card diesel">
-                <h3>HSD SALE</h3>
-                <h2 id="hsd-sale-card">₹ 0.00</h2>
-                <p id="hsd-litres-card">0 Ltrs</p>
-            </div>
-
-            <div class="card total">
-                <h3>TOTAL SALE</h3>
-                <h2 id="total-sale-card">₹ 0.00</h2>
-                <p>Fuel + Lube</p>
-            </div>
-
-        </div>
-
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-gas-pump"></i>
-                Nozzle Sales Entry
-            </div>
-
-            <h3 class="section-heading">MS Nozzles</h3>
-
-            <table class="entry-table nozzle-table">
-                <thead>
-                    <tr>
-                        <th>Nozzle</th>
-                        <th>Opening</th>
-                        <th>Closing</th>
-                        <th>Testing</th>
-                        <th>Sale</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {% for n in [1,2,3] %}
-                    <tr>
-                        <td>MS-{{ n }}</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale ms-sale" readonly></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <h3 class="section-heading">HSD Nozzles</h3>
-
-            <table class="entry-table nozzle-table">
-                <thead>
-                    <tr>
-                        <th>Nozzle</th>
-                        <th>Opening</th>
-                        <th>Closing</th>
-                        <th>Testing</th>
-                        <th>Sale</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {% for n in [1,2,3] %}
-                    <tr>
-                        <td>HSD-{{ n }}</td>
-                        <td><input type="number" class="opening"></td>
-                        <td><input type="number" class="closing"></td>
-                        <td><input type="number" class="testing"></td>
-                        <td><input type="number" class="sale hsd-sale" readonly></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="two-grid">
-
-            <div class="box">
-                <div class="box-title">
-                    <i class="fa-solid fa-wallet"></i>
-                    Digital Collection
-                </div>
-
-                <div class="form-grid">
-
-                    <div class="input-group">
-                        <label>PhonePe</label>
-                        <input type="number" id="phonepe" class="digital-input">
-                    </div>
-
-                    <div class="input-group">
-                        <label>Card Swipe</label>
-                        <input type="number" id="card-swipe" class="digital-input">
-                    </div>
-
-                    <div class="input-group">
-                        <label>HP Pay</label>
-                        <input type="number" id="hp-pay" class="digital-input">
-                    </div>
-
-                    <div class="input-group">
-                        <label>HPCL OTP</label>
-                        <input type="number" id="hpcl-otp" class="digital-input">
-                    </div>
-
-                    <div class="input-group">
-                        <label>UPI Other</label>
-                        <input type="number" id="upi-other" class="digital-input">
-                    </div>
-
-                    <div class="input-group">
-                        <label>Transport Collection Received</label>
-                        <input type="number" id="transport-received" readonly>
-                    </div>
-
-                </div>
-            </div>
-
-            <div class="box">
-                <div class="box-title">
-                    <i class="fa-solid fa-database"></i>
-                    Tank Stock
-                </div>
-
-                <table class="entry-table">
-                    <tr>
-                        <th>Fuel</th>
-                        <th>Opening</th>
-                        <th>Received</th>
-                        <th>Sale</th>
-                        <th>Closing</th>
-                    </tr>
-
-                    <tr>
-                        <td>MS</td>
-                        <td><input type="number" id="ms-stock-opening"></td>
-                        <td><input type="number" id="ms-stock-received"></td>
-                        <td><input type="number" id="ms-stock-sale" readonly></td>
-                        <td><input type="number" id="ms-stock-closing" readonly></td>
-                    </tr>
-
-                    <tr>
-                        <td>HSD</td>
-                        <td><input type="number" id="hsd-stock-opening"></td>
-                        <td><input type="number" id="hsd-stock-received"></td>
-                        <td><input type="number" id="hsd-stock-sale" readonly></td>
-                        <td><input type="number" id="hsd-stock-closing" readonly></td>
-                    </tr>
-                </table>
-            </div>
-
-        </div>
-
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-truck"></i>
-                Credit Transport Entry
-            </div>
-
-            <table class="entry-table" id="credit-table">
-                <thead>
-                    <tr>
-                        <th>Transporter</th>
-                        <th>Fuel</th>
-                        <th>Rate</th>
-                        <th>Amount</th>
-                        <th>Litres</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    <tr class="credit-row">
-                        <td>
-                            <select class="transporter">
-                                <option value="">Select Transporter</option>
-
-                                {% for t in transporters %}
-                                <option value="{{ t['id'] }}">{{ t['party_name'] }}</option>
-                                {% endfor %}
-                            </select>
-                        </td>
-
-                        <td>
-                            <select class="fuel">
-                                <option>MS</option>
-                                <option selected>HSD</option>
-                            </select>
-                        </td>
-
-                        <td><input type="number" class="rate" readonly></td>
-                        <td><input type="number" class="amount" placeholder="Amount"></td>
-                        <td><input type="number" class="litres" readonly></td>
-
-                        <td>
-                            <select>
-                                <option>Pending</option>
-                                <option>Paid</option>
-                            </select>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <button class="add-btn" id="add-credit">+ Add Credit Entry</button>
-        </div>
-
-        <div class="two-grid">
-
-            <div class="box">
-                <div class="box-title">
-                    <i class="fa-solid fa-oil-can"></i>
-                    Lube Sales
-                </div>
-
-                <table class="entry-table" id="lube-table">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Qty</th>
-                            <th>Rate</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr class="lube-row">
-                            <td>
-                                <select class="lube-product">
-                                    <option value="" data-rate="0">Select Product</option>
-
-                                    {% for item in lube_items %}
-                                    <option value="{{ item['id'] }}" data-rate="{{ item['selling_rate'] }}">
-                                        {{ item['product_name'] }} | Stock: {{ item['closing_stock'] }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </td>
-
-                            <td><input type="number" class="qty"></td>
-                            <td><input type="number" class="lube-rate" readonly></td>
-                            <td><input type="number" class="lube-amount" readonly></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <button class="add-btn" id="add-lube">+ Add Lube Item</button>
-            </div>
-
-            <div class="box">
-                <div class="box-title">
-                    <i class="fa-solid fa-money-bill-wave"></i>
-                    Expenses
-                </div>
-
-                <table class="entry-table" id="expense-table">
-                    <thead>
-                        <tr>
-                            <th>Expense Name</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr class="expense-row">
-                            <td><input type="text" placeholder="Expense Name"></td>
-                            <td><input type="number" class="expense-amount"></td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <button class="add-btn" id="add-expense">+ Add Expense</button>
-            </div>
-
-        </div>
-
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-chart-line"></i>
-                Final Summary
-            </div>
-
-            <div class="summary-grid">
-
-                <div class="summary-card">
-                    <span>Total Fuel Sale</span>
-                    <h2 id="summary-fuel-sale">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Lube Sale</span>
-                    <h2 id="summary-lube-sale">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Digital Collection</span>
-                    <h2 id="summary-digital">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Credit Given</span>
-                    <h2 id="summary-credit">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Transport Collection Received</span>
-                    <h2 id="summary-transport-received">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Net Credit Due</span>
-                    <h2 id="summary-net-credit">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card">
-                    <span>Total Expense</span>
-                    <h2 id="summary-expense">₹ 0.00</h2>
-                </div>
-
-                <div class="summary-card cash-card">
-                    <span>Cash In Hand</span>
-                    <h2 id="summary-cash">₹ 0.00</h2>
-                </div>
-
-            </div>
-        </div>
-
-    </main>
+<!-- SIDEBAR -->
+
+<aside class="sidebar">
+
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>Fueling Your Trust</p>
+</div>
+
+<nav>
+
+{% if session.get("role") == "admin" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+</nav>
+
+
+</aside>
+
+<!-- MAIN -->
+
+<main class="main-content">
+
+<input type="hidden" id="ms-rate" value="{{ settings['ms_rate'] }}">
+<input type="hidden" id="hsd-rate" value="{{ settings['hsd_rate'] }}">
+<input type="hidden" id="cng-rate" value="{{ settings['cng_rate'] }}">
+
+<!-- TOP -->
+
+<div class="topbar">
+
+<div>
+<h1>Daily Closing</h1>
+<p>Auto nozzle based fuel calculation system</p>
+</div>
+
+<button class="save-btn-top" id="save-closing">
+<i class="fa-solid fa-floppy-disk"></i>
+Save Closing
+</button>
+
+</div>
+
+<!-- DATE -->
+
+<div class="box">
+
+<div class="form-grid">
+
+<div class="input-group">
+
+<label>Closing Date</label>
+
+<input type="date"
+id="closing-date"
+value="{{ today }}">
+
+</div>
+
+</div>
+
+</div>
+
+<!-- KPI -->
+
+<div class="cards">
+
+<div class="card petrol">
+
+<div class="card-icon">
+<i class="fa-solid fa-gas-pump"></i>
+</div>
+
+<div class="card-info">
+<h4>MS SALE</h4>
+<h2 id="ms-sale-card">₹ 0.00</h2>
+<p id="ms-litres-card">0 Ltrs</p>
+</div>
+
+</div>
+
+<div class="card diesel">
+
+<div class="card-icon">
+<i class="fa-solid fa-oil-can"></i>
+</div>
+
+<div class="card-info">
+<h4>HSD SALE</h4>
+<h2 id="hsd-sale-card">₹ 0.00</h2>
+<p id="hsd-litres-card">0 Ltrs</p>
+</div>
+
+</div>
+
+<div class="card cng">
+
+<div class="card-icon">
+<i class="fa-solid fa-fire-flame-simple"></i>
+</div>
+
+<div class="card-info">
+<h4>CNG SALE</h4>
+<h2 id="cng-sale-card">₹ 0.00</h2>
+<p id="cng-kg-card">0 KG</p>
+</div>
+
+</div>
+
+<div class="card total">
+
+<div class="card-icon">
+<i class="fa-solid fa-chart-line"></i>
+</div>
+
+<div class="card-info">
+<h4>TOTAL SALE</h4>
+<h2 id="total-sale-card">₹ 0.00</h2>
+<p>Fuel + Lube</p>
+</div>
+
+</div>
+
+</div>
+
+<!-- NOZZLES -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Auto Capture
+</div>
+
+<!-- MS -->
+
+<h3 style="margin-bottom:14px;">MS Nozzles</h3>
+
+<table class="entry-table nozzle-table">
+
+<thead>
+<tr>
+<th>Nozzle</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Sale</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for n in ms_nozzles %}
+
+<tr>
+
+<td>{{ n["nozzle_name"] }}</td>
+
+<td>
+<input type="number"
+class="opening"
+value="{{ n['opening_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="closing"
+value="{{ n['closing_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="testing"
+value="{{ n['testing_qty'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="sale ms-sale"
+readonly
+value="{{ n['total_sale'] or 0 }}">
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+<br><br>
+
+<!-- HSD -->
+
+<h3 style="margin-bottom:14px;">HSD Nozzles</h3>
+
+<table class="entry-table nozzle-table">
+
+<thead>
+<tr>
+<th>Nozzle</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Sale</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for n in hsd_nozzles %}
+
+<tr>
+
+<td>{{ n["nozzle_name"] }}</td>
+
+<td>
+<input type="number"
+class="opening"
+value="{{ n['opening_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="closing"
+value="{{ n['closing_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="testing"
+value="{{ n['testing_qty'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="sale hsd-sale"
+readonly
+value="{{ n['total_sale'] or 0 }}">
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+<br><br>
+
+<!-- CNG -->
+
+<h3 style="margin-bottom:14px;">CNG Nozzles</h3>
+
+<table class="entry-table nozzle-table">
+
+<thead>
+<tr>
+<th>Nozzle</th>
+<th>Opening</th>
+<th>Closing</th>
+<th>Testing</th>
+<th>Sale KG</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for n in cng_nozzles %}
+
+<tr>
+
+<td>{{ n["nozzle_name"] }}</td>
+
+<td>
+<input type="number"
+class="opening"
+value="{{ n['opening_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="closing"
+value="{{ n['closing_reading'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="testing"
+value="{{ n['testing_qty'] or 0 }}">
+</td>
+
+<td>
+<input type="number"
+class="sale cng-sale"
+readonly
+value="{{ n['total_sale'] or 0 }}">
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+<!-- DIGITAL -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-wallet"></i>
+Digital Collection
+</div>
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>PhonePe</label>
+<input type="number" id="phonepe" class="digital-input">
+</div>
+
+<div class="input-group">
+<label>Card Swipe</label>
+<input type="number" id="card-swipe" class="digital-input">
+</div>
+
+<div class="input-group">
+<label>HP Pay</label>
+<input type="number" id="hp-pay" class="digital-input">
+</div>
+
+<div class="input-group">
+<label>HPCL OTP</label>
+<input type="number" id="hpcl-otp" class="digital-input">
+</div>
+
+<div class="input-group">
+<label>UPI Other</label>
+<input type="number" id="upi-other" class="digital-input">
+</div>
+
+<div class="input-group">
+<label>Transport Received</label>
+<input type="number" id="transport-received">
+</div>
+
+</div>
+
+</div>
+
+<!-- LUBE + EXPENSE -->
+
+<div class="two-grid">
+
+<!-- LUBE -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-oil-can"></i>
+Lube Sales
+</div>
+
+<table class="entry-table" id="lube-table">
+
+<thead>
+
+<tr>
+<th>Product</th>
+<th>Qty</th>
+<th>Rate</th>
+<th>Amount</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr class="lube-row">
+
+<td>
+
+<select class="lube-product">
+
+<option value="" data-rate="0">
+Select Product
+</option>
+
+{% for item in lube_items %}
+
+<option
+value="{{ item['id'] }}"
+data-rate="{{ item['selling_rate'] }}">
+
+{{ item['product_name'] }}
+| Stock:
+{{ item['closing_stock'] }}
+
+</option>
+
+{% endfor %}
+
+</select>
+
+</td>
+
+<td>
+<input type="number" class="qty">
+</td>
+
+<td>
+<input type="number"
+class="lube-rate"
+readonly>
+</td>
+
+<td>
+<input type="number"
+class="lube-amount"
+readonly>
+</td>
+
+<td>
+
+<button type="button"
+class="delete-row">
+
+Delete
+
+</button>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<button class="add-btn"
+id="add-lube">
+
++ Add Lube Item
+
+</button>
+
+</div>
+
+<!-- EXPENSE -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-money-bill-wave"></i>
+Expenses
+</div>
+
+<table class="entry-table"
+id="expense-table">
+
+<thead>
+
+<tr>
+<th>Expense Name</th>
+<th>Amount</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr class="expense-row">
+
+<td>
+<input type="text"
+placeholder="Expense Name">
+</td>
+
+<td>
+<input type="number"
+class="expense-amount">
+</td>
+
+<td>
+
+<button type="button"
+class="delete-row">
+
+Delete
+
+</button>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<button class="add-btn"
+id="add-expense">
+
++ Add Expense
+
+</button>
+
+</div>
+
+</div>
+
+<!-- SUMMARY -->
+
+<div class="box">
+
+<div class="box-title">
+<i class="fa-solid fa-chart-line"></i>
+Final Summary
+</div>
+
+<div class="summary-grid">
+
+<div class="summary-card">
+<span>Total Fuel Sale</span>
+<h2 id="summary-fuel-sale">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Lube Sale</span>
+<h2 id="summary-lube-sale">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Digital Collection</span>
+<h2 id="summary-digital">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Credit Given</span>
+<h2 id="summary-credit">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Transport Received</span>
+<h2 id="summary-transport-received">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Net Credit Due</span>
+<h2 id="summary-net-credit">₹ 0.00</h2>
+</div>
+
+<div class="summary-card">
+<span>Total Expense</span>
+<h2 id="summary-expense">₹ 0.00</h2>
+</div>
+
+<div class="summary-card cash-card">
+<span>Cash In Hand</span>
+<h2 id="summary-cash">₹ 0.00</h2>
+</div>
+
+</div>
+
+</div>
+
+</main>
 
 </div>
 

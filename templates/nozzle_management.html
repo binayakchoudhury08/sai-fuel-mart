@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nozzle Management - Sai Fuel Mart</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+.action-flex{
+    display:flex;
+    gap:8px;
+}
+.edit-btn,.delete-btn{
+    padding:8px 12px;
+    border-radius:10px;
+    color:white;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:700;
+}
+.edit-btn{background:#2563eb;}
+.delete-btn{background:#dc2626;}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<aside class="sidebar">
+    <div class="logo">
+        <h2>SAI FUEL MART</h2>
+        <p>FUELING YOUR TRUST</p>
+    </div>
+
+    <nav>
+        <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
+        <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
+        <a class="active" href="/nozzle-management"><i class="fa-solid fa-gas-pump"></i> Nozzle Management</a>
+        <a href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
+        <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
+        <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+        <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
+        <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
+        <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
+        <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
+    </nav>
+</aside>
+
+<main class="main-content">
+
+<div class="topbar">
+    <div>
+        <h1>Nozzle Management</h1>
+        <p>Nozzle master, meter reading, testing and fuel sale calculation</p>
+    </div>
+</div>
+
+<div class="box">
+    <div class="box-title">
+        <i class="fa-solid fa-plus"></i>
+        Add Nozzle Master
+    </div>
+
+    <form method="POST" action="/save-nozzle-master">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Nozzle Name</label>
+                <input type="text" name="nozzle_name" placeholder="MS1 / HSD1" required>
+            </div>
+
+            <div class="input-group">
+                <label>Machine No.</label>
+                <input type="text" name="machine_no" placeholder="351 / 356 / 725" required>
+            </div>
+
+            <div class="input-group">
+                <label>Fuel Type</label>
+                <select name="fuel_type" required>
+                    <option value="MS">MS</option>
+                    <option value="HSD">HSD</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Status</label>
+                <select name="status">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+            </div>
+
+        </div>
+
+        <br>
+
+        <button class="save-btn-top">
+            <i class="fa-solid fa-floppy-disk"></i>
+            Save Nozzle
+        </button>
+
+    </form>
+</div>
+
+<div class="box">
+    <div class="box-title">
+        <i class="fa-solid fa-gas-pump"></i>
+        Daily Nozzle Entry
+    </div>
+
+    <form method="POST" action="/save-nozzle-entry">
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Date</label>
+                <input type="date" name="entry_date" id="entry-date" required>
+            </div>
+
+            <div class="input-group">
+                <label>Nozzle</label>
+                <select name="nozzle_id" required>
+                    {% for nozzle in nozzle_master_rows %}
+                    {% if nozzle["status"] == "Active" %}
+                    <option value="{{ nozzle['id'] }}">
+                        {{ nozzle["nozzle_name"] }} | {{ nozzle["machine_no"] }} | {{ nozzle["fuel_type"] }}
+                    </option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Opening Reading</label>
+                <input type="number" step="0.01" name="opening_reading" id="opening" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Closing Reading</label>
+                <input type="number" step="0.01" name="closing_reading" id="closing" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Testing Qty</label>
+                <input type="number" step="0.01" name="testing_qty" id="testing" value="0">
+            </div>
+
+            <div class="input-group">
+                <label>Total Sale</label>
+                <input type="number" step="0.01" id="total-sale" readonly>
+            </div>
+
+        </div>
+
+        <br>
+
+        <button class="save-btn-top">
+            <i class="fa-solid fa-floppy-disk"></i>
+            Save Entry
+        </button>
+
+    </form>
+</div>
+
+<div class="box">
+    <div class="box-title">
+        <i class="fa-solid fa-list"></i>
+        Nozzle Master List
+    </div>
+
+    <table class="entry-table">
+        <tr>
+            <th>Nozzle</th>
+            <th>Machine</th>
+            <th>Fuel</th>
+            <th>Status</th>
+            <th>Action</th>
+        </tr>
+
+        {% for nozzle in nozzle_master_rows %}
+        <tr>
+            <td>{{ nozzle["nozzle_name"] }}</td>
+            <td>{{ nozzle["machine_no"] }}</td>
+            <td>{{ nozzle["fuel_type"] }}</td>
+            <td>{{ nozzle["status"] }}</td>
+            <td>
+                <div class="action-flex">
+                    <a href="/edit-nozzle-master/{{ nozzle['id'] }}" class="edit-btn">Edit</a>
+                    <a href="/delete-nozzle-master/{{ nozzle['id'] }}" class="delete-btn"
+                       onclick="return confirm('Delete this nozzle and all its entries?')">
+                        Delete
+                    </a>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="box">
+    <div class="box-title">
+        <i class="fa-solid fa-table"></i>
+        Nozzle Entry History
+    </div>
+
+    <table class="entry-table">
+        <tr>
+            <th>Date</th>
+            <th>Nozzle</th>
+            <th>Machine</th>
+            <th>Fuel</th>
+            <th>Opening</th>
+            <th>Closing</th>
+            <th>Testing</th>
+            <th>Total Sale</th>
+            <th>Updated</th>
+            <th>Action</th>
+        </tr>
+
+        {% for row in nozzle_rows %}
+        <tr>
+            <td>{{ row["entry_date"] }}</td>
+            <td>{{ row["nozzle_name"] }}</td>
+            <td>{{ row["machine_no"] }}</td>
+            <td>{{ row["fuel_type"] }}</td>
+            <td>{{ row["opening_reading"] }}</td>
+            <td>{{ row["closing_reading"] }}</td>
+            <td>{{ row["testing_qty"] }}</td>
+            <td><b>{{ row["total_sale"] }}</b></td>
+            <td>{{ row["created_at"] if row["created_at"] else "-" }}</td>
+            <td>
+                <div class="action-flex">
+                    <a href="/edit-nozzle-entry/{{ row['id'] }}" class="edit-btn">Edit</a>
+                    <a href="/delete-nozzle-entry/{{ row['id'] }}" class="delete-btn"
+                       onclick="return confirm('Delete this nozzle entry?')">
+                        Delete
+                    </a>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</main>
+</div>
+
+<script>
+document.getElementById("entry-date").value =
+    new Date().toISOString().split("T")[0];
+
+function calculateNozzleSale(){
+    var opening = parseFloat(document.getElementById("opening").value) || 0;
+    var closing = parseFloat(document.getElementById("closing").value) || 0;
+    var testing = parseFloat(document.getElementById("testing").value) || 0;
+
+    var sale = closing - opening - testing;
+
+    if(sale < 0){
+        sale = 0;
+    }
+
+    document.getElementById("total-sale").value = sale.toFixed(2);
+}
+
+document.getElementById("opening").addEventListener("input", calculateNozzleSale);
+document.getElementById("closing").addEventListener("input", calculateNozzleSale);
+document.getElementById("testing").addEventListener("input", calculateNozzleSale);
+
+calculateNozzleSale();
+</script>
+
+</body>
+</html>
