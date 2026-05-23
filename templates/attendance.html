@@ -2,582 +2,119 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Attendance - Sai Fuel Mart</title>
-
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
-
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:'Segoe UI',sans-serif;
-}
-
-body{
-    background:#f4f7fb;
-    color:#07120C;
-}
-
-.container{
-    display:flex;
-    min-height:100vh;
-}
-
-/* SIDEBAR */
-
-.sidebar{
-    width:270px;
-    background:#07120C;
-    color:white;
-    padding:26px 18px;
-    position:fixed;
-    top:0;
-    left:0;
-    bottom:0;
-    overflow-y:auto;
-}
-
-.logo{
-    margin-bottom:35px;
-}
-
-.logo h2{
-    font-size:24px;
-    font-weight:900;
-}
-
-.logo p{
-    color:#94a3b8;
-    font-size:12px;
-    margin-top:6px;
-}
-
-.sidebar nav{
-    display:flex;
-    flex-direction:column;
-    gap:8px;
-}
-
-.sidebar nav a{
-    text-decoration:none;
-    color:#d1d5db;
-    padding:14px 16px;
-    border-radius:14px;
-    display:flex;
-    align-items:center;
-    gap:12px;
-    font-weight:700;
-    transition:.2s;
-}
-
-.sidebar nav a:hover,
-.sidebar nav a.active{
-    background:#16a34a;
-    color:white;
-}
-
-/* MAIN */
-
-.main-content{
-    margin-left:270px;
-    width:calc(100% - 270px);
-    padding:30px;
-}
-
-.topbar{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:28px;
-}
-
-.topbar h1{
-    font-size:36px;
-    font-weight:900;
-}
-
-.topbar p{
-    color:#64748b;
-    margin-top:6px;
-}
-
-.top-right{
-    display:flex;
-    align-items:center;
-    gap:14px;
-}
-
-.search-box{
-    width:320px;
-    background:white;
-    border:1px solid #dbe3ef;
-    border-radius:16px;
-    padding:13px 16px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-}
-
-.search-box input{
-    width:100%;
-    border:none;
-    outline:none;
-    font-size:14px;
-}
-
-.date-box{
-    background:white;
-    border-radius:16px;
-    padding:13px 18px;
-    border:1px solid #dbe3ef;
-    font-weight:800;
-    color:#2563eb;
-}
-
-/* KPI */
-
-.kpi-grid{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:18px;
-    margin-bottom:24px;
-}
-
-.kpi-card{
-    background:white;
-    border-radius:24px;
-    padding:24px;
-    position:relative;
-    overflow:hidden;
-    box-shadow:0 12px 35px rgba(0,0,0,.05);
-}
-
-.kpi-card span{
-    color:#64748b;
-    font-size:13px;
-    font-weight:800;
-}
-
-.kpi-card h2{
-    font-size:34px;
-    margin-top:8px;
-    font-weight:900;
-}
-
-.kpi-card i{
-    position:absolute;
-    right:20px;
-    top:20px;
-    width:56px;
-    height:56px;
-    border-radius:18px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:22px;
-}
-
-.green-bg{
-    background:#dcfce7;
-    color:#16a34a;
-}
-
-.red-bg{
-    background:#fee2e2;
-    color:#dc2626;
-}
-
-.orange-bg{
-    background:#fef3c7;
-    color:#f59e0b;
-}
-
-.blue-bg{
-    background:#dbeafe;
-    color:#2563eb;
-}
-
-/* BOX */
-
-.box{
-    background:white;
-    border-radius:28px;
-    padding:24px;
-    margin-bottom:24px;
-    box-shadow:0 12px 35px rgba(0,0,0,.05);
-}
-
-.box-title{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    font-size:18px;
-    font-weight:900;
-    margin-bottom:22px;
-}
-
-/* ADD STAFF */
-
-.form-grid{
-    display:grid;
-    grid-template-columns:2fr 1fr 1fr auto;
-    gap:16px;
-    align-items:end;
-}
-
-.input-group{
-    display:flex;
-    flex-direction:column;
-}
-
-.input-group label{
-    font-size:13px;
-    color:#475569;
-    font-weight:800;
-    margin-bottom:8px;
-}
-
-.input-group input,
-.input-group select{
-    padding:13px;
-    border:1px solid #d1d5db;
-    border-radius:14px;
-    outline:none;
-    font-size:14px;
-}
-
-.add-btn{
-    border:none;
-    background:#2563eb;
-    color:white;
-    padding:14px 18px;
-    border-radius:14px;
-    font-weight:900;
-    cursor:pointer;
-}
-
-/* FILTER */
-
-.filter-tabs{
-    display:flex;
-    gap:12px;
-    margin-bottom:24px;
-    flex-wrap:wrap;
-}
-
-.filter-tab{
-    border:none;
-    background:white;
-    padding:12px 20px;
-    border-radius:14px;
-    font-weight:800;
-    cursor:pointer;
-    box-shadow:0 6px 18px rgba(0,0,0,.05);
-}
-
-.filter-tab.active{
-    background:#2563eb;
-    color:white;
-}
-
-/* STAFF GRID */
-
-.staff-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
-    gap:22px;
-}
-
-.staff-card{
-    background:white;
-    border-radius:30px;
-    padding:22px;
-    border:1px solid #e5e7eb;
-    transition:.25s;
-    box-shadow:0 10px 28px rgba(0,0,0,.04);
-}
-
-.staff-card:hover{
-    transform:translateY(-4px);
-    box-shadow:0 18px 45px rgba(0,0,0,.08);
-}
-
-.staff-head{
-    display:flex;
-    align-items:center;
-    gap:16px;
-    margin-bottom:22px;
-}
-
-.avatar{
-    width:60px;
-    height:60px;
-    border-radius:20px;
-    background:linear-gradient(135deg,#2563eb,#60a5fa);
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:24px;
-    font-weight:900;
-}
-
-.staff-info h3{
-    font-size:21px;
-    font-weight:900;
-}
-
-.staff-info p{
-    color:#64748b;
-    margin-top:4px;
-}
-
-.status-badge{
-    margin-left:auto;
-    padding:8px 14px;
-    border-radius:999px;
-    font-size:12px;
-    font-weight:900;
-}
-
-.active-badge{
-    background:#dcfce7;
-    color:#15803d;
-}
-
-.inactive-badge{
-    background:#fee2e2;
-    color:#dc2626;
-}
-
-/* STATS */
-
-.stats-grid{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:10px;
-    margin-bottom:18px;
-}
-
-.stat-box{
-    background:#f8fafc;
-    border-radius:16px;
-    padding:13px;
-    text-align:center;
-}
-
-.stat-box span{
-    display:block;
-    color:#64748b;
-    font-size:12px;
-    font-weight:700;
-}
-
-.stat-box b{
-    display:block;
-    margin-top:5px;
-    font-size:20px;
-    font-weight:900;
-}
-
-/* BUTTONS */
-
-.attendance-actions{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:10px;
-}
-
-.attendance-actions form{
-    width:100%;
-}
-
-.attendance-actions button{
-    width:100%;
-    border:none;
-    padding:11px;
-    border-radius:14px;
-    color:white;
-    font-weight:900;
-    cursor:pointer;
-}
-
-.present-btn{
-    background:#16a34a;
-}
-
-.absent-btn{
-    background:#dc2626;
-}
-
-.leave-btn{
-    background:#f59e0b;
-}
-
-
-/* PROFILE MODAL */
-
-.modal-overlay{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,.45);
-    display:none;
-    align-items:center;
-    justify-content:center;
-    z-index:9999;
-    backdrop-filter:blur(6px);
-}
-
-.modal{
-    width:900px;
-    max-width:95%;
-    background:white;
-    border-radius:32px;
-    padding:28px;
-    box-shadow:0 25px 70px rgba(0,0,0,.18);
-}
-
-.modal-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:22px;
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+body{background:#eef3f8;color:#0f172a}
+.container{display:flex;min-height:100vh}
+
+.sidebar{width:270px;background:#07120C;color:white;padding:26px 18px;position:fixed;top:0;left:0;bottom:0}
+.logo{margin-bottom:35px}
+.logo h2{font-size:24px;font-weight:900}
+.logo p{color:#94a3b8;font-size:12px;margin-top:6px}
+.sidebar nav{display:flex;flex-direction:column;gap:8px}
+.sidebar nav a{color:#d1d5db;text-decoration:none;padding:14px 16px;border-radius:14px;display:flex;gap:12px;align-items:center;font-weight:700}
+.sidebar nav a.active,.sidebar nav a:hover{background:#16a34a;color:white}
+
+.main{margin-left:270px;width:calc(100% - 270px);padding:26px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.topbar h1{font-size:34px;font-weight:900}
+.topbar p{color:#64748b;margin-top:5px}
+
+.top-actions{display:flex;gap:12px;align-items:center}
+.search{background:white;border:1px solid #dbe3ef;border-radius:18px;padding:13px 16px;width:320px;display:flex;gap:10px;align-items:center}
+.search input{border:none;outline:none;width:100%;font-size:14px}
+.add-member-btn,.export-btn{border:none;background:#2563eb;color:white;padding:13px 18px;border-radius:16px;font-weight:900;cursor:pointer;text-decoration:none}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.kpi{background:white;border-radius:24px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.05)}
+.kpi span{font-size:13px;color:#64748b;font-weight:800}
+.kpi h2{font-size:32px;margin-top:8px}
+
+.layout{display:grid;grid-template-columns:380px 1fr;gap:22px}
+.panel{background:white;border-radius:30px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.06)}
+.panel-title{font-size:18px;font-weight:900;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+
+.employee-list{display:flex;flex-direction:column;gap:12px;max-height:720px;overflow-y:auto}
+.emp-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:22px;padding:15px;cursor:pointer;transition:.2s}
+.emp-card:hover,.emp-card.selected{background:#eaf2ff;border-color:#2563eb}
+.emp-top{display:flex;gap:12px;align-items:center}
+.avatar{width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:white;display:flex;align-items:center;justify-content:center;font-weight:900}
+.emp-info h3{font-size:16px}
+.emp-info p{font-size:12px;color:#64748b;margin-top:2px}
+.badge{margin-left:auto;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900}
+.active-badge{background:#dcfce7;color:#15803d}
+.inactive-badge{background:#fee2e2;color:#dc2626}
+.emp-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:12px;color:#475569}
+
+.mark-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.mark-row button{width:100%;border:none;padding:10px;border-radius:12px;color:white;font-weight:900;cursor:pointer}
+.pbtn{background:#16a34a}.abtn{background:#dc2626}.lbtn{background:#f59e0b}
+
+.mini-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mini-actions a,.hist-action a{text-align:center;text-decoration:none;padding:9px;border-radius:11px;font-size:12px;font-weight:900}
+.edit{background:#dbeafe;color:#2563eb}
+.delete{background:#fee2e2;color:#dc2626}
+
+.empty{height:620px;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b}
+.empty i{font-size:64px;color:#cbd5e1;margin-bottom:16px}
+
+.profile{display:none}
+.profile.active{display:block}
+.profile-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.profile-user{display:flex;gap:16px;align-items:center}
+.big-avatar{width:74px;height:74px;border-radius:24px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900}
+.profile-user h2{font-size:28px}
+.profile-user p{color:#64748b;margin-top:4px}
+
+.details{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.detail{background:#f8fafc;border-radius:18px;padding:14px}
+.detail span{font-size:12px;color:#64748b;font-weight:900}
+.detail b{display:block;margin-top:5px;font-size:14px}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.stat{border-radius:20px;padding:18px;text-align:center}
+.stat span{font-size:12px;font-weight:900}
+.stat b{display:block;font-size:30px;margin-top:6px}
+.sp{background:#dcfce7;color:#15803d}
+.sa{background:#fee2e2;color:#dc2626}
+.sl{background:#fef3c7;color:#d97706}
+
+.calendar-box{background:#f8fafc;border-radius:24px;padding:18px;margin-bottom:22px}
+.month-title{font-weight:900;margin-bottom:14px}
+.week-head,.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.week-head div{text-align:center;font-size:12px;color:#64748b;font-weight:900}
+.day{height:54px;border-radius:16px;background:white;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;color:#94a3b8;border:1px solid #e5e7eb}
+.day small{font-size:10px;margin-top:2px}
+.day.present{background:#dcfce7;color:#15803d}
+.day.absent{background:#fee2e2;color:#dc2626}
+.day.leave{background:#fef3c7;color:#d97706}
+
+.table{width:100%;border-collapse:collapse}
+.table th{background:#f8fafc;color:#475569;padding:13px;text-align:left}
+.table td{padding:13px;border-top:1px solid #e5e7eb}
+.status-p{color:#16a34a;font-weight:900}
+.status-a{color:#dc2626;font-weight:900}
+.status-l{color:#f59e0b;font-weight:900}
+
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999}
+.modal{width:760px;max-width:94%;background:white;border-radius:30px;padding:28px;box-shadow:0 25px 70px rgba(0,0,0,.2)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.close{border:none;background:#f1f5f9;width:42px;height:42px;border-radius:14px;font-size:22px;cursor:pointer}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.input-group{display:flex;flex-direction:column}
+.input-group label{font-size:13px;color:#475569;font-weight:900;margin-bottom:8px}
+.input-group input,.input-group select{padding:13px;border:1px solid #d1d5db;border-radius:14px;outline:none}
+.save{margin-top:18px;width:100%;border:none;background:#2563eb;color:white;padding:14px;border-radius:16px;font-weight:900;cursor:pointer}
+
+@media(max-width:1100px){
+.sidebar{position:relative;width:100%;height:auto}
+.container{flex-direction:column}
+.main{margin-left:0;width:100%}
+.layout,.kpis,.details,.form-grid{grid-template-columns:1fr}
 }
-
-.close-btn{
-    width:42px;
-    height:42px;
-    border:none;
-    background:#f1f5f9;
-    border-radius:14px;
-    cursor:pointer;
-    font-size:20px;
-}
-
-.profile-row{
-    display:flex;
-    align-items:center;
-    gap:18px;
-    margin-bottom:24px;
-}
-
-.big-avatar{
-    width:74px;
-    height:74px;
-    border-radius:24px;
-    background:linear-gradient(135deg,#2563eb,#60a5fa);
-    color:white;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:28px;
-    font-weight:900;
-}
-
-.profile-stats{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:16px;
-    margin-bottom:24px;
-}
-
-.history-table{
-    width:100%;
-    border-collapse:collapse;
-}
-
-.history-table th{
-    background:#f8fafc;
-    color:#475569;
-    padding:14px;
-    text-align:left;
-}
-
-.history-table td{
-    padding:14px;
-    border-top:1px solid #e5e7eb;
-}
-
-.present-text{
-    color:#16a34a;
-    font-weight:900;
-}
-
-.absent-text{
-    color:#dc2626;
-    font-weight:900;
-}
-
-.leave-text{
-    color:#f59e0b;
-    font-weight:900;
-}
-
-@media(max-width:1000px){
-
-.sidebar{
-    position:relative;
-    width:100%;
-    height:auto;
-}
-
-.container{
-    flex-direction:column;
-}
-
-.main-content{
-    margin-left:0;
-    width:100%;
-}
-
-.kpi-grid,
-.form-grid{
-    grid-template-columns:1fr;
-}
-
-.topbar{
-    flex-direction:column;
-    align-items:flex-start;
-    gap:18px;
-}
-
-.search-box{
-    width:100%;
-}
-
-}
-
-.staff-card-actions{
-    display:flex;
-    gap:10px;
-    margin-top:14px;
-}
-
-.staff-card-actions a{
-    flex:1;
-    text-align:center;
-    text-decoration:none;
-    padding:10px;
-    border-radius:12px;
-    font-weight:900;
-    font-size:13px;
-}
-
-.mini-edit{
-    background:#dbeafe;
-    color:#2563eb;
-}
-
-.mini-delete{
-    background:#fee2e2;
-    color:#dc2626;
-}
-
 </style>
 </head>
 
@@ -586,7 +123,6 @@ body{
 <div class="container">
 
 <aside class="sidebar">
-
 <div class="logo">
 <h2>SAI FUEL MART</h2>
 <p>FUELING YOUR TRUST</p>
@@ -594,9 +130,39 @@ body{
 
 <nav>
 
+{% if session.get("role") == "admin" %}
+
 <a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a class="active" href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+
 </a>
 
 <a href="/daily-closing">
@@ -619,17 +185,12 @@ Tank Level
 Credit Transport
 </a>
 
-<a href="/digital-collection">
-<i class="fa-solid fa-credit-card"></i>
-Digital Collection
-</a>
-
 <a href="/lube-stock">
 <i class="fa-solid fa-bottle-droplet"></i>
 Lube Stock
 </a>
 
-<a class="active" href="/attendance">
+<a href="/attendance">
 <i class="fa-solid fa-user-check"></i>
 Attendance
 </a>
@@ -649,100 +210,232 @@ Settings
 Logout
 </a>
 
-</nav>
+{% endif %}
 
+</nav>
 </aside>
 
-<main class="main-content">
+<main class="main">
 
 <div class="topbar">
-
 <div>
-<h1>Team Attendance</h1>
-<p>Smart attendance & staff management system</p>
+<h1>Attendance Register</h1>
+<p>Employee attendance calendar with P / A / L status</p>
 </div>
 
-<div class="top-right">
-
-<div class="search-box">
+<div class="top-actions">
+<div class="search">
 <i class="fa-solid fa-magnifying-glass"></i>
-<input type="text"
-id="staffSearch"
-placeholder="Search staff or role...">
+<input id="empSearch" placeholder="Search employee, ID, department...">
 </div>
 
-<div class="date-box">
-<i class="fa-solid fa-calendar-days"></i>
-{{ current_date }}
+{% if session.get("role") == "manager" %}
+<button class="add-member-btn" onclick="openAddModal()">
+<i class="fa-solid fa-plus"></i> Add Member
+</button>
+{% endif %}
+
+{% if session.get("role") == "admin" %}
+<a href="/export-attendance-excel" class="export-btn">
+<i class="fa-solid fa-file-excel"></i> Export
+</a>
+{% endif %}
+</div>
+</div>
+
+<div class="kpis">
+<div class="kpi"><span>Total Staff</span><h2>{{ total_staff }}</h2></div>
+<div class="kpi"><span>Present Today</span><h2 style="color:#16a34a">{{ present_today }}</h2></div>
+<div class="kpi"><span>Absent Today</span><h2 style="color:#dc2626">{{ absent_today }}</h2></div>
+<div class="kpi"><span>Leave Today</span><h2 style="color:#f59e0b">{{ leave_today }}</h2></div>
+</div>
+
+<div class="layout">
+
+<div class="panel">
+<div class="panel-title"><i class="fa-solid fa-users"></i> Employees</div>
+
+<div class="employee-list">
+{% for staff in staff_list %}
+<div class="emp-card" data-target="profile-{{ staff['id'] }}" data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['department'] }} {{ staff['role'] }}">
+
+<div class="emp-top">
+<div class="avatar">{{ staff["staff_name"][:1] }}</div>
+<div class="emp-info">
+<h3>{{ staff["staff_name"] }}</h3>
+<p>{{ staff["emp_id"] or "-" }} • {{ staff["department"] or "-" }}</p>
+</div>
+
+{% if staff["status"] == "Active" %}
+<span class="badge active-badge">Active</span>
+{% else %}
+<span class="badge inactive-badge">Inactive</span>
+{% endif %}
+</div>
+
+<div class="emp-meta">
+<span><b>Shift:</b> {{ staff["shift"] or "-" }}</span>
+<span><b>Joined:</b> {{ staff["joined_date"] or "-" }}</span>
+</div>
+
+{% if session.get("role") == "manager" %}
+<div class="mark-row">
+<form method="POST" action="/save-attendance">
+<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
+<input type="hidden" name="attendance_status" value="Present">
+<button class="pbtn" type="submit">P</button>
+</form>
+
+<form method="POST" action="/save-attendance">
+<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
+<input type="hidden" name="attendance_status" value="Absent">
+<button class="abtn" type="submit">A</button>
+</form>
+
+<form method="POST" action="/save-attendance">
+<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
+<input type="hidden" name="attendance_status" value="Leave">
+<button class="lbtn" type="submit">L</button>
+</form>
+</div>
+
+<div class="mini-actions">
+<a href="/edit-staff/{{ staff['id'] }}" class="edit">Edit</a>
+<a href="/delete-staff/{{ staff['id'] }}" class="delete" onclick="return confirm('Delete employee?')">Delete</a>
+</div>
+{% endif %}
+
+</div>
+{% endfor %}
+</div>
+</div>
+
+<div class="panel">
+
+<div id="emptyPanel" class="empty">
+<div>
+<i class="fa-solid fa-address-card"></i>
+<h2>Select Employee</h2>
+<p>Click an employee from the left side to view full attendance calendar.</p>
+</div>
+</div>
+
+{% for staff in staff_list %}
+<div class="profile" id="profile-{{ staff['id'] }}">
+
+<div class="profile-head">
+<div class="profile-user">
+<div class="big-avatar">{{ staff["staff_name"][:1] }}</div>
+<div>
+<h2>{{ staff["staff_name"] }}</h2>
+<p>{{ staff["emp_id"] or "-" }} • {{ staff["role"] or "-" }}</p>
+</div>
+</div>
+</div>
+
+<div class="details">
+<div class="detail"><span>Department</span><b>{{ staff["department"] or "-" }}</b></div>
+<div class="detail"><span>Shift</span><b>{{ staff["shift"] or "-" }}</b></div>
+<div class="detail"><span>Joined</span><b>{{ staff["joined_date"] or "-" }}</b></div>
+<div class="detail"><span>Bank A/C</span><b>{{ staff["bank_account"] or "-" }}</b></div>
+</div>
+
+<div class="stats">
+<div class="stat sp"><span>Present</span><b>{{ staff_attendance[staff["staff_name"]]["present"] }}</b></div>
+<div class="stat sa"><span>Absent</span><b>{{ staff_attendance[staff["staff_name"]]["absent"] }}</b></div>
+<div class="stat sl"><span>Leave</span><b>{{ staff_attendance[staff["staff_name"]]["leave"] }}</b></div>
+</div>
+
+<div class="calendar-box">
+<div class="month-title">Attendance Calendar</div>
+
+<div class="week-head">
+<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+</div>
+
+<div class="calendar">
+{% for r in staff_attendance[staff["staff_name"]]["records"][:31] %}
+{% if r["attendance_status"] == "Present" %}
+<div class="day present">{{ r["date"][-2:] }}<small>P</small></div>
+{% elif r["attendance_status"] == "Absent" %}
+<div class="day absent">{{ r["date"][-2:] }}<small>A</small></div>
+{% else %}
+<div class="day leave">{{ r["date"][-2:] }}<small>L</small></div>
+{% endif %}
+{% endfor %}
+</div>
+</div>
+
+<table class="table">
+<thead>
+<tr>
+<th>Date</th>
+<th>Status</th>
+{% if session.get("role") == "manager" %}
+<th>Action</th>
+{% endif %}
+</tr>
+</thead>
+<tbody>
+{% for r in staff_attendance[staff["staff_name"]]["records"] %}
+<tr>
+<td>{{ r["date"] }}</td>
+
+{% if r["attendance_status"] == "Present" %}
+<td class="status-p">Present</td>
+{% elif r["attendance_status"] == "Absent" %}
+<td class="status-a">Absent</td>
+{% else %}
+<td class="status-l">Leave</td>
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+<td class="hist-action">
+<a href="/edit-attendance/{{ r['id'] }}" class="edit">Edit</a>
+<a href="/delete-attendance/{{ r['id'] }}" class="delete" onclick="return confirm('Delete attendance?')">Delete</a>
+</td>
+{% endif %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+</div>
+{% endfor %}
+
 </div>
 
 </div>
-
+</main>
 </div>
 
-<!-- KPI -->
-
-<div class="kpi-grid">
-
-<div class="kpi-card">
-<span>Total Staff</span>
-<h2>{{ total_staff }}</h2>
-<i class="fa-solid fa-users blue-bg"></i>
-</div>
-
-<div class="kpi-card">
-<span>Present Today</span>
-<h2 style="color:#16a34a;">
-{{ present_today }}
-</h2>
-<i class="fa-solid fa-circle-check green-bg"></i>
-</div>
-
-<div class="kpi-card">
-<span>Absent Today</span>
-<h2 style="color:#dc2626;">
-{{ absent_today }}
-</h2>
-<i class="fa-solid fa-circle-xmark red-bg"></i>
-</div>
-
-<div class="kpi-card">
-<span>Leave Today</span>
-<h2 style="color:#f59e0b;">
-{{ leave_today }}
-</h2>
-<i class="fa-solid fa-plane orange-bg"></i>
-</div>
-
-</div>
-
-<!-- ADD STAFF -->
-
-<div class="box">
-
-<div class="box-title">
-<i class="fa-solid fa-user-plus"></i>
-Add Staff Member
+<div class="modal-bg" id="addModal">
+<div class="modal">
+<div class="modal-head">
+<h2>Add Employee</h2>
+<button class="close" onclick="closeAddModal()">×</button>
 </div>
 
 <form method="POST" action="/save-staff">
-
 <div class="form-grid">
 
 <div class="input-group">
-<label>Staff Name</label>
-<input type="text"
-name="staff_name"
-placeholder="Enter staff name"
-required>
+<label>Employee ID</label>
+<input type="text" name="emp_id" value="{{ next_emp_id }}" readonly>
+</div>
+
+<div class="input-group">
+<label>Employee Name</label>
+<input type="text" name="staff_name" required>
 </div>
 
 <div class="input-group">
 <label>Role</label>
 <select name="role" required>
-
 <option value="">Select Role</option>
-
 <option>Manager</option>
 <option>Supervisor</option>
 <option>Cashier</option>
@@ -750,458 +443,79 @@ required>
 <option>Security</option>
 <option>Cleaner</option>
 <option>Operator</option>
-<option>Other</option>
+</select>
+</div>
 
+<div class="input-group">
+<label>Department</label>
+<select name="department" required>
+<option value="">Select Department</option>
+<option>Fuel</option>
+<option>Cash</option>
+<option>Operations</option>
+<option>Accounts</option>
+<option>Office</option>
+</select>
+</div>
+
+<div class="input-group">
+<label>Joined Date</label>
+<input type="date" name="joined_date">
+</div>
+
+<div class="input-group">
+<label>Bank Account</label>
+<input type="text" name="bank_account">
+</div>
+
+<div class="input-group">
+<label>Shift</label>
+<select name="shift" required>
+<option value="">Select Shift</option>
+<option>6AM - 6PM</option>
+<option>6PM - 6AM</option>
 </select>
 </div>
 
 <div class="input-group">
 <label>Status</label>
-
 <select name="status">
 <option>Active</option>
 <option>Inactive</option>
 </select>
+</div>
 
 </div>
 
-<button class="add-btn" type="submit">
-<i class="fa-solid fa-plus"></i>
-Add Staff
-</button>
-
-</div>
-
+<button class="save" type="submit">Save Employee</button>
 </form>
-
 </div>
-
-<!-- FILTER -->
-
-<div class="filter-tabs">
-
-<button class="filter-tab active"
-onclick="filterCards('all',this)">
-All Staff
-</button>
-
-<button class="filter-tab"
-onclick="filterCards('manager',this)">
-Managers
-</button>
-
-<button class="filter-tab"
-onclick="filterCards('cashier',this)">
-Cashiers
-</button>
-
-<button class="filter-tab"
-onclick="filterCards('salesman',this)">
-Salesmen
-</button>
-
-<button class="filter-tab"
-onclick="filterCards('active',this)">
-Active
-</button>
-
 </div>
-
-<!-- STAFF GRID -->
-
-<div class="staff-grid">
-
-{% for staff in staff_list %}
-
-<div class="staff-card"
-
-data-name="{{ staff['staff_name']|lower }}"
-data-role="{{ staff['role']|lower }}"
-data-status="{{ staff['status']|lower }}">
-
-<div class="staff-head">
-
-<div class="avatar">
-{{ staff["staff_name"][:1] }}
-</div>
-
-<div class="staff-info">
-
-<h3 class="profile-name"
-    data-name="{{ staff['staff_name'] }}"
-    style="cursor:pointer;">
-    {{ staff["staff_name"] }}
-</h3>
-<p>{{ staff["role"] }}</p>
-
-<div class="staff-card-actions">
-
-<a href="/edit-staff/{{ staff['id'] }}" class="mini-edit">
-<i class="fa-solid fa-pen"></i>
-Edit
-</a>
-
-<a href="/delete-staff/{{ staff['id'] }}"
-class="mini-delete"
-onclick="return confirm('Delete this staff and attendance records?')">
-<i class="fa-solid fa-trash"></i>
-Delete
-</a>
-
-</div>
-
-</div>
-
-{% if staff["status"] == "Active" %}
-
-<span class="status-badge active-badge">
-Active
-</span>
-
-{% else %}
-
-<span class="status-badge inactive-badge">
-Inactive
-</span>
-
-{% endif %}
-
-</div>
-
-<div class="stats-grid">
-
-<div class="stat-box">
-<span>Present</span>
-
-<b style="color:#16a34a;">
-{{ staff_attendance[staff["staff_name"]]["present"] }}
-</b>
-
-</div>
-
-<div class="stat-box">
-<span>Absent</span>
-
-<b style="color:#dc2626;">
-{{ staff_attendance[staff["staff_name"]]["absent"] }}
-</b>
-
-</div>
-
-<div class="stat-box">
-<span>Leave</span>
-
-<b style="color:#f59e0b;">
-{{ staff_attendance[staff["staff_name"]]["leave"] }}
-</b>
-
-</div>
-
-</div>
-
-<div class="attendance-actions">
-
-<form method="POST" action="/save-attendance">
-
-<input type="hidden"
-name="date"
-value="{{ current_date }}">
-
-<input type="hidden"
-name="staff_name"
-value="{{ staff['staff_name'] }}">
-
-<input type="hidden"
-name="attendance_status"
-value="Present">
-
-<button class="present-btn"
-type="submit">
-
-Present
-
-</button>
-
-</form>
-
-<form method="POST" action="/save-attendance">
-
-<input type="hidden"
-name="date"
-value="{{ current_date }}">
-
-<input type="hidden"
-name="staff_name"
-value="{{ staff['staff_name'] }}">
-
-<input type="hidden"
-name="attendance_status"
-value="Absent">
-
-<button class="absent-btn"
-type="submit">
-
-Absent
-
-</button>
-
-</form>
-
-<form method="POST" action="/save-attendance">
-
-<input type="hidden"
-name="date"
-value="{{ current_date }}">
-
-<input type="hidden"
-name="staff_name"
-value="{{ staff['staff_name'] }}">
-
-<input type="hidden"
-name="attendance_status"
-value="Leave">
-
-<button class="leave-btn"
-type="submit">
-
-Leave
-
-</button>
-
-</form>
-
-</div>
-
-</div>
-
-{% endfor %}
-
-</div>
-
-</main>
-
-</div>
-
-
-<!-- MODAL -->
-
-<div class="modal-overlay"
-id="profileModal">
-
-<div class="modal">
-
-<div class="modal-head">
-
-<h2>Attendance Profile</h2>
-
-<button class="close-btn"
-onclick="closeProfile()">
-
-×
-
-</button>
-
-</div>
-
-<div class="profile-row">
-
-<div class="big-avatar"
-id="modalAvatar">
-
-S
-
-</div>
-
-<div>
-
-<h2 id="modalName">
-Staff Name
-</h2>
-
-<p>
-Individual attendance history
-</p>
-
-</div>
-
-</div>
-
-<div class="profile-stats">
-
-<div class="stat-box">
-<span>Total Present</span>
-<b id="profilePresent">0</b>
-</div>
-
-<div class="stat-box">
-<span>Total Absent</span>
-<b id="profileAbsent">0</b>
-</div>
-
-<div class="stat-box">
-<span>Total Leave</span>
-<b id="profileLeave">0</b>
-</div>
-
-</div>
-
-<table class="history-table">
-
-<thead>
-
-<tr>
-<th>Date</th>
-<th>Status</th>
-<th>Action</th>
-</tr>
-
-</thead>
-
-<tbody id="profileTableBody">
-
-</tbody>
-
-</table>
-
-</div>
-
-</div>
-
-<script id="attendance-json" type="application/json">
-[
-{% for att in attendance_list %}
-{
-    "id": {{ att["id"] }},
-    "name": {{ att["staff_name"]|tojson }},
-    "date": {{ att["date"]|tojson }},
-    "status": {{ att["attendance_status"]|tojson }}
-}{% if not loop.last %},{% endif %}
-{% endfor %}
-]
-</script>
 
 <script>
-const attendanceRecords = JSON.parse(
-    document.getElementById("attendance-json").textContent
-);
+function openAddModal(){document.getElementById("addModal").style.display="flex"}
+function closeAddModal(){document.getElementById("addModal").style.display="none"}
 
-function openProfile(name){
+document.querySelectorAll(".emp-card").forEach(function(card){
+    card.addEventListener("click",function(e){
+        if(e.target.tagName==="BUTTON" || e.target.tagName==="A") return;
 
-    const modal = document.getElementById("profileModal");
-    const body = document.getElementById("profileTableBody");
+        document.querySelectorAll(".emp-card").forEach(c=>c.classList.remove("selected"));
+        card.classList.add("selected");
 
-    modal.style.display = "flex";
+        document.getElementById("emptyPanel").style.display="none";
+        document.querySelectorAll(".profile").forEach(p=>p.classList.remove("active"));
 
-    document.getElementById("modalName").innerText = name;
-    document.getElementById("modalAvatar").innerText = name.charAt(0).toUpperCase();
-
-    body.innerHTML = "";
-
-    let p = 0;
-    let a = 0;
-    let l = 0;
-
-    const records = attendanceRecords.filter(function(r){
-        return r.name === name;
-    });
-
-    if(records.length === 0){
-        body.innerHTML = `
-            <tr>
-                <td colspan="2">No attendance records found</td>
-            </tr>
-        `;
-    }
-
-    records.forEach(function(r){
-
-        let cls = "";
-
-        if(r.status === "Present"){
-            cls = "present-text";
-            p++;
-        }
-
-        if(r.status === "Absent"){
-            cls = "absent-text";
-            a++;
-        }
-
-        if(r.status === "Leave"){
-            cls = "leave-text";
-            l++;
-        }
-
-        body.innerHTML += `
-<tr>
-<td>${r.date}</td>
-<td class="${cls}">${r.status}</td>
-<td>
-<a href="/edit-attendance/${r.id}" class="mini-edit">Edit</a>
-<a href="/delete-attendance/${r.id}" class="mini-delete"
-onclick="return confirm('Delete this attendance record?')">Delete</a>
-</td>
-</tr>
-`;
-    });
-
-    document.getElementById("profilePresent").innerText = p;
-    document.getElementById("profileAbsent").innerText = a;
-    document.getElementById("profileLeave").innerText = l;
-}
-
-function closeProfile(){
-    document.getElementById("profileModal").style.display = "none";
-}
-
-document.querySelectorAll(".profile-name").forEach(function(el){
-    el.addEventListener("click", function(){
-        openProfile(this.dataset.name);
+        document.getElementById(card.dataset.target).classList.add("active");
     });
 });
 
-function filterCards(type, btn){
-
-    document.querySelectorAll(".filter-tab").forEach(function(b){
-        b.classList.remove("active");
+document.getElementById("empSearch").addEventListener("input",function(){
+    const value=this.value.toLowerCase();
+    document.querySelectorAll(".emp-card").forEach(function(card){
+        const data=(card.dataset.search || "").toLowerCase();
+        card.style.display=data.includes(value) ? "block" : "none";
     });
-
-    btn.classList.add("active");
-
-    document.querySelectorAll(".staff-card").forEach(function(card){
-
-        const role = card.dataset.role || "";
-        const status = card.dataset.status || "";
-
-        if(type === "all" || role === type || status === type){
-            card.style.display = "block";
-        }else{
-            card.style.display = "none";
-        }
-    });
-}
-
-document.getElementById("staffSearch").addEventListener("input", function(){
-
-    const value = this.value.toLowerCase();
-
-    document.querySelectorAll(".staff-card").forEach(function(card){
-
-        const name = card.dataset.name || "";
-        const role = card.dataset.role || "";
-
-        if(name.includes(value) || role.includes(value)){
-            card.style.display = "block";
-        }else{
-            card.style.display = "none";
-        }
-    });
-});
-
-document.getElementById("profileModal").addEventListener("click", function(e){
-    if(e.target.id === "profileModal"){
-        closeProfile();
-    }
 });
 </script>
 

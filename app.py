@@ -35,10 +35,15 @@ def is_manager():
     return session.get("role") == "manager"
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(
+        DB_PATH,
+        timeout=30,
+        check_same_thread=False
+    )
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
-
 
 def style_excel_sheet(ws):
     header_fill = PatternFill(start_color="07120C", end_color="07120C", fill_type="solid")
@@ -148,26 +153,19 @@ def init_db():
         )
     """)
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS attendance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            staff_name TEXT,
-            attendance_status TEXT
-        )
-    """)
+    for col, typ in [
+    ("emp_id", "TEXT"),
+    ("department", "TEXT"),
+    ("joined_date", "TEXT"),
+    ("bank_account", "TEXT"),
+    ("shift", "TEXT")
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE staff_master ADD COLUMN {col} {typ}")
+        except sqlite3.OperationalError:
+            pass
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS lube_stock (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_name TEXT,
-            selling_rate REAL,
-            opening_stock REAL,
-            purchase_qty REAL,
-            sale_qty REAL DEFAULT 0,
-            closing_stock REAL
-        )
-    """)
+        
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS credit_transporters (
@@ -180,6 +178,21 @@ def init_db():
             status TEXT
         )
     """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS lube_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        product_id INTEGER,
+        product_name TEXT,
+        transaction_type TEXT,
+        qty REAL,
+        rate REAL,
+        amount REAL,
+        remarks TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+""")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS transport_payments (
@@ -443,6 +456,213 @@ def backup_database():
 # app.py
 # DAILY CLOSING ROUTE
 
+@app.route("/save-daily-closing", methods=["POST"])
+def save_daily_closing():
+
+    if not session.get("logged_in"):
+        return jsonify({"status": "error", "message": "Not logged in"})
+
+    data = request.get_json()
+    if not data.get("date"):
+     return jsonify({
+        "status": "error",
+        "message": "Date missing"
+    })
+    conn = None
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute("SELECT id FROM daily_closing WHERE date = ?", (data["date"],))
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute("DELETE FROM daily_closing WHERE id=?", (existing["id"],))
+            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=?", (data["date"],))
+
+        cur.execute("""
+            INSERT INTO daily_closing (
+                date, ms_litres, hsd_litres, cng_sale, total_fuel_sale, lube_sale,
+                digital_collection, phonepe, card_swipe, hp_pay, hpcl_otp,
+                upi_other, credit_given, transport_received, net_credit_due,
+                total_expense, cash_in_hand
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data["date"], data["ms_litres"], data["hsd_litres"], data.get("cng_sale", 0),
+            data["total_fuel_sale"], data["lube_sale"], data["digital_collection"],
+            data.get("phonepe", 0), data.get("card_swipe", 0), data.get("hp_pay", 0),
+            data.get("hpcl_otp", 0), data.get("upi_other", 0), data["credit_given"],
+            data["transport_received"], data["net_credit_due"], data["total_expense"],
+            data["cash_in_hand"]
+        ))
+
+        for item in data.get("nozzle_entries", []):
+            nozzle_id = item.get("nozzle_id")
+            opening = float(item.get("opening", 0))
+            closing = float(item.get("closing", 0))
+            testing = float(item.get("testing", 0))
+            sale = max(round(closing - opening - testing, 2), 0)
+
+            if not nozzle_id:
+                continue
+
+            cur.execute("""
+                INSERT INTO nozzle_entries (
+                    entry_date, nozzle_id, opening_reading, closing_reading,
+                    testing_qty, total_sale, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data["date"], nozzle_id, opening, closing, testing, sale,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ))
+
+        for item in data.get("lube_sales", []):
+            qty = float(item.get("qty", 0))
+            rate = float(item.get("rate", 0))
+            amount = float(item.get("amount", 0))
+            product_id = item.get("product_id")
+            product_name = item.get("product_name", "")
+
+            if qty <= 0 or not product_id:
+                continue
+
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = sale_qty + ?,
+                    closing_stock = closing_stock - ?
+                WHERE id = ?
+            """, (qty, qty, product_id))
+
+            cur.execute("""
+                INSERT INTO lube_transactions (
+                    date, product_id, product_name, transaction_type,
+                    qty, rate, amount, remarks
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data["date"], product_id, product_name, "Sale",
+                qty, rate, amount, "Daily Closing Sale"
+            ))
+
+        for item in data.get("credit_transport_sales", []):
+            amount = float(item.get("amount", 0))
+            transporter_id = item.get("transporter_id")
+
+            if amount <= 0 or not transporter_id:
+                continue
+
+            cur.execute("""
+                UPDATE credit_transporters
+                SET credit_given = credit_given + ?,
+                    balance_due = balance_due + ?
+                WHERE id = ?
+            """, (amount, amount, transporter_id))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Daily closing saved successfully"
+        })
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+
+        return jsonify({
+            "status": "error",
+            "message": f"Error: {str(e)}"
+        })
+
+    finally:
+        if conn:
+            conn.close()
+
+@app.route("/delete-daily-closing/<int:id>")
+def delete_daily_closing(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = None
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute("SELECT date FROM daily_closing WHERE id=?", (id,))
+        row = cur.fetchone()
+
+        if row:
+            report_date = row["date"]
+
+            cur.execute("DELETE FROM daily_closing WHERE id=?", (id,))
+            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=?", (report_date,))
+
+        conn.commit()
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return f"Error deleting daily closing: {e}"
+
+    finally:
+        if conn:
+            conn.close()
+
+    return redirect(url_for("reports"))
+
+
+@app.route("/save-lube-product", methods=["POST"])
+def save_lube_product():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    product_name = request.form.get("product_name")
+    selling_rate = float(request.form.get("selling_rate") or 0)
+    opening_stock = float(request.form.get("opening_stock") or 0)
+    purchase_qty = float(request.form.get("purchase_qty") or 0)
+
+    closing_stock = opening_stock + purchase_qty
+
+    cur.execute("""
+
+        INSERT INTO lube_stock (
+
+            product_name,
+            selling_rate,
+            opening_stock,
+            purchase_qty,
+            sale_qty,
+            closing_stock
+
+        )
+
+        VALUES (?, ?, ?, ?, ?, ?)
+
+    """, (
+
+        product_name,
+        selling_rate,
+        opening_stock,
+        purchase_qty,
+        0,
+        closing_stock
+
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("lube_stock"))
+
 @app.route("/daily-closing")
 def daily_closing():
 
@@ -486,30 +706,55 @@ def daily_closing():
 
     cur.execute("""
 
-        SELECT
+    SELECT
 
-            nm.id,
-            nm.nozzle_name,
-            nm.machine_no,
-            nm.fuel_type,
+        nm.id,
+        nm.nozzle_name,
+        nm.machine_no,
+        nm.fuel_type,
+
+        COALESCE(
 
             ne.opening_reading,
-            ne.closing_reading,
-            ne.testing_qty,
-            ne.total_sale
 
-        FROM nozzle_master nm
+            (
 
-        LEFT JOIN nozzle_entries ne
+                SELECT prev.closing_reading
 
-        ON nm.id = ne.nozzle_id
-        AND ne.entry_date = ?
+                FROM nozzle_entries prev
 
-        ORDER BY
-        nm.fuel_type,
-        nm.nozzle_name
+                WHERE prev.nozzle_id = nm.id
+                AND prev.entry_date < ?
 
-    """, (selected_date,))
+                ORDER BY prev.entry_date DESC,
+                         prev.id DESC
+
+                LIMIT 1
+
+            ),
+
+            0
+
+        ) AS opening_reading,
+
+        ne.closing_reading,
+        ne.testing_qty,
+        ne.total_sale
+
+    FROM nozzle_master nm
+
+    LEFT JOIN nozzle_entries ne
+
+    ON nm.id = ne.nozzle_id
+    AND ne.entry_date = ?
+
+    ORDER BY
+    nm.fuel_type,
+    nm.nozzle_name
+
+""", (selected_date, selected_date))
+
+        
 
     all_nozzles = cur.fetchall()
 
@@ -592,74 +837,29 @@ def print_daily_report(date):
         report_date=date
     )
 
-@app.route("/save-daily-closing", methods=["POST"])
-def save_daily_closing():
-    if not session.get("logged_in"):
-        return jsonify({"status": "error", "message": "Not logged in"})
 
-    data = request.get_json()
+@app.route("/edit-lube-transaction/<int:id>")
+def edit_lube_transaction(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT id FROM daily_closing WHERE date = ?", (data["date"],))
-    if cur.fetchone():
-        conn.close()
-        return jsonify({
-            "status": "error",
-            "message": "This date data already exists. Please edit from Reports."
-        })
-
     cur.execute("""
-        INSERT INTO daily_closing (
-            date, ms_litres, hsd_litres, cng_sale, total_fuel_sale, lube_sale,
-            digital_collection, phonepe, card_swipe, hp_pay, hpcl_otp,
-            upi_other, credit_given, transport_received, net_credit_due,
-            total_expense, cash_in_hand
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data["date"],
-        data["ms_litres"],
-        data["hsd_litres"],
-        data.get("cng_sale", 0),
-        data["total_fuel_sale"],
-        data["lube_sale"],
-        data["digital_collection"],
-        data.get("phonepe", 0),
-        data.get("card_swipe", 0),
-        data.get("hp_pay", 0),
-        data.get("hpcl_otp", 0),
-        data.get("upi_other", 0),
-        data["credit_given"],
-        data["transport_received"],
-        data["net_credit_due"],
-        data["total_expense"],
-        data["cash_in_hand"]
-    ))
+        SELECT *
+        FROM lube_transactions
+        WHERE id=?
+    """, (id,))
+    tx = cur.fetchone()
 
-    for item in data.get("lube_sales", []):
-        qty = float(item["qty"])
-        cur.execute("""
-            UPDATE lube_stock
-            SET sale_qty = sale_qty + ?,
-                closing_stock = closing_stock - ?
-            WHERE id = ?
-        """, (qty, qty, item["product_id"]))
-
-    for item in data.get("credit_transport_sales", []):
-        amount = float(item["amount"])
-        cur.execute("""
-            UPDATE credit_transporters
-            SET credit_given = credit_given + ?,
-                balance_due = balance_due + ?
-            WHERE id = ?
-        """, (amount, amount, item["transporter_id"]))
-
-    conn.commit()
     conn.close()
 
-    return jsonify({"status": "success", "message": "Daily closing saved successfully"})
-
+    return render_template(
+        "edit_lube_transaction.html",
+        tx=tx
+    )
 
 @app.route("/get-daily-closing/<date>")
 def get_daily_closing(date):
@@ -768,6 +968,134 @@ def delete_attendance(id):
 
     return redirect(url_for("attendance"))
 
+@app.route("/edit-staff/<int:id>")
+def edit_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    staff = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "edit_staff.html",
+        staff=staff
+    )
+
+@app.route("/update-staff/<int:id>", methods=["POST"])
+def update_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT staff_name
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    old = cur.fetchone()
+
+    old_name = old["staff_name"]
+
+    cur.execute("""
+        UPDATE staff_master
+        SET
+            emp_id=?,
+            staff_name=?,
+            role=?,
+            department=?,
+            joined_date=?,
+            bank_account=?,
+            shift=?,
+            status=?
+        WHERE id=?
+    """, (
+
+        request.form.get("emp_id"),
+        request.form.get("staff_name"),
+        request.form.get("role"),
+        request.form.get("department"),
+        request.form.get("joined_date"),
+        request.form.get("bank_account"),
+        request.form.get("shift"),
+        request.form.get("status"),
+        id
+    ))
+
+    # UPDATE ATTENDANCE NAME ALSO
+
+    cur.execute("""
+        UPDATE attendance
+        SET staff_name=?
+        WHERE staff_name=?
+    """, (
+        request.form.get("staff_name"),
+        old_name
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+@app.route("/delete-staff/<int:id>")
+def delete_staff(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT staff_name
+        FROM staff_master
+        WHERE id=?
+    """, (id,))
+
+    staff = cur.fetchone()
+
+    if staff:
+
+        staff_name = staff["staff_name"]
+
+        # DELETE ATTENDANCE
+
+        cur.execute("""
+            DELETE FROM attendance
+            WHERE staff_name=?
+        """, (staff_name,))
+
+        # DELETE STAFF
+
+        cur.execute("""
+            DELETE FROM staff_master
+            WHERE id=?
+        """, (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+
+
+
+
 @app.route("/edit-daily-closing/<int:id>")
 def edit_daily_closing(id):
 
@@ -859,32 +1187,6 @@ def update_daily_closing(id):
     return redirect(url_for("reports"))
 
 
-# =========================================
-# DELETE DAILY CLOSING
-# =========================================
-
-@app.route("/delete-daily-closing/<int:id>")
-def delete_daily_closing(id):
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        DELETE FROM daily_closing
-        WHERE id=?
-    """, (id,))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("reports"))
-
-# ======================================================
-# NOZZLE MANAGEMENT ROUTES - NO SHIFT VERSION
-# ======================================================
 
 @app.route("/nozzle-management")
 def nozzle_management():
@@ -2578,88 +2880,281 @@ def save_settings():
 
 @app.route("/lube-stock")
 def lube_stock():
+
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM lube_stock ORDER BY id DESC")
-    lube_items = cur.fetchall()
-    conn.close()
-
-    return render_template("lube_stock.html", lube_items=lube_items)
-
-
-@app.route("/save-lube-product", methods=["POST"])
-def save_lube_product():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    product_name = request.form["product_name"]
-    selling_rate = float(request.form["selling_rate"])
-    opening_stock = float(request.form["opening_stock"])
-    purchase_qty = float(request.form["purchase_qty"] or 0)
-    closing_stock = opening_stock + purchase_qty
 
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO lube_stock (
-            product_name, selling_rate, opening_stock,
-            purchase_qty, sale_qty, closing_stock
+        SELECT *
+        FROM lube_stock
+        ORDER BY product_name ASC
+    """)
+    lube_items = cur.fetchall()
+
+    cur.execute("""
+        SELECT *
+        FROM lube_transactions
+        ORDER BY date DESC, id DESC
+    """)
+    lube_transactions = cur.fetchall()
+
+    cur.execute("""
+        SELECT COUNT(*) AS total_products,
+               COALESCE(SUM(closing_stock),0) AS total_stock,
+               COALESCE(SUM(sale_qty),0) AS total_sold
+        FROM lube_stock
+    """)
+    summary = cur.fetchone()
+
+    product_data = {}
+
+    for item in lube_items:
+        product_id = item["id"]
+
+        cur.execute("""
+            SELECT *
+            FROM lube_transactions
+            WHERE product_id=?
+            ORDER BY date DESC, id DESC
+        """, (product_id,))
+        transactions = cur.fetchall()
+
+        total_purchase = sum(float(t["qty"] or 0) for t in transactions if t["transaction_type"] == "Purchase")
+        total_sale = sum(float(t["qty"] or 0) for t in transactions if t["transaction_type"] == "Sale")
+
+        product_data[product_id] = {
+            "transactions": transactions,
+            "total_purchase": total_purchase,
+            "total_sale": total_sale
+        }
+
+    conn.close()
+
+    return render_template(
+        "lube_stock.html",
+        lube_items=lube_items,
+        lube_transactions=lube_transactions,
+        product_data=product_data,
+        summary=summary
+    )
+
+@app.route("/save-lube-transaction", methods=["POST"])
+def save_lube_transaction():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    date = request.form.get("date")
+    product_id = request.form.get("product_id")
+    transaction_type = request.form.get("transaction_type")
+    qty = float(request.form.get("qty") or 0)
+    rate = float(request.form.get("rate") or 0)
+    remarks = request.form.get("remarks", "")
+
+    amount = round(qty * rate, 2)
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT product_name
+        FROM lube_stock
+        WHERE id=?
+    """, (product_id,))
+    product = cur.fetchone()
+
+    if not product:
+        conn.close()
+        return redirect(url_for("lube_stock"))
+
+    product_name = product["product_name"]
+
+    cur.execute("""
+        INSERT INTO lube_transactions (
+            date, product_id, product_name, transaction_type,
+            qty, rate, amount, remarks
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        product_name, selling_rate, opening_stock,
-        purchase_qty, 0, closing_stock
+        date, product_id, product_name, transaction_type,
+        qty, rate, amount, remarks
     ))
+
+    if transaction_type == "Purchase":
+        cur.execute("""
+            UPDATE lube_stock
+            SET purchase_qty = purchase_qty + ?,
+                closing_stock = closing_stock + ?
+            WHERE id=?
+        """, (qty, qty, product_id))
+
+    elif transaction_type == "Sale":
+        cur.execute("""
+            UPDATE lube_stock
+            SET sale_qty = sale_qty + ?,
+                closing_stock = closing_stock - ?
+            WHERE id=?
+        """, (qty, qty, product_id))
 
     conn.commit()
     conn.close()
 
     return redirect(url_for("lube_stock"))
 
+@app.route("/delete-lube-transaction/<int:id>")
+def delete_lube_transaction(id):
 
-@app.route("/edit-lube/<int:id>")
-def edit_lube(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM lube_stock WHERE id = ?", (id,))
-    item = cur.fetchone()
-    conn.close()
-
-    return render_template("edit_lube.html", item=item)
-
-
-@app.route("/update-lube/<int:id>", methods=["POST"])
-def update_lube(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    opening_stock = float(request.form["opening_stock"])
-    purchase_qty = float(request.form["purchase_qty"])
-    sale_qty = float(request.form["sale_qty"])
-    closing_stock = opening_stock + purchase_qty - sale_qty
 
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
-        UPDATE lube_stock
-        SET product_name=?, selling_rate=?, opening_stock=?,
-            purchase_qty=?, sale_qty=?, closing_stock=?
+        SELECT *
+        FROM lube_transactions
+        WHERE id=?
+    """, (id,))
+    tx = cur.fetchone()
+
+    if tx:
+        product_id = tx["product_id"]
+        qty = float(tx["qty"] or 0)
+
+        if tx["transaction_type"] == "Purchase":
+            cur.execute("""
+                UPDATE lube_stock
+                SET purchase_qty = purchase_qty - ?,
+                    closing_stock = closing_stock - ?
+                WHERE id=?
+            """, (qty, qty, product_id))
+
+        elif tx["transaction_type"] == "Sale":
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = sale_qty - ?,
+                    closing_stock = closing_stock + ?
+                WHERE id=?
+            """, (qty, qty, product_id))
+
+        cur.execute("""
+            DELETE FROM lube_transactions
+            WHERE id=?
+        """, (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("lube_stock"))
+
+@app.route("/edit-lube/<int:id>")
+def edit_lube(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM lube_stock
+        WHERE id=?
+    """, (id,))
+
+    item = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "edit_lube.html",
+        item=item
+    )
+
+@app.route("/update-lube-transaction/<int:id>", methods=["POST"])
+def update_lube_transaction(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM lube_transactions
+        WHERE id=?
+    """, (id,))
+    old = cur.fetchone()
+
+    if not old:
+        conn.close()
+        return redirect(url_for("lube_stock"))
+
+    old_qty = float(old["qty"] or 0)
+    old_type = old["transaction_type"]
+    product_id = old["product_id"]
+
+    # reverse old stock effect
+    if old_type == "Purchase":
+        cur.execute("""
+            UPDATE lube_stock
+            SET purchase_qty = purchase_qty - ?,
+                closing_stock = closing_stock - ?
+            WHERE id=?
+        """, (old_qty, old_qty, product_id))
+
+    elif old_type == "Sale":
+        cur.execute("""
+            UPDATE lube_stock
+            SET sale_qty = sale_qty - ?,
+                closing_stock = closing_stock + ?
+            WHERE id=?
+        """, (old_qty, old_qty, product_id))
+
+    new_date = request.form.get("date")
+    new_type = request.form.get("transaction_type")
+    new_qty = float(request.form.get("qty") or 0)
+    new_rate = float(request.form.get("rate") or 0)
+    new_amount = round(new_qty * new_rate, 2)
+    remarks = request.form.get("remarks", "")
+
+    # apply new stock effect
+    if new_type == "Purchase":
+        cur.execute("""
+            UPDATE lube_stock
+            SET purchase_qty = purchase_qty + ?,
+                closing_stock = closing_stock + ?
+            WHERE id=?
+        """, (new_qty, new_qty, product_id))
+
+    elif new_type == "Sale":
+        cur.execute("""
+            UPDATE lube_stock
+            SET sale_qty = sale_qty + ?,
+                closing_stock = closing_stock - ?
+            WHERE id=?
+        """, (new_qty, new_qty, product_id))
+
+    cur.execute("""
+        UPDATE lube_transactions
+        SET date=?,
+            transaction_type=?,
+            qty=?,
+            rate=?,
+            amount=?,
+            remarks=?
         WHERE id=?
     """, (
-        request.form["product_name"],
-        float(request.form["selling_rate"]),
-        opening_stock,
-        purchase_qty,
-        sale_qty,
-        closing_stock,
+        new_date,
+        new_type,
+        new_qty,
+        new_rate,
+        new_amount,
+        remarks,
         id
     ))
 
@@ -2667,6 +3162,48 @@ def update_lube(id):
     conn.close()
 
     return redirect(url_for("lube_stock"))
+
+@app.route("/update-lube/<int:id>", methods=["POST"])
+def update_lube(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE lube_stock
+        SET
+            product_name=?,
+            selling_rate=?,
+            opening_stock=?,
+            purchase_qty=?,
+            sale_qty=?,
+            closing_stock=?
+        WHERE id=?
+    """, (
+
+        request.form.get("product_name"),
+        request.form.get("selling_rate"),
+        request.form.get("opening_stock"),
+        request.form.get("purchase_qty"),
+        request.form.get("sale_qty"),
+        request.form.get("closing_stock"),
+        id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("lube_stock"))
+# =========================================
+# ATTENDANCE DATABASE UPGRADE
+# put this inside init_db(), after staff_master table
+# =========================================
+
+
+
 
 # =========================================
 # ATTENDANCE PAGE
@@ -2683,21 +3220,14 @@ def attendance():
     conn = get_conn()
     cur = conn.cursor()
 
-    # STAFF LIST
-
     cur.execute("""
         SELECT *
         FROM staff_master
         ORDER BY
-            CASE
-                WHEN status='Active' THEN 1
-                ELSE 2
-            END,
+            CASE WHEN status='Active' THEN 1 ELSE 2 END,
             staff_name ASC
     """)
     staff_list = cur.fetchall()
-
-    # ATTENDANCE HISTORY
 
     cur.execute("""
         SELECT *
@@ -2706,105 +3236,170 @@ def attendance():
     """)
     attendance_list = cur.fetchall()
 
-    # KPI
-
     cur.execute("""
-        SELECT COUNT(*) AS total_staff
+        SELECT COUNT(*) AS total
         FROM staff_master
         WHERE status='Active'
     """)
-    total_staff = cur.fetchone()["total_staff"]
+    total_staff = cur.fetchone()["total"]
 
     cur.execute("""
-        SELECT COUNT(*) AS present_today
+        SELECT COUNT(*) AS total
         FROM attendance
-        WHERE date=?
-        AND attendance_status='Present'
+        WHERE date=? AND attendance_status='Present'
     """, (today,))
-    present_today = cur.fetchone()["present_today"]
+    present_today = cur.fetchone()["total"]
 
     cur.execute("""
-        SELECT COUNT(*) AS absent_today
+        SELECT COUNT(*) AS total
         FROM attendance
-        WHERE date=?
-        AND attendance_status='Absent'
+        WHERE date=? AND attendance_status='Absent'
     """, (today,))
-    absent_today = cur.fetchone()["absent_today"]
+    absent_today = cur.fetchone()["total"]
 
     cur.execute("""
-        SELECT COUNT(*) AS leave_today
+        SELECT COUNT(*) AS total
         FROM attendance
-        WHERE date=?
-        AND attendance_status='Leave'
+        WHERE date=? AND attendance_status='Leave'
     """, (today,))
-    leave_today = cur.fetchone()["leave_today"]
-
-    absent_leave = absent_today + leave_today
-
-    # STAFF WISE ATTENDANCE
+    leave_today = cur.fetchone()["total"]
 
     staff_attendance = {}
 
     for staff in staff_list:
-
-        staff_name = staff["staff_name"]
+        name = staff["staff_name"]
 
         cur.execute("""
             SELECT *
             FROM attendance
             WHERE staff_name=?
-            ORDER BY date DESC
-            LIMIT 50
-        """, (staff_name,))
-
+            ORDER BY date DESC, id DESC
+        """, (name,))
         records = cur.fetchall()
 
-        present_count = 0
-        absent_count = 0
-        leave_count = 0
+        present = sum(1 for r in records if r["attendance_status"] == "Present")
+        absent = sum(1 for r in records if r["attendance_status"] == "Absent")
+        leave = sum(1 for r in records if r["attendance_status"] == "Leave")
 
-        for r in records:
+        today_status = ""
+        today_time = ""
 
-            if r["attendance_status"] == "Present":
-                present_count += 1
+        cur.execute("""
+            SELECT attendance_status
+            FROM attendance
+            WHERE staff_name=? AND date=?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (name, today))
+        today_row = cur.fetchone()
 
-            elif r["attendance_status"] == "Absent":
-                absent_count += 1
+        if today_row:
+            today_status = today_row["attendance_status"]
 
-            elif r["attendance_status"] == "Leave":
-                leave_count += 1
-
-        staff_attendance[staff_name] = {
+        staff_attendance[name] = {
             "records": records,
-            "present": present_count,
-            "absent": absent_count,
-            "leave": leave_count
+            "present": present,
+            "absent": absent,
+            "leave": leave,
+            "today_status": today_status,
+            "today_time": today_time
         }
+
+    cur.execute("SELECT COUNT(*) AS total FROM staff_master")
+    total_emp = cur.fetchone()["total"] + 1
+    next_emp_id = f"EMP{total_emp:03d}"
 
     conn.close()
 
     return render_template(
         "attendance.html",
-
         current_date=today,
-
         staff_list=staff_list,
-
         attendance_list=attendance_list,
-
+        next_emp_id=next_emp_id,
         staff_attendance=staff_attendance,
-
         total_staff=total_staff,
-
         present_today=present_today,
-
         absent_today=absent_today,
-
-        leave_today=leave_today,
-
-        absent_leave=absent_leave
+        leave_today=leave_today
     )
 
+@app.route("/export-attendance-excel")
+def export_attendance_excel():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    if not is_admin():
+        return redirect(url_for("dashboard"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            sm.emp_id,
+            sm.staff_name,
+            sm.role,
+            sm.department,
+            sm.joined_date,
+            sm.bank_account,
+            sm.shift,
+            sm.status,
+            a.date,
+            a.attendance_status
+        FROM staff_master sm
+        LEFT JOIN attendance a
+        ON sm.staff_name = a.staff_name
+        ORDER BY sm.staff_name ASC, a.date DESC
+    """)
+
+    rows = cur.fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Attendance"
+
+    ws.append([
+        "Employee ID",
+        "Employee Name",
+        "Role",
+        "Department",
+        "Joined Date",
+        "Bank Account",
+        "Shift",
+        "Employee Status",
+        "Attendance Date",
+        "Attendance Status"
+    ])
+
+    for row in rows:
+        ws.append([
+            row["emp_id"],
+            row["staff_name"],
+            row["role"],
+            row["department"],
+            row["joined_date"],
+            row["bank_account"],
+            row["shift"],
+            row["status"],
+            row["date"],
+            row["attendance_status"]
+        ])
+
+    style_excel_sheet(ws)
+
+    conn.close()
+
+    file = BytesIO()
+    wb.save(file)
+    file.seek(0)
+
+    return send_file(
+        file,
+        as_attachment=True,
+        download_name="Attendance_Report.xlsx"
+    )
 
 # =========================================
 # SAVE STAFF
@@ -2816,37 +3411,44 @@ def save_staff():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    staff_name = request.form.get("staff_name", "").strip()
-    role = request.form.get("role", "").strip()
-    status = request.form.get("status", "Active").strip()
-
-    if not staff_name:
-        return redirect(url_for("attendance"))
-
     conn = get_conn()
     cur = conn.cursor()
+
+    staff_name = request.form.get("staff_name", "").strip()
+
+    if not staff_name:
+        conn.close()
+        return redirect(url_for("attendance"))
 
     cur.execute("""
         SELECT id
         FROM staff_master
         WHERE LOWER(staff_name)=LOWER(?)
     """, (staff_name,))
-
     existing = cur.fetchone()
 
     if not existing:
-
         cur.execute("""
             INSERT INTO staff_master (
+                emp_id,
                 staff_name,
                 role,
+                department,
+                joined_date,
+                bank_account,
+                shift,
                 status
             )
-            VALUES (?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
+            request.form.get("emp_id", ""),
             staff_name,
-            role,
-            status
+            request.form.get("role", ""),
+            request.form.get("department", ""),
+            request.form.get("joined_date", ""),
+            request.form.get("bank_account", ""),
+            request.form.get("shift", ""),
+            request.form.get("status", "Active")
         ))
 
     conn.commit()
@@ -2856,7 +3458,7 @@ def save_staff():
 
 
 # =========================================
-# SAVE ATTENDANCE
+# SAVE / UPDATE ATTENDANCE
 # =========================================
 
 @app.route("/save-attendance", methods=["POST"])
@@ -2865,39 +3467,32 @@ def save_attendance():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    date = request.form.get("date")
-    staff_name = request.form.get("staff_name")
-    attendance_status = request.form.get("attendance_status")
+    date = request.form.get("date", datetime.now().strftime("%Y-%m-%d"))
+    staff_name = request.form.get("staff_name", "").strip()
+    attendance_status = request.form.get("attendance_status", "")
+
+    if not staff_name or not attendance_status:
+        return redirect(url_for("attendance"))
 
     conn = get_conn()
     cur = conn.cursor()
-
-    # UPDATE IF ALREADY EXISTS
 
     cur.execute("""
         SELECT id
         FROM attendance
         WHERE date=? AND staff_name=?
-    """, (
-        date,
-        staff_name
-    ))
-
+        ORDER BY id DESC
+        LIMIT 1
+    """, (date, staff_name))
     existing = cur.fetchone()
 
     if existing:
-
         cur.execute("""
             UPDATE attendance
             SET attendance_status=?
             WHERE id=?
-        """, (
-            attendance_status,
-            existing["id"]
-        ))
-
+        """, (attendance_status, existing["id"]))
     else:
-
         cur.execute("""
             INSERT INTO attendance (
                 date,
@@ -2910,117 +3505,6 @@ def save_attendance():
             staff_name,
             attendance_status
         ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("attendance"))
-
-@app.route("/edit-staff/<int:id>")
-def edit_staff(id):
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT *
-        FROM staff_master
-        WHERE id=?
-    """, (id,))
-
-    staff = cur.fetchone()
-
-    conn.close()
-
-    return render_template(
-        "edit_staff.html",
-        staff=staff
-    )
-
-
-@app.route("/update-staff/<int:id>", methods=["POST"])
-def update_staff(id):
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    staff_name = request.form.get("staff_name", "").strip()
-    role = request.form.get("role", "").strip()
-    status = request.form.get("status", "Active").strip()
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT staff_name
-        FROM staff_master
-        WHERE id=?
-    """, (id,))
-
-    old = cur.fetchone()
-    old_name = old["staff_name"] if old else ""
-
-    cur.execute("""
-        UPDATE staff_master
-        SET staff_name=?,
-            role=?,
-            status=?
-        WHERE id=?
-    """, (
-        staff_name,
-        role,
-        status,
-        id
-    ))
-
-    if old_name and old_name != staff_name:
-        cur.execute("""
-            UPDATE attendance
-            SET staff_name=?
-            WHERE staff_name=?
-        """, (
-            staff_name,
-            old_name
-        ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("attendance"))
-
-
-@app.route("/delete-staff/<int:id>")
-def delete_staff(id):
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT staff_name
-        FROM staff_master
-        WHERE id=?
-    """, (id,))
-
-    staff = cur.fetchone()
-
-    if staff:
-        staff_name = staff["staff_name"]
-
-        cur.execute("""
-            DELETE FROM attendance
-            WHERE staff_name=?
-        """, (staff_name,))
-
-        cur.execute("""
-            DELETE FROM staff_master
-            WHERE id=?
-        """, (id,))
 
     conn.commit()
     conn.close()

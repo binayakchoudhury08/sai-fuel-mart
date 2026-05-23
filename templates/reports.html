@@ -418,7 +418,7 @@ body{
 
 {% if session.get("role") == "admin" %}
 
-<a class="active" href="/dashboard">
+<a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
 </a>
@@ -427,6 +427,8 @@ Dashboard
 <i class="fa-solid fa-chart-line"></i>
 Reports
 </a>
+
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
 
 <a href="/backup-database">
 <i class="fa-solid fa-database"></i>

@@ -295,17 +295,54 @@ function setupDateChange(){
 
 /* SAVE */
 
+function collectNozzleEntries(){
+
+    let rows = [];
+
+    document.querySelectorAll(".nozzle-table tbody tr")
+    .forEach(function(row){
+
+        rows.push({
+
+            nozzle_id:
+            row.querySelector(".nozzle-id").value,
+
+            opening:
+            row.querySelector(".opening").value,
+
+            closing:
+            row.querySelector(".closing").value,
+
+            testing:
+            row.querySelector(".testing").value
+
+        });
+
+    });
+
+    return rows;
+}
+
 function collectLubeSales(){
     let rows = [];
 
     document.querySelectorAll(".lube-row").forEach(function(row){
         const product = row.querySelector(".lube-product");
         const qty = row.querySelector(".qty");
+        const rate = row.querySelector(".lube-rate");
+        const amount = row.querySelector(".lube-amount");
 
-        if(product && product.value && num(qty.value) > 0){
+        if(!product) return;
+
+        const selectedOption = product.options[product.selectedIndex];
+
+        if(product.value && num(qty.value) > 0){
             rows.push({
                 product_id: product.value,
-                qty: num(qty.value)
+                product_name: selectedOption.dataset.name || selectedOption.textContent.trim(),
+                qty: num(qty.value),
+                rate: num(rate.value),
+                amount: num(amount.value)
             });
         }
     });
@@ -334,89 +371,200 @@ function collectCreditSales(){
 }
 
 function setupSaveClosing(){
-    const btn = document.getElementById("save-closing");
+
+    const btn =
+    document.getElementById("save-closing");
 
     if(!btn) return;
 
     btn.addEventListener("click", async function(){
+
         updateAllTotals();
 
+        const selectedDate =
+        document.getElementById("closing-date").value;
+
+        if(!selectedDate){
+
+            alert("Please select date");
+            return;
+
+        }
+
         btn.disabled = true;
+
         btn.innerHTML = "Saving...";
 
         try{
+
             const msLitres = sum(".ms-sale");
             const hsdLitres = sum(".hsd-sale");
             const cngSale = sum(".cng-sale");
 
             const totalFuelSale =
+
                 (msLitres * MS_RATE) +
                 (hsdLitres * HSD_RATE) +
                 (cngSale * CNG_RATE);
 
-            const lubeSale = sum(".lube-amount");
+            const lubeSale =
+            sum(".lube-amount");
 
-            const phonepe = num(document.getElementById("phonepe")?.value);
-            const cardSwipe = num(document.getElementById("card-swipe")?.value);
-            const hpPay = num(document.getElementById("hp-pay")?.value);
-            const hpclOtp = num(document.getElementById("hpcl-otp")?.value);
-            const upiOther = num(document.getElementById("upi-other")?.value);
+            const phonepe =
+            num(document.getElementById("phonepe")?.value);
 
-            const digitalCollection = phonepe + cardSwipe + hpPay + hpclOtp + upiOther;
-            const transportReceived = num(document.getElementById("transport-received")?.value);
-            const creditGiven = sum(".credit-row .amount");
-            const netCreditDue = Math.max(creditGiven - transportReceived, 0);
-            const totalExpense = sum(".expense-amount");
+            const cardSwipe =
+            num(document.getElementById("card-swipe")?.value);
+
+            const hpPay =
+            num(document.getElementById("hp-pay")?.value);
+
+            const hpclOtp =
+            num(document.getElementById("hpcl-otp")?.value);
+
+            const upiOther =
+            num(document.getElementById("upi-other")?.value);
+
+            const digitalCollection =
+
+                phonepe +
+                cardSwipe +
+                hpPay +
+                hpclOtp +
+                upiOther;
+
+            const transportReceived =
+            num(document.getElementById("transport-received")?.value);
+
+            const creditGiven =
+            sum(".credit-row .amount");
+
+            const netCreditDue = Math.max(
+
+                creditGiven -
+                transportReceived,
+
+                0
+
+            );
+
+            const totalExpense =
+            sum(".expense-amount");
 
             const cashInHand =
+
                 totalFuelSale +
                 lubeSale +
                 transportReceived -
+
                 digitalCollection -
                 netCreditDue -
                 totalExpense;
 
             const data = {
-                date: document.getElementById("closing-date")?.value,
+
+                date: selectedDate,
+
+                nozzle_entries:
+                collectNozzleEntries(),
+
                 ms_litres: msLitres,
+
                 hsd_litres: hsdLitres,
+
                 cng_sale: cngSale,
+
                 total_fuel_sale: totalFuelSale,
+
                 lube_sale: lubeSale,
-                digital_collection: digitalCollection,
+
+                digital_collection:
+                digitalCollection,
+
                 phonepe: phonepe,
+
                 card_swipe: cardSwipe,
+
                 hp_pay: hpPay,
+
                 hpcl_otp: hpclOtp,
+
                 upi_other: upiOther,
+
                 credit_given: creditGiven,
-                transport_received: transportReceived,
-                net_credit_due: netCreditDue,
-                total_expense: totalExpense,
-                cash_in_hand: cashInHand,
-                lube_sales: collectLubeSales(),
-                credit_transport_sales: collectCreditSales()
+
+                transport_received:
+                transportReceived,
+
+                net_credit_due:
+                netCreditDue,
+
+                total_expense:
+                totalExpense,
+
+                cash_in_hand:
+                cashInHand,
+
+                lube_sales:
+                collectLubeSales(),
+
+                credit_transport_sales:
+                collectCreditSales()
+
             };
 
-            const response = await fetch("/save-daily-closing", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify(data)
-            });
+            const response = await fetch(
 
-            const result = await response.json();
-            alert(result.message || "Saved Successfully");
+                "/save-daily-closing",
 
-        }catch(error){
-            console.log(error);
-            alert("Error saving daily closing");
-        }finally{
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Closing';
+                {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                        "application/json"
+                    },
+
+                    body: JSON.stringify(data)
+
+                }
+
+            );
+
+            const result =
+            await response.json();
+
+            alert(
+                result.message ||
+                "Saved Successfully"
+            );
+
         }
-    });
-}
 
+        catch(error){
+
+            console.log(error);
+
+            alert(
+                "Error saving daily closing"
+            );
+
+        }
+
+        finally{
+
+            btn.disabled = false;
+
+            btn.innerHTML = `
+                <i class="fa-solid fa-floppy-disk"></i>
+                Save Closing
+            `;
+        }
+
+    });
+
+}
 /* INIT */
 
 document.addEventListener("DOMContentLoaded", function(){

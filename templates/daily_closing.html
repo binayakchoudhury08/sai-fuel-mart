@@ -528,14 +528,15 @@ Save Closing
 
 <label>Closing Date</label>
 
-<input type="date"
+<input
+type="date"
 id="closing-date"
-value="{{ today }}">
+value="{{ selected_date or today }}"
+required>
 
 </div>
 
 </div>
-
 </div>
 
 <!-- KPI -->
@@ -631,28 +632,41 @@ Nozzle Auto Capture
 
 <tr>
 
-<td>{{ n["nozzle_name"] }}</td>
+<td>
+
+{{ n["nozzle_name"] }}
+
+<input
+type="hidden"
+class="nozzle-id"
+value="{{ n['id'] }}">
+
+</td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="opening"
 value="{{ n['opening_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="closing"
 value="{{ n['closing_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="testing"
 value="{{ n['testing_qty'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="sale ms-sale"
 readonly
 value="{{ n['total_sale'] or 0 }}">
@@ -665,10 +679,6 @@ value="{{ n['total_sale'] or 0 }}">
 </tbody>
 
 </table>
-
-<br><br>
-
-<!-- HSD -->
 
 <h3 style="margin-bottom:14px;">HSD Nozzles</h3>
 
@@ -690,28 +700,41 @@ value="{{ n['total_sale'] or 0 }}">
 
 <tr>
 
-<td>{{ n["nozzle_name"] }}</td>
+<td>
+
+{{ n["nozzle_name"] }}
+
+<input
+type="hidden"
+class="nozzle-id"
+value="{{ n['id'] }}">
+
+</td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="opening"
 value="{{ n['opening_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="closing"
 value="{{ n['closing_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="testing"
 value="{{ n['testing_qty'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="sale hsd-sale"
 readonly
 value="{{ n['total_sale'] or 0 }}">
@@ -725,10 +748,6 @@ value="{{ n['total_sale'] or 0 }}">
 
 </table>
 
-<br><br>
-
-<!-- CNG -->
-
 <h3 style="margin-bottom:14px;">CNG Nozzles</h3>
 
 <table class="entry-table nozzle-table">
@@ -739,7 +758,7 @@ value="{{ n['total_sale'] or 0 }}">
 <th>Opening</th>
 <th>Closing</th>
 <th>Testing</th>
-<th>Sale KG</th>
+<th>Sale</th>
 </tr>
 </thead>
 
@@ -749,28 +768,41 @@ value="{{ n['total_sale'] or 0 }}">
 
 <tr>
 
-<td>{{ n["nozzle_name"] }}</td>
+<td>
+
+{{ n["nozzle_name"] }}
+
+<input
+type="hidden"
+class="nozzle-id"
+value="{{ n['id'] }}">
+
+</td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="opening"
 value="{{ n['opening_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="closing"
 value="{{ n['closing_reading'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="testing"
 value="{{ n['testing_qty'] or 0 }}">
 </td>
 
 <td>
-<input type="number"
+<input
+type="number"
 class="sale cng-sale"
 readonly
 value="{{ n['total_sale'] or 0 }}">
@@ -783,7 +815,6 @@ value="{{ n['total_sale'] or 0 }}">
 </tbody>
 
 </table>
-
 </div>
 
 <!-- DIGITAL -->
@@ -916,12 +947,25 @@ Lube Sales
 <tr class="lube-row">
 <td>
 <select class="lube-product">
-<option value="" data-rate="0">Select Product</option>
-{% for item in lube_items %}
-<option value="{{ item['id'] }}" data-rate="{{ item['selling_rate'] }}">
-{{ item['product_name'] }} | Stock: {{ item['closing_stock'] }}
+
+<option value="" data-rate="0" data-name="">
+Select Product
 </option>
+
+{% for item in lube_items %}
+
+<option
+value="{{ item['id'] }}"
+data-rate="{{ item['selling_rate'] }}"
+data-name="{{ item['product_name'] }}">
+
+{{ item['product_name'] }} |
+Stock: {{ item['closing_stock'] }}
+
+</option>
+
 {% endfor %}
+
 </select>
 </td>
 

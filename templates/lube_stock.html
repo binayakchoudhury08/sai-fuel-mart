@@ -1,175 +1,575 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Lube Stock - Sai Fuel Mart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<meta charset="UTF-8">
+<title>Lube Stock - Sai Fuel Mart</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+body{background:#eef3f8;color:#0f172a}
+.container{display:flex;min-height:100vh}
+
+.sidebar{width:270px;background:#07120C;color:white;padding:26px 18px;position:fixed;top:0;left:0;bottom:0;overflow-y:auto}
+.logo{margin-bottom:35px}
+.logo h2{font-size:24px;font-weight:900}
+.logo p{color:#94a3b8;font-size:12px;margin-top:6px}
+.sidebar nav{display:flex;flex-direction:column;gap:8px}
+.sidebar nav a{color:#d1d5db;text-decoration:none;padding:14px 16px;border-radius:14px;display:flex;gap:12px;align-items:center;font-weight:700}
+.sidebar nav a.active,.sidebar nav a:hover{background:#16a34a;color:white}
+
+.main{margin-left:270px;width:calc(100% - 270px);padding:26px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.topbar h1{font-size:34px;font-weight:900}
+.topbar p{color:#64748b;margin-top:5px}
+
+.top-actions{display:flex;gap:12px;align-items:center}
+.search{background:white;border:1px solid #dbe3ef;border-radius:18px;padding:13px 16px;width:320px;display:flex;gap:10px;align-items:center}
+.search input{border:none;outline:none;width:100%;font-size:14px}
+.add-product-btn{border:none;background:#2563eb;color:white;padding:13px 18px;border-radius:16px;font-weight:900;cursor:pointer;text-decoration:none}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.kpi{background:white;border-radius:24px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.05)}
+.kpi span{font-size:13px;color:#64748b;font-weight:800}
+.kpi h2{font-size:32px;margin-top:8px}
+
+.layout{display:grid;grid-template-columns:390px 1fr;gap:22px}
+.panel{background:white;border-radius:30px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.06);overflow:hidden}
+.panel-title{font-size:18px;font-weight:900;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+
+.product-list{display:flex;flex-direction:column;gap:12px;max-height:720px;overflow-y:auto;padding-right:4px}
+.product-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:22px;padding:15px;cursor:pointer;transition:.2s}
+.product-card:hover,.product-card.selected{background:#eaf2ff;border-color:#2563eb}
+.product-top{display:flex;gap:12px;align-items:center}
+.icon-avatar{width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,#16a34a,#86efac);color:white;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px}
+.product-info h3{font-size:16px}
+.product-info p{font-size:12px;color:#64748b;margin-top:2px}
+.badge{margin-left:auto;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900}
+.ok-badge{background:#dcfce7;color:#15803d}
+.low-badge{background:#fee2e2;color:#dc2626}
+.product-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:12px;color:#475569}
+
+.quick-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.quick-row button{width:100%;border:none;padding:10px;border-radius:12px;color:white;font-weight:900;cursor:pointer}
+.purchase-btn{background:#16a34a}
+.sale-btn{background:#f59e0b}
+
+.mini-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.mini-actions a{text-align:center;text-decoration:none;padding:9px;border-radius:11px;font-size:12px;font-weight:900}
+.edit{background:#dbeafe;color:#2563eb}
+.delete{background:#fee2e2;color:#dc2626}
+
+.empty{height:620px;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b}
+.empty i{font-size:64px;color:#cbd5e1;margin-bottom:16px}
+
+.profile{display:none}
+.profile.active{display:block}
+.profile-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+.profile-user{display:flex;gap:16px;align-items:center}
+.big-avatar{width:74px;height:74px;border-radius:24px;background:linear-gradient(135deg,#16a34a,#86efac);color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900}
+.profile-user h2{font-size:28px}
+.profile-user p{color:#64748b;margin-top:4px}
+
+.details{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.detail{background:#f8fafc;border-radius:18px;padding:14px}
+.detail span{font-size:12px;color:#64748b;font-weight:900}
+.detail b{display:block;margin-top:5px;font-size:14px}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.stat{border-radius:20px;padding:18px;text-align:center}
+.stat span{font-size:12px;font-weight:900}
+.stat b{display:block;font-size:30px;margin-top:6px}
+.sp{background:#dcfce7;color:#15803d}
+.sa{background:#fef3c7;color:#d97706}
+.sl{background:#dbeafe;color:#2563eb}
+
+.table-wrap{width:100%;overflow-x:auto}
+.table{width:100%;border-collapse:collapse;min-width:850px}
+.table th{background:#f8fafc;color:#475569;padding:13px;text-align:left}
+.table td{padding:13px;border-top:1px solid #e5e7eb}
+.type-purchase{color:#16a34a;font-weight:900}
+.type-sale{color:#f59e0b;font-weight:900}
+
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999}
+.modal{width:760px;max-width:94%;background:white;border-radius:30px;padding:28px;box-shadow:0 25px 70px rgba(0,0,0,.2)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.close{border:none;background:#f1f5f9;width:42px;height:42px;border-radius:14px;font-size:22px;cursor:pointer}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.input-group{display:flex;flex-direction:column}
+.input-group label{font-size:13px;color:#475569;font-weight:900;margin-bottom:8px}
+.input-group input,.input-group select{padding:13px;border:1px solid #d1d5db;border-radius:14px;outline:none}
+.save{margin-top:18px;width:100%;border:none;background:#2563eb;color:white;padding:14px;border-radius:16px;font-weight:900;cursor:pointer}
+
+@media(max-width:1100px){
+.sidebar{position:relative;width:100%;height:auto}
+.container{flex-direction:column}
+.main{margin-left:0;width:100%}
+.layout,.kpis,.details,.form-grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 
 <body>
 
 <div class="container">
 
-    <aside class="sidebar">
-        <div class="logo">
-            <h2>SAI FUEL MART</h2>
-            <p>FUELING YOUR TRUST</p>
-        </div>
+<aside class="sidebar">
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>FUELING YOUR TRUST</p>
+</div>
 
-        <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/nozzle-management">
+<nav>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+<a class="active" href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+
+
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
 <i class="fa-solid fa-gas-pump"></i>
 Nozzle Management
 </a>
-            <a href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
-            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a class="active" href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
-    </aside>
 
-    <main class="main-content">
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
 
-        <div class="topbar">
-            <div>
-                <h1>Lube Stock</h1>
-                <p>Manage lube products, rates and stock balance</p>
-            </div>
-        </div>
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-plus"></i> Add Lube Product
-            </div>
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
 
-            <form method="POST" action="/save-lube-product">
-                <div class="form-grid">
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
 
-                    <div class="input-group">
-                        <label>Product Name</label>
-                        <input type="text" name="product_name" placeholder="Example: HP Racer 2T" required>
-                    </div>
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
 
-                    <div class="input-group">
-                        <label>Selling Rate</label>
-                        <input type="number" step="0.01" name="selling_rate" required>
-                    </div>
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
 
-                    <div class="input-group">
-                        <label>Opening Stock</label>
-                        <input type="number" step="0.01" name="opening_stock" required>
-                    </div>
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
 
-                    <div class="input-group">
-                        <label>Purchase Qty</label>
-                        <input type="number" step="0.01" name="purchase_qty" value="0">
-                    </div>
+{% endif %}
 
-                </div>
+</nav>
 
-                <br>
+</aside>
 
-                <button class="save-btn-top" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i> Save Product
-                </button>
-            </form>
-        </div>
+<main class="main">
 
-        <div class="box">
-    <div class="box-title">
-        <i class="fa-solid fa-magnifying-glass"></i> Search & Filter
-    </div>
-
-    <div class="form-grid">
-        <div class="input-group">
-            <label>Search Product</label>
-            <input type="text" id="lubeSearch" placeholder="Search by product name...">
-        </div>
-
-        <div class="input-group">
-            <label>Status Filter</label>
-            <select id="stockFilter">
-                <option value="all">All Stock</option>
-                <option value="low">Low Stock</option>
-                <option value="available">Available</option>
-            </select>
-        </div>
-    </div>
+<div class="topbar">
+<div>
+<h1>Lube Stock</h1>
+<p>Product-wise purchase, sale and stock register</p>
 </div>
 
-        <div class="box">
-            <div class="box-title">
-                <i class="fa-solid fa-boxes-stacked"></i> Lube Stock Register
-            </div>
+<div class="top-actions">
+<div class="search">
+<i class="fa-solid fa-magnifying-glass"></i>
+<input id="productSearch" placeholder="Search product, rate, stock...">
+</div>
 
-            <table class="entry-table" id="lubeTable">
-                <tr>
-                    <th>Product</th>
-                    <th>Rate</th>
-                    <th>Opening</th>
-                    <th>Purchase</th>
-                    <th>Sale</th>
-                    <th>Closing</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
+{% if session.get("role") == "manager" %}
+<button class="add-product-btn" onclick="openProductModal()">
+<i class="fa-solid fa-plus"></i> Add Product
+</button>
+{% endif %}
+</div>
+</div>
 
-                {% for item in lube_items %}
-                <tr class="lube-row-data"
-    data-name="{{ item['product_name']|lower }}"
-    data-status="{% if item['closing_stock'] <= 5 %}low{% else %}available{% endif %}">
-                    <td>{{ item["product_name"] }}</td>
-                    <td>₹ {{ item["selling_rate"] }}</td>
-                    <td>{{ item["opening_stock"] }}</td>
-                    <td>{{ item["purchase_qty"] }}</td>
-                    <td>{{ item["sale_qty"] }}</td>
-                    <td>{{ item["closing_stock"] }}</td>
+<div class="kpis">
+<div class="kpi"><span>Total Products</span><h2>{{ summary["total_products"] or 0 }}</h2></div>
+<div class="kpi"><span>Total Stock</span><h2 style="color:#16a34a">{{ summary["total_stock"]|round|int }}</h2></div>
+<div class="kpi"><span>Total Sold</span><h2 style="color:#f59e0b">{{ summary["total_sold"]|round|int }}</h2></div>
+<div class="kpi"><span>Low Stock</span><h2 style="color:#dc2626">
+{% set low_count = namespace(value=0) %}
+{% for item in lube_items %}
+{% if item["closing_stock"] <= 5 %}
+{% set low_count.value = low_count.value + 1 %}
+{% endif %}
+{% endfor %}
+{{ low_count.value }}
+</h2></div>
+</div>
 
-                    <td>
-                        {% if item["closing_stock"] <= 5 %}
-                            <span class="status-low">Low Stock</span>
-                        {% else %}
-                            <span class="status-ok">Available</span>
-                        {% endif %}
-                    </td>
+<div class="layout">
 
-                    <td>
-                        <a href="/edit-lube/{{ item['id'] }}" class="add-btn">Edit</a>
-                        <a href="/delete-lube/{{ item['id'] }}" class="add-btn"
-                           onclick="return confirm('Delete this product?')">Delete</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
-        </div>
+<div class="panel">
+<div class="panel-title"><i class="fa-solid fa-boxes-stacked"></i> Products</div>
 
-    </main>
+<div class="product-list">
+{% for item in lube_items %}
+<div class="product-card"
+data-target="product-{{ item['id'] }}"
+data-search="{{ item['product_name'] }} {{ item['selling_rate'] }} {{ item['closing_stock'] }}">
 
+<div class="product-top">
+<div class="icon-avatar"><i class="fa-solid fa-oil-can"></i></div>
+<div class="product-info">
+<h3>{{ item["product_name"] }}</h3>
+<p>ID: LUBE{{ "%03d"|format(item["id"]) }} • ₹ {{ item["selling_rate"] }}</p>
+</div>
+
+{% if item["closing_stock"] <= 5 %}
+<span class="badge low-badge">Low</span>
+{% else %}
+<span class="badge ok-badge">Stock</span>
+{% endif %}
+</div>
+
+<div class="product-meta">
+<span><b>Closing:</b> {{ item["closing_stock"] }}</span>
+<span><b>Sold:</b> {{ item["sale_qty"] }}</span>
+</div>
+
+{% if session.get("role") == "manager" %}
+<div class="quick-row">
+
+<button
+type="button"
+class="purchase-btn tx-btn"
+data-id="{{ item['id'] }}"
+data-name="{{ item['product_name'] }}"
+data-rate="{{ item['selling_rate'] }}"
+data-type="Purchase">
+Purchase
+</button>
+
+<button
+type="button"
+class="sale-btn tx-btn"
+data-id="{{ item['id'] }}"
+data-name="{{ item['product_name'] }}"
+data-rate="{{ item['selling_rate'] }}"
+data-type="Sale">
+Sell
+</button>
+
+</div>
+
+
+
+<div class="mini-actions">
+<a href="/edit-lube/{{ item['id'] }}" class="edit">Edit</a>
+<a href="/delete-lube/{{ item['id'] }}" class="delete" onclick="return confirm('Delete product?')">Delete</a>
+</div>
+{% endif %}
+</div>
+{% endfor %}
+</div>
+</div>
+
+<div class="panel">
+
+<div id="emptyPanel" class="empty">
+<div>
+<i class="fa-solid fa-oil-can"></i>
+<h2>Select Product</h2>
+<p>Click a lube product from the left side to view purchase/sale history.</p>
+</div>
+</div>
+
+{% for item in lube_items %}
+<div class="profile" id="product-{{ item['id'] }}">
+
+<div class="profile-head">
+<div class="profile-user">
+<div class="big-avatar"><i class="fa-solid fa-oil-can"></i></div>
+<div>
+<h2>{{ item["product_name"] }}</h2>
+<p>LUBE{{ "%03d"|format(item["id"]) }} • ₹ {{ item["selling_rate"] }}</p>
+</div>
+</div>
+</div>
+
+<div class="details">
+<div class="detail"><span>Opening</span><b>{{ item["opening_stock"] }}</b></div>
+<div class="detail"><span>Purchase</span><b>{{ item["purchase_qty"] }}</b></div>
+<div class="detail"><span>Sale</span><b>{{ item["sale_qty"] }}</b></div>
+<div class="detail"><span>Closing</span><b>{{ item["closing_stock"] }}</b></div>
+</div>
+
+<div class="stats">
+<div class="stat sp"><span>Total Purchased</span><b>{{ product_data[item["id"]]["total_purchase"]|round|int }}</b></div>
+<div class="stat sa"><span>Total Sold</span><b>{{ product_data[item["id"]]["total_sale"]|round|int }}</b></div>
+<div class="stat sl"><span>Current Stock</span><b>{{ item["closing_stock"]|round|int }}</b></div>
+</div>
+
+<div class="table-wrap">
+<table class="table">
+<thead>
+<tr>
+<th>Date</th>
+<th>Type</th>
+<th>Qty</th>
+<th>Rate</th>
+<th>Amount</th>
+<th>Remarks</th>
+{% if session.get("role") == "manager" %}
+<th>Action</th>
+{% endif %}
+</tr>
+</thead>
+
+<tbody>
+{% for tx in product_data[item["id"]]["transactions"] %}
+<tr>
+<td>{{ tx["date"] }}</td>
+
+{% if tx["transaction_type"] == "Purchase" %}
+<td class="type-purchase">Purchase</td>
+{% else %}
+<td class="type-sale">Sale</td>
+{% endif %}
+
+<td>{{ tx["qty"] }}</td>
+<td>₹ {{ tx["rate"] }}</td>
+<td><b>₹ {{ tx["amount"] }}</b></td>
+<td>{{ tx["remarks"] }}</td>
+
+{% if session.get("role") == "manager" %}
+<td>
+<a href="/edit-lube-transaction/{{ tx['id'] }}" class="edit">Edit</a>
+
+<a href="/delete-lube-transaction/{{ tx['id'] }}"
+class="delete"
+onclick="return confirm('Delete this transaction?')">
+Delete
+</a>
+</td>
+{% endif %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+</div>
+{% endfor %}
+
+</div>
+
+</div>
+</main>
+</div>
+
+<!-- ADD PRODUCT MODAL -->
+<div class="modal-bg" id="productModal">
+<div class="modal">
+
+<div class="modal-head">
+<h2>Add Lube Product</h2>
+<button class="close" onclick="closeProductModal()">×</button>
+</div>
+
+<form method="POST" action="/save-lube-product">
+<div class="form-grid">
+
+<div class="input-group">
+<label>Product Name</label>
+<input type="text" name="product_name" placeholder="HP Racer 2T" required>
+</div>
+
+<div class="input-group">
+<label>Selling Rate</label>
+<input type="number" step="0.01" name="selling_rate" required>
+</div>
+
+<div class="input-group">
+<label>Opening Stock</label>
+<input type="number" step="0.01" name="opening_stock" required>
+</div>
+
+<div class="input-group">
+<label>Purchase Qty</label>
+<input type="number" step="0.01" name="purchase_qty" value="0">
+</div>
+
+</div>
+
+<button class="save" type="submit">Save Product</button>
+</form>
+
+</div>
+</div>
+
+<!-- TRANSACTION MODAL -->
+<div class="modal-bg" id="txModal">
+<div class="modal">
+
+<div class="modal-head">
+<h2 id="txTitle">Lube Transaction</h2>
+<button class="close" onclick="closeTxModal()">×</button>
+</div>
+
+<form method="POST" action="/save-lube-transaction">
+<input type="hidden" name="product_id" id="txProductId">
+<input type="hidden" name="transaction_type" id="txType">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date" name="date" id="txDate" required>
+</div>
+
+<div class="input-group">
+<label>Product</label>
+<input type="text" id="txProductName" readonly>
+</div>
+
+<div class="input-group">
+<label>Qty</label>
+<input type="number" step="0.01" name="qty" id="txQty" required>
+</div>
+
+<div class="input-group">
+<label>Rate</label>
+<input type="number" step="0.01" name="rate" id="txRate" required>
+</div>
+
+<div class="input-group">
+<label>Amount</label>
+<input type="number" step="0.01" id="txAmount" readonly>
+</div>
+
+<div class="input-group">
+<label>Remarks</label>
+<input type="text" name="remarks" placeholder="Order / sale note">
+</div>
+
+</div>
+
+<button class="save" type="submit">Save Transaction</button>
+</form>
+
+</div>
 </div>
 
 <script>
-function filterLubeStock(){
-    const searchValue = document.getElementById("lubeSearch").value.toLowerCase();
-    const statusValue = document.getElementById("stockFilter").value;
+function openProductModal(){document.getElementById("productModal").style.display="flex"}
+function closeProductModal(){document.getElementById("productModal").style.display="none"}
+function closeTxModal(){document.getElementById("txModal").style.display="none"}
 
-    document.querySelectorAll(".lube-row-data").forEach(function(row){
-        const name = row.dataset.name || "";
-        const status = row.dataset.status || "";
-
-        const searchMatch = name.includes(searchValue);
-        const statusMatch = statusValue === "all" || status === statusValue;
-
-        row.style.display = searchMatch && statusMatch ? "table-row" : "none";
-    });
+function openTxModal(id,name,rate,type){
+    document.getElementById("txModal").style.display="flex";
+    document.getElementById("txProductId").value=id;
+    document.getElementById("txProductName").value=name;
+    document.getElementById("txRate").value=rate;
+    document.getElementById("txType").value=type;
+    document.getElementById("txTitle").innerText=type + " - " + name;
+    document.getElementById("txDate").value=new Date().toISOString().split("T")[0];
+    calculateAmount();
 }
 
-document.getElementById("lubeSearch").addEventListener("input", filterLubeStock);
-document.getElementById("stockFilter").addEventListener("change", filterLubeStock);
+function calculateAmount(){
+    let q=parseFloat(document.getElementById("txQty").value)||0;
+    let r=parseFloat(document.getElementById("txRate").value)||0;
+    document.getElementById("txAmount").value=(q*r).toFixed(2);
+}
+
+document.getElementById("txQty").addEventListener("input",calculateAmount);
+document.getElementById("txRate").addEventListener("input",calculateAmount);
+
+document.querySelectorAll(".product-card").forEach(function(card){
+    card.addEventListener("click",function(e){
+        if(e.target.tagName==="BUTTON" || e.target.tagName==="A") return;
+
+        document.querySelectorAll(".product-card").forEach(c=>c.classList.remove("selected"));
+        card.classList.add("selected");
+
+        document.getElementById("emptyPanel").style.display="none";
+        document.querySelectorAll(".profile").forEach(p=>p.classList.remove("active"));
+
+        document.getElementById(card.dataset.target).classList.add("active");
+    });
+});
+
+document.getElementById("productSearch").addEventListener("input",function(){
+    const value=this.value.toLowerCase();
+
+    document.querySelectorAll(".product-card").forEach(function(card){
+        const data=(card.dataset.search || "").toLowerCase();
+        card.style.display=data.includes(value) ? "block" : "none";
+    });
+});
+
+document.querySelectorAll(".tx-btn").forEach(function(btn){
+
+    btn.addEventListener("click", function(e){
+
+        e.stopPropagation();
+
+        openTxModal(
+            this.dataset.id,
+            this.dataset.name,
+            this.dataset.rate,
+            this.dataset.type
+        );
+
+    });
+
+});
+
 </script>
 
 </body>

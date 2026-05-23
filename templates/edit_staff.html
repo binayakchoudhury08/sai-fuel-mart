@@ -1,56 +1,428 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Edit Staff</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<meta charset="UTF-8">
+<title>Edit Employee</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+body{
+    background:#eef3f8;
+    font-family:'Segoe UI',sans-serif;
+}
+
+.wrapper{
+    max-width:1000px;
+    margin:40px auto;
+}
+
+.box{
+    background:white;
+    border-radius:30px;
+    padding:32px;
+    box-shadow:0 18px 45px rgba(0,0,0,.08);
+}
+
+.title{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:28px;
+}
+
+.title h2{
+    font-size:32px;
+    margin:0;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    font-size:13px;
+    font-weight:800;
+    color:#475569;
+    margin-bottom:8px;
+}
+
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:16px;
+    outline:none;
+    font-size:14px;
+}
+
+.preview{
+    margin-top:28px;
+    background:#f8fafc;
+    border-radius:24px;
+    padding:22px;
+    display:flex;
+    align-items:center;
+    gap:18px;
+}
+
+.avatar{
+    width:74px;
+    height:74px;
+    border-radius:24px;
+    background:linear-gradient(135deg,#2563eb,#60a5fa);
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:30px;
+    font-weight:900;
+}
+
+.preview-info h3{
+    font-size:24px;
+    margin:0;
+}
+
+.preview-info p{
+    color:#64748b;
+    margin-top:6px;
+}
+
+.badge{
+    margin-left:auto;
+    padding:10px 18px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:900;
+}
+
+.active{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.inactive{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.action-row{
+    display:flex;
+    gap:14px;
+    margin-top:30px;
+}
+
+.save-btn{
+    flex:1;
+    border:none;
+    background:#2563eb;
+    color:white;
+    padding:16px;
+    border-radius:16px;
+    font-size:15px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.cancel-btn{
+    flex:1;
+    text-decoration:none;
+    background:#f1f5f9;
+    color:#0f172a;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+}
+
+.delete-btn{
+    flex:1;
+    text-decoration:none;
+    background:#fee2e2;
+    color:#dc2626;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+}
+
+@media(max-width:850px){
+
+.form-grid{
+    grid-template-columns:1fr;
+}
+
+.action-row{
+    flex-direction:column;
+}
+
+.preview{
+    flex-direction:column;
+    align-items:flex-start;
+}
+
+.badge{
+    margin-left:0;
+}
+
+}
+
+</style>
 </head>
 
 <body>
 
-<div class="main-content" style="margin:40px auto;max-width:700px;">
+<div class="wrapper">
 
 <div class="box">
-<div class="box-title">Edit Staff</div>
 
-<form method="POST" action="/update-staff/{{ staff['id'] }}">
+<div class="title">
+<i class="fa-solid fa-user-pen"></i>
+<h2>Edit Employee</h2>
+</div>
+
+<form method="POST"
+action="/update-staff/{{ staff['id'] }}">
 
 <div class="form-grid">
 
 <div class="input-group">
-<label>Staff Name</label>
-<input type="text" name="staff_name" value="{{ staff['staff_name'] }}" required>
+<label>Employee ID</label>
+
+<input type="text"
+name="emp_id"
+value="{{ staff['emp_id'] }}"
+required>
+
+</div>
+
+<div class="input-group">
+<label>Employee Name</label>
+
+<input type="text"
+name="staff_name"
+value="{{ staff['staff_name'] }}"
+required>
+
 </div>
 
 <div class="input-group">
 <label>Role</label>
+
 <select name="role" required>
-<option {% if staff['role']=='Manager' %}selected{% endif %}>Manager</option>
-<option {% if staff['role']=='Supervisor' %}selected{% endif %}>Supervisor</option>
-<option {% if staff['role']=='Cashier' %}selected{% endif %}>Cashier</option>
-<option {% if staff['role']=='Salesman' %}selected{% endif %}>Salesman</option>
-<option {% if staff['role']=='Security' %}selected{% endif %}>Security</option>
-<option {% if staff['role']=='Cleaner' %}selected{% endif %}>Cleaner</option>
-<option {% if staff['role']=='Operator' %}selected{% endif %}>Operator</option>
-<option {% if staff['role']=='Other' %}selected{% endif %}>Other</option>
+
+<option
+value="Manager"
+{% if staff['role']=='Manager' %}selected{% endif %}>
+Manager
+</option>
+
+<option
+value="Supervisor"
+{% if staff['role']=='Supervisor' %}selected{% endif %}>
+Supervisor
+</option>
+
+<option
+value="Cashier"
+{% if staff['role']=='Cashier' %}selected{% endif %}>
+Cashier
+</option>
+
+<option
+value="Salesman"
+{% if staff['role']=='Salesman' %}selected{% endif %}>
+Salesman
+</option>
+
+<option
+value="Security"
+{% if staff['role']=='Security' %}selected{% endif %}>
+Security
+</option>
+
+<option
+value="Cleaner"
+{% if staff['role']=='Cleaner' %}selected{% endif %}>
+Cleaner
+</option>
+
+<option
+value="Operator"
+{% if staff['role']=='Operator' %}selected{% endif %}>
+Operator
+</option>
+
 </select>
+
+</div>
+
+<div class="input-group">
+<label>Department</label>
+
+<select name="department" required>
+
+<option
+value="Fuel"
+{% if staff['department']=='Fuel' %}selected{% endif %}>
+Fuel
+</option>
+
+<option
+value="Cash"
+{% if staff['department']=='Cash' %}selected{% endif %}>
+Cash
+</option>
+
+<option
+value="Operations"
+{% if staff['department']=='Operations' %}selected{% endif %}>
+Operations
+</option>
+
+<option
+value="Accounts"
+{% if staff['department']=='Accounts' %}selected{% endif %}>
+Accounts
+</option>
+
+<option
+value="Office"
+{% if staff['department']=='Office' %}selected{% endif %}>
+Office
+</option>
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Joined Date</label>
+
+<input type="date"
+name="joined_date"
+value="{{ staff['joined_date'] }}">
+
+</div>
+
+<div class="input-group">
+<label>Bank Account</label>
+
+<input type="text"
+name="bank_account"
+value="{{ staff['bank_account'] }}">
+
+</div>
+
+<div class="input-group">
+<label>Shift</label>
+
+<select name="shift">
+
+<option
+value="6AM - 6PM"
+{% if staff['shift']=='6AM - 6PM' %}selected{% endif %}>
+6AM - 6PM
+</option>
+
+<option
+value="6PM - 6AM"
+{% if staff['shift']=='6PM - 6AM' %}selected{% endif %}>
+6PM - 6AM
+</option>
+
+</select>
+
 </div>
 
 <div class="input-group">
 <label>Status</label>
+
 <select name="status">
-<option {% if staff['status']=='Active' %}selected{% endif %}>Active</option>
-<option {% if staff['status']=='Inactive' %}selected{% endif %}>Inactive</option>
+
+<option
+value="Active"
+{% if staff['status']=='Active' %}selected{% endif %}>
+Active
+</option>
+
+<option
+value="Inactive"
+{% if staff['status']=='Inactive' %}selected{% endif %}>
+Inactive
+</option>
+
 </select>
-</div>
 
 </div>
 
-<br>
+</div>
 
-<button class="save-btn-top" type="submit">Update Staff</button>
-<a href="/attendance" class="add-btn">Cancel</a>
+<div class="preview">
+
+<div class="avatar">
+{{ staff["staff_name"][:1] }}
+</div>
+
+<div class="preview-info">
+<h3>{{ staff["staff_name"] }}</h3>
+<p>{{ staff["emp_id"] }} • {{ staff["department"] }}</p>
+</div>
+
+{% if staff["status"] == "Active" %}
+
+<div class="badge active">
+Active Employee
+</div>
+
+{% else %}
+
+<div class="badge inactive">
+Inactive Employee
+</div>
+
+{% endif %}
+
+</div>
+
+<div class="action-row">
+
+<button class="save-btn" type="submit">
+<i class="fa-solid fa-floppy-disk"></i>
+Update Employee
+</button>
+
+<a href="/attendance"
+class="cancel-btn">
+
+Cancel
+
+</a>
+
+<a href="/delete-staff/{{ staff['id'] }}"
+class="delete-btn"
+onclick="return confirm('Delete this employee and attendance records?')">
+
+Delete Employee
+
+</a>
+
+</div>
 
 </form>
+
 </div>
 
 </div>

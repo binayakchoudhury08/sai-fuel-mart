@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Edit Lube Transaction</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+body{
+    background:#eef3f8;
+    font-family:'Segoe UI',sans-serif;
+}
+.wrapper{
+    max-width:850px;
+    margin:40px auto;
+}
+.box{
+    background:white;
+    border-radius:28px;
+    padding:30px;
+    box-shadow:0 15px 40px rgba(0,0,0,.08);
+}
+.title{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:26px;
+}
+.title h2{
+    font-size:30px;
+    margin:0;
+}
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+}
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+.input-group label{
+    font-size:13px;
+    font-weight:800;
+    color:#475569;
+    margin-bottom:8px;
+}
+.input-group input,
+.input-group select{
+    padding:14px;
+    border:1px solid #d1d5db;
+    border-radius:16px;
+    outline:none;
+}
+.action-row{
+    display:flex;
+    gap:14px;
+    margin-top:28px;
+}
+.save-btn{
+    flex:1;
+    border:none;
+    background:#2563eb;
+    color:white;
+    padding:15px;
+    border-radius:16px;
+    font-size:15px;
+    font-weight:900;
+}
+.cancel-btn{
+    flex:1;
+    background:#f1f5f9;
+    color:#0f172a;
+    text-decoration:none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:16px;
+    font-weight:900;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+<div class="box">
+
+<div class="title">
+<i class="fa-solid fa-pen"></i>
+<h2>Edit Lube Transaction</h2>
+</div>
+
+<form method="POST" action="/update-lube-transaction/{{ tx['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date" name="date" value="{{ tx['date'] }}" required>
+</div>
+
+<div class="input-group">
+<label>Product</label>
+<input type="text" value="{{ tx['product_name'] }}" readonly>
+</div>
+
+<div class="input-group">
+<label>Type</label>
+<select name="transaction_type">
+<option {% if tx['transaction_type']=='Purchase' %}selected{% endif %}>Purchase</option>
+<option {% if tx['transaction_type']=='Sale' %}selected{% endif %}>Sale</option>
+</select>
+</div>
+
+<div class="input-group">
+<label>Qty</label>
+<input type="number" step="0.01" name="qty" id="qty" value="{{ tx['qty'] }}" required>
+</div>
+
+<div class="input-group">
+<label>Rate</label>
+<input type="number" step="0.01" name="rate" id="rate" value="{{ tx['rate'] }}" required>
+</div>
+
+<div class="input-group">
+<label>Amount</label>
+<input type="number" step="0.01" id="amount" value="{{ tx['amount'] }}" readonly>
+</div>
+
+<div class="input-group">
+<label>Remarks</label>
+<input type="text" name="remarks" value="{{ tx['remarks'] }}">
+</div>
+
+</div>
+
+<div class="action-row">
+<button class="save-btn" type="submit">Update Transaction</button>
+<a href="/lube-stock" class="cancel-btn">Cancel</a>
+</div>
+
+</form>
+
+</div>
+</div>
+
+<script>
+function calc(){
+    const q = parseFloat(document.getElementById("qty").value) || 0;
+    const r = parseFloat(document.getElementById("rate").value) || 0;
+    document.getElementById("amount").value = (q*r).toFixed(2);
+}
+document.getElementById("qty").addEventListener("input", calc);
+document.getElementById("rate").addEventListener("input", calc);
+</script>
+
+</body>
+</html>
