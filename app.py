@@ -3623,6 +3623,11 @@ def attendance():
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+    
+    selected_date = request.args.get(
+    "date",
+    datetime.now().strftime("%Y-%m-%d")
+)
 
     conn = get_conn()
     cur = conn.cursor()
@@ -3735,6 +3740,7 @@ def attendance():
         leave_today=leave_today,
         next_emp_id=next_emp_id,
         salaries=salaries,
+        selected_date=selected_date,
         salary_by_staff=salary_by_staff
     )
 
@@ -4115,12 +4121,48 @@ def save_attendance():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    date = request.form.get("date", datetime.now().strftime("%Y-%m-%d"))
-    staff_name = request.form.get("staff_name", "").strip()
-    attendance_status = request.form.get("attendance_status", "")
+    attendance_date = request.form.get(
+        "date",
+        datetime.now().strftime("%Y-%m-%d")
+    )
+
+    staff_name = request.form.get(
+        "staff_name",
+        ""
+    ).strip()
+
+    attendance_status = request.form.get(
+        "attendance_status",
+        ""
+    )
 
     if not staff_name or not attendance_status:
-        return redirect(url_for("attendance"))
+        return redirect(
+            url_for(
+                "attendance",
+                date=attendance_date
+            )
+        )
+
+    # Prevent future attendance
+    selected = datetime.strptime(
+        attendance_date,
+        "%Y-%m-%d"
+    )
+
+    if selected.date() > datetime.now().date():
+
+        flash(
+            "Future attendance not allowed",
+            "error"
+        )
+
+        return redirect(
+            url_for(
+                "attendance",
+                date=attendance_date
+            )
+        )
 
     conn = get_conn()
     cur = conn.cursor()
@@ -4129,18 +4171,27 @@ def save_attendance():
         SELECT id
         FROM attendance
         WHERE date=? AND staff_name=?
-        ORDER BY id DESC
         LIMIT 1
-    """, (date, staff_name))
+    """, (
+        attendance_date,
+        staff_name
+    ))
+
     existing = cur.fetchone()
 
     if existing:
+
         cur.execute("""
             UPDATE attendance
             SET attendance_status=?
             WHERE id=?
-        """, (attendance_status, existing["id"]))
+        """, (
+            attendance_status,
+            existing["id"]
+        ))
+
     else:
+
         cur.execute("""
             INSERT INTO attendance (
                 date,
@@ -4149,7 +4200,7 @@ def save_attendance():
             )
             VALUES (?, ?, ?)
         """, (
-            date,
+            attendance_date,
             staff_name,
             attendance_status
         ))
@@ -4157,8 +4208,12 @@ def save_attendance():
     conn.commit()
     conn.close()
 
-    return redirect(url_for("attendance"))
-
+    return redirect(
+        url_for(
+            "attendance",
+            date=attendance_date
+        )
+    )
 @app.route("/delete-lube/<int:id>")
 def delete_lube(id):
     if not session.get("logged_in"):

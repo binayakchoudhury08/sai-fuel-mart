@@ -862,6 +862,19 @@ Add Member
 <i class="fa-solid fa-money-bill-wave"></i>
 Monthly Salary
 </button>
+
+<form method="GET" action="/attendance">
+
+    <input
+        type="date"
+        name="date"
+        value="{{ selected_date }}">
+
+    <button type="submit">
+        Load Date
+    </button>
+
+</form>
 {% endif %}
 
 {% if session.get("role") == "admin" %}
@@ -942,21 +955,21 @@ data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['departmen
 <div class="mark-row">
 
 <form method="POST" action="/save-attendance">
-<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="date" value="{{ selected_date }}">
 <input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
 <input type="hidden" name="attendance_status" value="Present">
 <button class="pbtn" type="submit">P</button>
 </form>
 
 <form method="POST" action="/save-attendance">
-<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="date" value="{{ selected_date }}">
 <input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
 <input type="hidden" name="attendance_status" value="Absent">
 <button class="abtn" type="submit">A</button>
 </form>
 
 <form method="POST" action="/save-attendance">
-<input type="hidden" name="date" value="{{ current_date }}">
+<input type="hidden" name="date" value="{{ selected_date }}">
 <input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
 <input type="hidden" name="attendance_status" value="Leave">
 <button class="lbtn" type="submit">L</button>
