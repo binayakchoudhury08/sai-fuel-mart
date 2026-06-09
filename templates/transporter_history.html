@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<title>Transporter History</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+body{
+    background:#f1f5f9;
+    font-family:'Segoe UI',sans-serif;
+    padding:30px;
+}
+
+.box{
+    background:#fff;
+    padding:28px;
+    border-radius:28px;
+    box-shadow:0 10px 35px rgba(0,0,0,.05);
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:24px;
+}
+
+.party-card{
+    background:#07120C;
+    color:#fff;
+    padding:24px;
+    border-radius:24px;
+    margin-bottom:24px;
+}
+
+.party-card h2{
+    margin:0;
+    font-size:30px;
+}
+
+.party-card p{
+    margin-top:10px;
+    color:#cbd5e1;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-top:24px;
+}
+
+.stat{
+    background:rgba(255,255,255,.08);
+    padding:16px;
+    border-radius:18px;
+}
+
+.stat span{
+    font-size:12px;
+    color:#cbd5e1;
+}
+
+.stat h3{
+    margin-top:8px;
+    font-size:22px;
+}
+
+.entry-table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.entry-table th{
+    background:#f8fafc;
+    padding:14px;
+    text-align:left;
+    font-size:13px;
+    color:#64748b;
+}
+
+.entry-table td{
+    padding:16px 14px;
+    border-bottom:1px solid #eef2f7;
+}
+
+.credit{
+    color:#dc2626;
+    font-weight:700;
+}
+
+.received{
+    color:#16a34a;
+    font-weight:700;
+}
+
+.back-btn{
+    text-decoration:none;
+    background:#07120C;
+    color:#fff;
+    padding:12px 18px;
+    border-radius:14px;
+    font-weight:700;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="topbar">
+
+<h1>Transporter Ledger</h1>
+
+<a href="/credit-transport" class="back-btn">
+
+<i class="fa-solid fa-arrow-left"></i>
+Back
+
+</a>
+
+</div>
+
+<div class="party-card">
+
+<h2>{{ transporter["party_name"] }}</h2>
+
+<p>
+
+{{ transporter["vehicle_no"] }}
+
+</p>
+
+<div class="stats">
+
+<div class="stat">
+<span>Fuel Credit</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["fuel_credit"] or 0) }}
+</h3>
+</div>
+
+<div class="stat">
+<span>Lube Credit</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["lube_credit"] or 0) }}
+</h3>
+</div>
+
+<div class="stat">
+<span>Received</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["payment_received"] or 0) }}
+</h3>
+</div>
+
+<div class="stat">
+<span>Balance Due</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["balance_due"] or 0) }}
+</h3>
+</div>
+
+</div>
+
+</div>
+
+<div class="box">
+
+<table class="entry-table">
+
+<thead>
+
+<tr>
+
+<th>Date</th>
+<th>Type</th>
+<th>Fuel</th>
+<th>Lube</th>
+<th>Received</th>
+<th>Balance</th>
+<th>Remarks</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for h in history %}
+
+<tr>
+
+<td>
+{{ h["date"] }}
+</td>
+
+<td>
+{{ h["entry_type"] }}
+</td>
+
+<td class="credit">
+₹ {{ "%.2f"|format(h["fuel_credit"] or 0) }}
+</td>
+
+<td class="credit">
+₹ {{ "%.2f"|format(h["lube_credit"] or 0) }}
+</td>
+
+<td class="received">
+₹ {{ "%.2f"|format(h["received_amount"] or 0) }}
+</td>
+
+<td>
+₹ {{ "%.2f"|format(h["balance_after"] or 0) }}
+</td>
+
+<td>
+{{ h["remarks"] }}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</body>
+</html>

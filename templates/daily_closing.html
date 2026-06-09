@@ -389,6 +389,255 @@ body{
     }
 }
 
+/* =========================
+LUBE SALES TABLE FIX
+========================= */
+
+#lube-table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0 14px;
+    table-layout:fixed;
+}
+
+#lube-table thead th{
+    font-size:13px;
+    color:#64748b;
+    text-align:left;
+    padding:0 8px 10px;
+    font-weight:700;
+    white-space:nowrap;
+}
+
+#lube-table tbody tr{
+    background:#ffffff;
+}
+
+#lube-table td{
+    padding:0 8px;
+    vertical-align:middle;
+}
+
+/* PRODUCT */
+
+#lube-table td:nth-child(1){
+    width:25%;
+}
+
+/* QTY */
+
+#lube-table td:nth-child(2){
+    width:10%;
+}
+
+/* RATE */
+
+#lube-table td:nth-child(3){
+    width:12%;
+}
+
+/* AMOUNT */
+
+#lube-table td:nth-child(4){
+    width:14%;
+}
+
+/* MODE */
+
+#lube-table td:nth-child(5){
+    width:12%;
+}
+
+/* TRANSPORTER */
+
+#lube-table td:nth-child(6){
+    width:17%;
+}
+
+/* ACTION */
+
+#lube-table td:nth-child(7){
+    width:10%;
+}
+
+/* INPUTS */
+
+#lube-table select,
+#lube-table input{
+
+    width:100%;
+    height:44px;
+
+    border:1px solid #dbe2ea;
+
+    border-radius:12px;
+
+    padding:0 12px;
+
+    background:#fff;
+
+    font-size:14px;
+
+    outline:none;
+
+    transition:.2s;
+
+}
+
+#lube-table select:focus,
+#lube-table input:focus{
+
+    border-color:#16a34a;
+
+    box-shadow:0 0 0 3px rgba(22,163,74,.08);
+
+}
+
+/* DELETE BUTTON */
+
+#lube-table .delete-row{
+
+    width:100%;
+
+    height:44px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#fee2e2;
+
+    color:#dc2626;
+
+    font-size:13px;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+    transition:.2s;
+
+}
+
+#lube-table .delete-row:hover{
+
+    background:#fecaca;
+
+}
+
+/* BOX */
+
+.lube-box{
+
+    background:#fff;
+
+    padding:24px;
+
+    border-radius:26px;
+
+    box-shadow:0 10px 35px rgba(0,0,0,.05);
+
+}
+
+/* TITLE */
+
+.lube-box .box-title{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    font-size:28px;
+
+    font-weight:800;
+
+    margin-bottom:24px;
+
+    color:#07120C;
+
+}
+
+/* ADD BUTTON */
+
+#add-lube{
+
+    margin-top:14px;
+
+    border:none;
+
+    background:#07120C;
+
+    color:#fff;
+
+    padding:13px 18px;
+
+    border-radius:14px;
+
+    font-size:14px;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+}
+
+/* MOBILE */
+
+@media(max-width:1200px){
+
+    #lube-table{
+        min-width:1100px;
+    }
+
+    .lube-scroll{
+        overflow-x:auto;
+    }
+
+}
+
+.lube-wide{
+    grid-column:1 / -1;
+}
+
+#lube-table{
+    min-width:100%;
+}
+
+#lube-table th,
+#lube-table td{
+    padding:12px 10px;
+}
+
+#lube-table td:nth-child(1){
+    width:28%;
+}
+
+#lube-table td:nth-child(2){
+    width:9%;
+}
+
+#lube-table td:nth-child(3){
+    width:11%;
+}
+
+#lube-table td:nth-child(4){
+    width:12%;
+}
+
+#lube-table td:nth-child(5){
+    width:11%;
+}
+
+#lube-table td:nth-child(6){
+    width:20%;
+}
+
+#lube-table td:nth-child(7){
+    width:9%;
+}
+
 </style>
 
 </head>
@@ -875,6 +1124,7 @@ Digital Collection
 Credit Transport
 </div>
 
+
 <table class="entry-table" id="credit-table">
 <thead>
 <tr>
@@ -917,6 +1167,8 @@ Credit Transport
 </tbody>
 </table>
 
+
+
 <button class="add-btn" id="add-credit">
 + Add Credit Entry
 </button>
@@ -925,64 +1177,104 @@ Credit Transport
 
 <!-- LUBE -->
 
-<div class="box premium-box">
+
+<div class="box premium-box lube-box lube-wide">
 
 <div class="box-title">
-<i class="fa-solid fa-oil-can"></i>
+<i class="fa-solid fa-bottle-droplet"></i>
 Lube Sales
 </div>
 
+<div class="lube-scroll">
+
 <table class="entry-table" id="lube-table">
+
 <thead>
 <tr>
 <th>Product</th>
 <th>Qty</th>
 <th>Rate</th>
 <th>Amount</th>
+<th>Mode</th>
+<th>Transporter</th>
 <th>Action</th>
 </tr>
 </thead>
 
 <tbody>
+
 <tr class="lube-row">
+
 <td>
 <select class="lube-product">
-
-<option value="" data-rate="0" data-name="">
-Select Product
-</option>
+<option value="" data-rate="0" data-name="">Select Product</option>
 
 {% for item in lube_items %}
-
 <option
 value="{{ item['id'] }}"
 data-rate="{{ item['selling_rate'] }}"
 data-name="{{ item['product_name'] }}">
-
-{{ item['product_name'] }} |
-Stock: {{ item['closing_stock'] }}
-
+{{ item['product_name'] }} | Stock: {{ item['closing_stock'] }}
 </option>
-
 {% endfor %}
-
 </select>
 </td>
 
-<td><input type="number" class="qty"></td>
-<td><input type="number" class="lube-rate" readonly></td>
-<td><input type="number" class="lube-amount" readonly></td>
-<td><button type="button" class="delete-row">Delete</button></td>
-</tr>
-</tbody>
-</table>
+<td>
+<input type="number" class="qty" placeholder="Qty">
+</td>
 
-<button class="add-btn" id="add-lube">
-+ Add Lube Item
-</button>
+<td>
+<input type="number" class="lube-rate" readonly>
+</td>
+
+<td>
+<input type="number" class="lube-amount" readonly>
+</td>
+
+<td>
+<select class="lube-mode">
+<option value="Cash">Cash</option>
+<option value="Credit">Credit</option>
+</select>
+</td>
+
+<td>
+<select class="lube-transporter" style="display:none;">
+<option value="">Select Party</option>
+
+{% for t in transporters %}
+<option
+value="{{ t['id'] }}"
+data-name="{{ t['party_name'] }}">
+{{ t['party_name'] }}
+</option>
+{% endfor %}
+</select>
+</td>
+
+<td>
+<button type="button" class="delete-row">Delete</button>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 </div>
 
+<button type="button" class="add-btn" id="add-lube">
++ Add Lube Item
+</button>
+
+<div class="lube-note">
+<i class="fa-solid fa-circle-info"></i>
+Select Cash or Credit. If Credit is selected, choose the Transporter.
+</div>
+
+</div>
 <!-- EXPENSE -->
 
 <div class="box premium-box">

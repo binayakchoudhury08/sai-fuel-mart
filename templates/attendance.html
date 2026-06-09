@@ -6,114 +6,724 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
-body{background:#eef3f8;color:#0f172a}
-.container{display:flex;min-height:100vh}
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
 
-.sidebar{width:270px;background:#07120C;color:white;padding:26px 18px;position:fixed;top:0;left:0;bottom:0}
-.logo{margin-bottom:35px}
-.logo h2{font-size:24px;font-weight:900}
-.logo p{color:#94a3b8;font-size:12px;margin-top:6px}
-.sidebar nav{display:flex;flex-direction:column;gap:8px}
-.sidebar nav a{color:#d1d5db;text-decoration:none;padding:14px 16px;border-radius:14px;display:flex;gap:12px;align-items:center;font-weight:700}
-.sidebar nav a.active,.sidebar nav a:hover{background:#16a34a;color:white}
+body{
+    background:#eef3f8;
+    color:#0f172a;
+}
 
-.main{margin-left:270px;width:calc(100% - 270px);padding:26px}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.topbar h1{font-size:34px;font-weight:900}
-.topbar p{color:#64748b;margin-top:5px}
+.container{
+    display:flex;
+    min-height:100vh;
+}
 
-.top-actions{display:flex;gap:12px;align-items:center}
-.search{background:white;border:1px solid #dbe3ef;border-radius:18px;padding:13px 16px;width:320px;display:flex;gap:10px;align-items:center}
-.search input{border:none;outline:none;width:100%;font-size:14px}
-.add-member-btn,.export-btn{border:none;background:#2563eb;color:white;padding:13px 18px;border-radius:16px;font-weight:900;cursor:pointer;text-decoration:none}
+/* SIDEBAR */
 
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
-.kpi{background:white;border-radius:24px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.05)}
-.kpi span{font-size:13px;color:#64748b;font-weight:800}
-.kpi h2{font-size:32px;margin-top:8px}
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:26px 18px;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    overflow-y:auto;
+}
 
-.layout{display:grid;grid-template-columns:380px 1fr;gap:22px}
-.panel{background:white;border-radius:30px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.06)}
-.panel-title{font-size:18px;font-weight:900;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.logo{
+    margin-bottom:35px;
+}
 
-.employee-list{display:flex;flex-direction:column;gap:12px;max-height:720px;overflow-y:auto}
-.emp-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:22px;padding:15px;cursor:pointer;transition:.2s}
-.emp-card:hover,.emp-card.selected{background:#eaf2ff;border-color:#2563eb}
-.emp-top{display:flex;gap:12px;align-items:center}
-.avatar{width:48px;height:48px;border-radius:16px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:white;display:flex;align-items:center;justify-content:center;font-weight:900}
-.emp-info h3{font-size:16px}
-.emp-info p{font-size:12px;color:#64748b;margin-top:2px}
-.badge{margin-left:auto;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:900}
-.active-badge{background:#dcfce7;color:#15803d}
-.inactive-badge{background:#fee2e2;color:#dc2626}
-.emp-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;font-size:12px;color:#475569}
+.logo h2{
+    font-size:24px;
+    font-weight:900;
+}
 
-.mark-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.mark-row button{width:100%;border:none;padding:10px;border-radius:12px;color:white;font-weight:900;cursor:pointer}
-.pbtn{background:#16a34a}.abtn{background:#dc2626}.lbtn{background:#f59e0b}
+.logo p{
+    color:#94a3b8;
+    font-size:12px;
+    margin-top:6px;
+}
 
-.mini-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.mini-actions a,.hist-action a{text-align:center;text-decoration:none;padding:9px;border-radius:11px;font-size:12px;font-weight:900}
-.edit{background:#dbeafe;color:#2563eb}
-.delete{background:#fee2e2;color:#dc2626}
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
 
-.empty{height:620px;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b}
-.empty i{font-size:64px;color:#cbd5e1;margin-bottom:16px}
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:14px;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    font-weight:700;
+}
 
-.profile{display:none}
-.profile.active{display:block}
-.profile-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
-.profile-user{display:flex;gap:16px;align-items:center}
-.big-avatar{width:74px;height:74px;border-radius:24px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900}
-.profile-user h2{font-size:28px}
-.profile-user p{color:#64748b;margin-top:4px}
+.sidebar nav a.active,
+.sidebar nav a:hover{
+    background:#16a34a;
+    color:white;
+}
 
-.details{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-.detail{background:#f8fafc;border-radius:18px;padding:14px}
-.detail span{font-size:12px;color:#64748b;font-weight:900}
-.detail b{display:block;margin-top:5px;font-size:14px}
+/* MAIN */
 
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
-.stat{border-radius:20px;padding:18px;text-align:center}
-.stat span{font-size:12px;font-weight:900}
-.stat b{display:block;font-size:30px;margin-top:6px}
-.sp{background:#dcfce7;color:#15803d}
-.sa{background:#fee2e2;color:#dc2626}
-.sl{background:#fef3c7;color:#d97706}
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:26px;
+}
 
-.calendar-box{background:#f8fafc;border-radius:24px;padding:18px;margin-bottom:22px}
-.month-title{font-weight:900;margin-bottom:14px}
-.week-head,.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
-.week-head div{text-align:center;font-size:12px;color:#64748b;font-weight:900}
-.day{height:54px;border-radius:16px;background:white;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;color:#94a3b8;border:1px solid #e5e7eb}
-.day small{font-size:10px;margin-top:2px}
-.day.present{background:#dcfce7;color:#15803d}
-.day.absent{background:#fee2e2;color:#dc2626}
-.day.leave{background:#fef3c7;color:#d97706}
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+    gap:18px;
+}
 
-.table{width:100%;border-collapse:collapse}
-.table th{background:#f8fafc;color:#475569;padding:13px;text-align:left}
-.table td{padding:13px;border-top:1px solid #e5e7eb}
-.status-p{color:#16a34a;font-weight:900}
-.status-a{color:#dc2626;font-weight:900}
-.status-l{color:#f59e0b;font-weight:900}
+.topbar h1{
+    font-size:34px;
+    font-weight:900;
+}
 
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999}
-.modal{width:760px;max-width:94%;background:white;border-radius:30px;padding:28px;box-shadow:0 25px 70px rgba(0,0,0,.2)}
-.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.close{border:none;background:#f1f5f9;width:42px;height:42px;border-radius:14px;font-size:22px;cursor:pointer}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.input-group{display:flex;flex-direction:column}
-.input-group label{font-size:13px;color:#475569;font-weight:900;margin-bottom:8px}
-.input-group input,.input-group select{padding:13px;border:1px solid #d1d5db;border-radius:14px;outline:none}
-.save{margin-top:18px;width:100%;border:none;background:#2563eb;color:white;padding:14px;border-radius:16px;font-weight:900;cursor:pointer}
+.topbar p{
+    color:#64748b;
+    margin-top:5px;
+}
+
+.top-actions{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.search{
+    background:white;
+    border:1px solid #dbe3ef;
+    border-radius:18px;
+    padding:13px 16px;
+    width:320px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+.search input{
+    border:none;
+    outline:none;
+    width:100%;
+    font-size:14px;
+}
+
+.add-member-btn,
+.export-btn,
+.salary-btn{
+    border:none;
+    color:white;
+    padding:13px 18px;
+    border-radius:16px;
+    font-weight:900;
+    cursor:pointer;
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+}
+
+.add-member-btn{
+    background:#2563eb;
+}
+
+.salary-btn{
+    background:#16a34a;
+}
+
+.export-btn{
+    background:#07120C;
+}
+
+/* KPI */
+
+.kpis{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-bottom:22px;
+}
+
+.kpi{
+    background:white;
+    border-radius:24px;
+    padding:20px;
+    box-shadow:0 12px 30px rgba(0,0,0,.05);
+}
+
+.kpi span{
+    font-size:13px;
+    color:#64748b;
+    font-weight:800;
+}
+
+.kpi h2{
+    font-size:32px;
+    margin-top:8px;
+}
+
+/* LAYOUT */
+
+.layout{
+    display:grid;
+    grid-template-columns:380px 1fr;
+    gap:22px;
+}
+
+.panel{
+    background:white;
+    border-radius:30px;
+    padding:22px;
+    box-shadow:0 12px 35px rgba(0,0,0,.06);
+}
+
+.panel-title{
+    font-size:18px;
+    font-weight:900;
+    margin-bottom:18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+/* EMPLOYEE CARDS */
+
+.employee-list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    max-height:720px;
+    overflow-y:auto;
+}
+
+.emp-card{
+    background:#f8fafc;
+    border:1px solid #e5e7eb;
+    border-radius:22px;
+    padding:15px;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.emp-card:hover,
+.emp-card.selected{
+    background:#eaf2ff;
+    border-color:#2563eb;
+}
+
+.emp-top{
+    display:flex;
+    gap:12px;
+    align-items:center;
+}
+
+.avatar{
+    width:48px;
+    height:48px;
+    border-radius:16px;
+    background:linear-gradient(135deg,#2563eb,#60a5fa);
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+}
+
+.emp-info h3{
+    font-size:16px;
+}
+
+.emp-info p{
+    font-size:12px;
+    color:#64748b;
+    margin-top:2px;
+}
+
+.badge{
+    margin-left:auto;
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:900;
+}
+
+.active-badge{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.inactive-badge{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.emp-meta{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-top:12px;
+    font-size:12px;
+    color:#475569;
+}
+
+.mark-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-top:12px;
+}
+
+.mark-row button{
+    width:100%;
+    border:none;
+    padding:10px;
+    border-radius:12px;
+    color:white;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.pbtn{background:#16a34a}
+.abtn{background:#dc2626}
+.lbtn{background:#f59e0b}
+
+.mini-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin-top:10px;
+}
+
+.mini-actions a,
+.hist-action a{
+    text-align:center;
+    text-decoration:none;
+    padding:9px;
+    border-radius:11px;
+    font-size:12px;
+    font-weight:900;
+}
+
+.edit{
+    background:#dbeafe;
+    color:#2563eb;
+}
+
+.delete{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+/* PROFILE */
+
+.empty{
+    height:620px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:#64748b;
+}
+
+.empty i{
+    font-size:64px;
+    color:#cbd5e1;
+    margin-bottom:16px;
+}
+
+.profile{
+    display:none;
+}
+
+.profile.active{
+    display:block;
+}
+
+.profile-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    margin-bottom:20px;
+}
+
+.profile-user{
+    display:flex;
+    gap:16px;
+    align-items:center;
+}
+
+.big-avatar{
+    width:74px;
+    height:74px;
+    border-radius:24px;
+    background:linear-gradient(135deg,#2563eb,#60a5fa);
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:28px;
+    font-weight:900;
+}
+
+.profile-user h2{
+    font-size:28px;
+}
+
+.profile-user p{
+    color:#64748b;
+    margin-top:4px;
+}
+
+.details{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    margin-bottom:18px;
+}
+
+.detail{
+    background:#f8fafc;
+    border-radius:18px;
+    padding:14px;
+}
+
+.detail span{
+    font-size:12px;
+    color:#64748b;
+    font-weight:900;
+}
+
+.detail b{
+    display:block;
+    margin-top:5px;
+    font-size:14px;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-bottom:20px;
+}
+
+.stat{
+    border-radius:20px;
+    padding:18px;
+    text-align:center;
+}
+
+.stat span{
+    font-size:12px;
+    font-weight:900;
+}
+
+.stat b{
+    display:block;
+    font-size:30px;
+    margin-top:6px;
+}
+
+.sp{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.sa{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.sl{
+    background:#fef3c7;
+    color:#d97706;
+}
+
+/* CALENDAR */
+
+.calendar-box{
+    background:#f8fafc;
+    border-radius:24px;
+    padding:18px;
+    margin-bottom:22px;
+}
+
+.month-title{
+    font-weight:900;
+    margin-bottom:14px;
+}
+
+.week-head,
+.calendar{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:10px;
+}
+
+.week-head div{
+    text-align:center;
+    font-size:12px;
+    color:#64748b;
+    font-weight:900;
+}
+
+.day{
+    height:54px;
+    border-radius:16px;
+    background:white;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    color:#94a3b8;
+    border:1px solid #e5e7eb;
+}
+
+.day small{
+    font-size:10px;
+    margin-top:2px;
+}
+
+.day.present{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.day.absent{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.day.leave{
+    background:#fef3c7;
+    color:#d97706;
+}
+
+/* TABLES */
+
+.table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+.table th{
+    background:#f8fafc;
+    color:#475569;
+    padding:13px;
+    text-align:left;
+}
+
+.table td{
+    padding:13px;
+    border-top:1px solid #e5e7eb;
+}
+
+.status-p{
+    color:#16a34a;
+    font-weight:900;
+}
+
+.status-a{
+    color:#dc2626;
+    font-weight:900;
+}
+
+.status-l{
+    color:#f59e0b;
+    font-weight:900;
+}
+
+/* SALARY */
+
+.salary-section{
+    margin-top:24px;
+    background:white;
+    border-radius:30px;
+    padding:22px;
+    box-shadow:0 12px 35px rgba(0,0,0,.06);
+}
+
+.salary-title{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px;
+    font-size:20px;
+    font-weight:900;
+}
+
+.salary-table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+
+.salary-table{
+    width:100%;
+    min-width:850px;
+    border-collapse:collapse;
+}
+
+.salary-table th{
+    background:#f8fafc;
+    color:#475569;
+    padding:13px;
+    text-align:left;
+}
+
+.salary-table td{
+    padding:13px;
+    border-top:1px solid #e5e7eb;
+}
+
+.mode-bank{
+    color:#2563eb;
+    font-weight:900;
+}
+
+.mode-cash{
+    color:#16a34a;
+    font-weight:900;
+}
+
+.salary-mini-box{
+    margin-top:22px;
+    background:#f8fafc;
+    border-radius:24px;
+    padding:18px;
+}
+
+.salary-mini-title{
+    font-weight:900;
+    margin-bottom:14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+/* MODALS */
+
+.modal-bg,
+.modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:9999;
+}
+
+.modal,
+.modal-box{
+    width:760px;
+    max-width:94%;
+    background:white;
+    border-radius:30px;
+    padding:28px;
+    box-shadow:0 25px 70px rgba(0,0,0,.2);
+}
+
+.modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:20px;
+}
+
+.close{
+    border:none;
+    background:#f1f5f9;
+    width:42px;
+    height:42px;
+    border-radius:14px;
+    font-size:22px;
+    cursor:pointer;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    font-size:13px;
+    color:#475569;
+    font-weight:900;
+    margin-bottom:8px;
+}
+
+.input-group input,
+.input-group select{
+    padding:13px;
+    border:1px solid #d1d5db;
+    border-radius:14px;
+    outline:none;
+}
+
+.save{
+    margin-top:18px;
+    width:100%;
+    border:none;
+    background:#2563eb;
+    color:white;
+    padding:14px;
+    border-radius:16px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.salary-save{
+    background:#16a34a;
+}
+
+/* RESPONSIVE */
 
 @media(max-width:1100px){
-.sidebar{position:relative;width:100%;height:auto}
-.container{flex-direction:column}
-.main{margin-left:0;width:100%}
-.layout,.kpis,.details,.form-grid{grid-template-columns:1fr}
+    .sidebar{
+        position:relative;
+        width:100%;
+        height:auto;
+    }
+
+    .container{
+        flex-direction:column;
+    }
+
+    .main{
+        margin-left:0;
+        width:100%;
+    }
+
+    .layout,
+    .kpis,
+    .details,
+    .form-grid{
+        grid-template-columns:1fr;
+    }
 }
 </style>
 </head>
@@ -142,11 +752,24 @@ Dashboard
 Reports
 </a>
 
-<a class="active" href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+<a class="active" href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
 
 <a href="/backup-database">
 <i class="fa-solid fa-database"></i>
 Backup
+</a>
+
+<a href="/full-system-export">
+    <i class="fa-solid fa-file-export"></i>
+    Full Data Excel
+</a>
+
+<a href="/analytics">
+    <i class="fa-solid fa-chart-pie"></i>
+    Analytics
 </a>
 
 <a href="/logout">
@@ -159,10 +782,9 @@ Logout
 
 {% if session.get("role") == "manager" %}
 
-<a class="active" href="/dashboard">
+<a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
-
 </a>
 
 <a href="/daily-closing">
@@ -190,7 +812,7 @@ Credit Transport
 Lube Stock
 </a>
 
-<a href="/attendance">
+<a class="active" href="/attendance">
 <i class="fa-solid fa-user-check"></i>
 Attendance
 </a>
@@ -220,10 +842,11 @@ Logout
 <div class="topbar">
 <div>
 <h1>Attendance Register</h1>
-<p>Employee attendance calendar with P / A / L status</p>
+<p>Employee attendance calendar with salary payment history</p>
 </div>
 
 <div class="top-actions">
+
 <div class="search">
 <i class="fa-solid fa-magnifying-glass"></i>
 <input id="empSearch" placeholder="Search employee, ID, department...">
@@ -231,36 +854,71 @@ Logout
 
 {% if session.get("role") == "manager" %}
 <button class="add-member-btn" onclick="openAddModal()">
-<i class="fa-solid fa-plus"></i> Add Member
+<i class="fa-solid fa-plus"></i>
+Add Member
+</button>
+
+<button class="salary-btn" onclick="openSalaryModal()">
+<i class="fa-solid fa-money-bill-wave"></i>
+Monthly Salary
 </button>
 {% endif %}
 
 {% if session.get("role") == "admin" %}
 <a href="/export-attendance-excel" class="export-btn">
-<i class="fa-solid fa-file-excel"></i> Export
+<i class="fa-solid fa-file-excel"></i>
+Export
 </a>
 {% endif %}
+
 </div>
 </div>
 
 <div class="kpis">
-<div class="kpi"><span>Total Staff</span><h2>{{ total_staff }}</h2></div>
-<div class="kpi"><span>Present Today</span><h2 style="color:#16a34a">{{ present_today }}</h2></div>
-<div class="kpi"><span>Absent Today</span><h2 style="color:#dc2626">{{ absent_today }}</h2></div>
-<div class="kpi"><span>Leave Today</span><h2 style="color:#f59e0b">{{ leave_today }}</h2></div>
+<div class="kpi">
+<span>Total Staff</span>
+<h2>{{ total_staff }}</h2>
+</div>
+
+<div class="kpi">
+<span>Present Today</span>
+<h2 style="color:#16a34a">{{ present_today }}</h2>
+</div>
+
+<div class="kpi">
+<span>Absent Today</span>
+<h2 style="color:#dc2626">{{ absent_today }}</h2>
+</div>
+
+<div class="kpi">
+<span>Leave Today</span>
+<h2 style="color:#f59e0b">{{ leave_today }}</h2>
+</div>
 </div>
 
 <div class="layout">
 
 <div class="panel">
-<div class="panel-title"><i class="fa-solid fa-users"></i> Employees</div>
+<div class="panel-title">
+<i class="fa-solid fa-users"></i>
+Employees
+</div>
 
 <div class="employee-list">
+
 {% for staff in staff_list %}
-<div class="emp-card" data-target="profile-{{ staff['id'] }}" data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['department'] }} {{ staff['role'] }}">
+
+<div
+class="emp-card"
+data-target="profile-{{ staff['id'] }}"
+data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['department'] }} {{ staff['role'] }}">
 
 <div class="emp-top">
-<div class="avatar">{{ staff["staff_name"][:1] }}</div>
+
+<div class="avatar">
+{{ staff["staff_name"][:1] }}
+</div>
+
 <div class="emp-info">
 <h3>{{ staff["staff_name"] }}</h3>
 <p>{{ staff["emp_id"] or "-" }} • {{ staff["department"] or "-" }}</p>
@@ -271,6 +929,7 @@ Logout
 {% else %}
 <span class="badge inactive-badge">Inactive</span>
 {% endif %}
+
 </div>
 
 <div class="emp-meta">
@@ -279,7 +938,9 @@ Logout
 </div>
 
 {% if session.get("role") == "manager" %}
+
 <div class="mark-row">
+
 <form method="POST" action="/save-attendance">
 <input type="hidden" name="date" value="{{ current_date }}">
 <input type="hidden" name="staff_name" value="{{ staff['staff_name'] }}">
@@ -300,16 +961,20 @@ Logout
 <input type="hidden" name="attendance_status" value="Leave">
 <button class="lbtn" type="submit">L</button>
 </form>
+
 </div>
 
 <div class="mini-actions">
 <a href="/edit-staff/{{ staff['id'] }}" class="edit">Edit</a>
 <a href="/delete-staff/{{ staff['id'] }}" class="delete" onclick="return confirm('Delete employee?')">Delete</a>
 </div>
+
 {% endif %}
 
 </div>
+
 {% endfor %}
+
 </div>
 </div>
 
@@ -319,69 +984,134 @@ Logout
 <div>
 <i class="fa-solid fa-address-card"></i>
 <h2>Select Employee</h2>
-<p>Click an employee from the left side to view full attendance calendar.</p>
+<p>Click an employee from the left side to view full attendance calendar and salary history.</p>
 </div>
 </div>
 
 {% for staff in staff_list %}
+
 <div class="profile" id="profile-{{ staff['id'] }}">
 
 <div class="profile-head">
 <div class="profile-user">
-<div class="big-avatar">{{ staff["staff_name"][:1] }}</div>
+
+<div class="big-avatar">
+{{ staff["staff_name"][:1] }}
+</div>
+
 <div>
 <h2>{{ staff["staff_name"] }}</h2>
 <p>{{ staff["emp_id"] or "-" }} • {{ staff["role"] or "-" }}</p>
 </div>
+
 </div>
 </div>
 
 <div class="details">
-<div class="detail"><span>Department</span><b>{{ staff["department"] or "-" }}</b></div>
-<div class="detail"><span>Shift</span><b>{{ staff["shift"] or "-" }}</b></div>
-<div class="detail"><span>Joined</span><b>{{ staff["joined_date"] or "-" }}</b></div>
-<div class="detail"><span>Bank A/C</span><b>{{ staff["bank_account"] or "-" }}</b></div>
+
+<div class="detail">
+<span>Department</span>
+<b>{{ staff["department"] or "-" }}</b>
+</div>
+
+<div class="detail">
+<span>Shift</span>
+<b>{{ staff["shift"] or "-" }}</b>
+</div>
+
+<div class="detail">
+<span>Joined</span>
+<b>{{ staff["joined_date"] or "-" }}</b>
+</div>
+
+<div class="detail">
+<span>Bank A/C</span>
+<b>{{ staff["bank_account"] or "-" }}</b>
+</div>
+
 </div>
 
 <div class="stats">
-<div class="stat sp"><span>Present</span><b>{{ staff_attendance[staff["staff_name"]]["present"] }}</b></div>
-<div class="stat sa"><span>Absent</span><b>{{ staff_attendance[staff["staff_name"]]["absent"] }}</b></div>
-<div class="stat sl"><span>Leave</span><b>{{ staff_attendance[staff["staff_name"]]["leave"] }}</b></div>
+
+<div class="stat sp">
+<span>Present</span>
+<b>{{ staff_attendance[staff["staff_name"]]["present"] }}</b>
+</div>
+
+<div class="stat sa">
+<span>Absent</span>
+<b>{{ staff_attendance[staff["staff_name"]]["absent"] }}</b>
+</div>
+
+<div class="stat sl">
+<span>Leave</span>
+<b>{{ staff_attendance[staff["staff_name"]]["leave"] }}</b>
+</div>
+
 </div>
 
 <div class="calendar-box">
-<div class="month-title">Attendance Calendar</div>
+
+<div class="month-title">
+Attendance Calendar
+</div>
 
 <div class="week-head">
-<div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+<div>Mon</div>
+<div>Tue</div>
+<div>Wed</div>
+<div>Thu</div>
+<div>Fri</div>
+<div>Sat</div>
+<div>Sun</div>
 </div>
 
 <div class="calendar">
+
 {% for r in staff_attendance[staff["staff_name"]]["records"][:31] %}
+
 {% if r["attendance_status"] == "Present" %}
-<div class="day present">{{ r["date"][-2:] }}<small>P</small></div>
+<div class="day present">
+{{ r["date"][-2:] }}
+<small>P</small>
+</div>
 {% elif r["attendance_status"] == "Absent" %}
-<div class="day absent">{{ r["date"][-2:] }}<small>A</small></div>
+<div class="day absent">
+{{ r["date"][-2:] }}
+<small>A</small>
+</div>
 {% else %}
-<div class="day leave">{{ r["date"][-2:] }}<small>L</small></div>
+<div class="day leave">
+{{ r["date"][-2:] }}
+<small>L</small>
+</div>
 {% endif %}
+
 {% endfor %}
+
 </div>
 </div>
 
 <table class="table">
+
 <thead>
 <tr>
 <th>Date</th>
 <th>Status</th>
+
 {% if session.get("role") == "manager" %}
 <th>Action</th>
 {% endif %}
+
 </tr>
 </thead>
+
 <tbody>
+
 {% for r in staff_attendance[staff["staff_name"]]["records"] %}
+
 <tr>
+
 <td>{{ r["date"] }}</td>
 
 {% if r["attendance_status"] == "Present" %}
@@ -398,28 +1128,177 @@ Logout
 <a href="/delete-attendance/{{ r['id'] }}" class="delete" onclick="return confirm('Delete attendance?')">Delete</a>
 </td>
 {% endif %}
+
 </tr>
+
 {% endfor %}
+
+</tbody>
+
+</table>
+
+<div class="salary-mini-box">
+
+<div class="salary-mini-title">
+<i class="fa-solid fa-money-check-dollar"></i>
+Salary History
+</div>
+
+<div class="salary-table-wrap">
+
+<table class="salary-table">
+
+<thead>
+<tr>
+<th>Date</th>
+<th>Month</th>
+<th>Mode</th>
+<th>Bank Account</th>
+<th>Amount</th>
+<th>Remarks</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% set salary_map = salary_by_staff|default({}) %}
+{% for s in salary_map.get(staff["staff_name"], []) %}
+
+<tr>
+<td>{{ s["payment_date"] }}</td>
+<td>{{ s["month_name"] }}</td>
+
+{% if s["payment_mode"] == "Bank" %}
+<td class="mode-bank">Bank</td>
+{% else %}
+<td class="mode-cash">Cash</td>
+{% endif %}
+
+<td>{{ s["bank_account"] or "-" }}</td>
+<td>₹ {{ "%.2f"|format(s["amount"] or 0) }}</td>
+<td>{{ s["remarks"] or "-" }}</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</div>
+
+<div class="salary-section">
+
+<div class="salary-title">
+<i class="fa-solid fa-receipt"></i>
+All Salary Payment History
+</div>
+
+<div class="salary-table-wrap">
+
+<table class="salary-table">
+
+<thead>
+<tr>
+<th>Date</th>
+<th>Month</th>
+<th>Employee</th>
+<th>Mode</th>
+<th>Bank Account</th>
+<th>Amount</th>
+<th>Remarks</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for s in salaries|default([]) %}
+
+<tr>
+
+<td>{{ s["payment_date"] }}</td>
+
+<td>{{ s["month_name"] }}</td>
+
+<td>{{ s["employee_name"] }}</td>
+
+{% if s["payment_mode"] == "Bank" %}
+<td class="mode-bank">Bank</td>
+{% else %}
+<td class="mode-cash">Cash</td>
+{% endif %}
+
+<td>{{ s["bank_account"] or "-" }}</td>
+
+<td>₹ {{ "%.2f"|format(s["amount"] or 0) }}</td>
+
+<td>{{ s["remarks"] or "-" }}</td>
+
+{% if session.get("role") == "manager" %}
+<td>
+
+<div class="salary-action-flex">
+
+<a
+href="/edit-salary/{{ s['id'] }}"
+class="salary-edit">
+
+Edit
+
+</a>
+
+<a
+href="/delete-salary/{{ s['id'] }}"
+class="salary-delete"
+onclick="return confirm('Delete this salary payment?')">
+
+Delete
+
+</a>
+
+</div>
+
+</td>
+{% endif %}
+
+</tr>
+
+{% endfor %}
+
 </tbody>
 </table>
 
 </div>
-{% endfor %}
 
 </div>
 
-</div>
 </main>
 </div>
 
+<!-- ADD MEMBER MODAL -->
+
 <div class="modal-bg" id="addModal">
+
 <div class="modal">
+
 <div class="modal-head">
 <h2>Add Employee</h2>
 <button class="close" onclick="closeAddModal()">×</button>
 </div>
 
 <form method="POST" action="/save-staff">
+
 <div class="form-grid">
 
 <div class="input-group">
@@ -487,18 +1366,131 @@ Logout
 
 </div>
 
-<button class="save" type="submit">Save Employee</button>
+<button class="save" type="submit">
+Save Employee
+</button>
+
 </form>
+
+</div>
+</div>
+
+<!-- SALARY MODAL -->
+
+<div class="modal-overlay" id="salaryModal">
+
+<div class="modal-box">
+
+<div class="modal-head">
+<h2>
+<i class="fa-solid fa-money-bill-wave"></i>
+Monthly Salary Payment
+</h2>
+<button class="close" onclick="closeSalaryModal()">×</button>
+</div>
+
+<form method="POST" action="/save-salary-payment">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Member</label>
+
+<select id="salaryEmployee" name="emp_id" required>
+
+<option value="">
+Select Employee
+</option>
+
+{% for staff in staff_list %}
+
+<option
+value="{{ staff['emp_id'] }}"
+data-name="{{ staff['staff_name'] }}"
+data-bank="{{ staff['bank_account'] or '' }}">
+
+{{ staff["emp_id"] or "-" }} - {{ staff["staff_name"] }}
+
+</option>
+
+{% endfor %}
+
+</select>
+</div>
+
+<input type="hidden" name="employee_name" id="salaryEmployeeName">
+
+<div class="input-group">
+<label>Month</label>
+<input type="month" name="month_name" required>
+</div>
+
+<div class="input-group">
+<label>Payment Date</label>
+<input type="date" name="payment_date" required>
+</div>
+
+<div class="input-group">
+<label>Payment Mode</label>
+
+<select name="payment_mode" id="paymentMode" required>
+<option value="Cash">Cash</option>
+<option value="Bank">Bank</option>
+</select>
+
+</div>
+
+<div class="input-group" id="bankSection" style="display:none;">
+<label>Bank Account</label>
+<input type="text" name="bank_account" id="bankAccount" readonly>
+</div>
+
+<div class="input-group">
+<label>Amount</label>
+<input type="number" step="0.01" name="amount" required>
+</div>
+
+<div class="input-group">
+<label>Remarks</label>
+<input type="text" name="remarks" placeholder="Optional">
+</div>
+
+</div>
+
+<button class="save salary-save" type="submit">
+Save Salary Payment
+</button>
+
+</form>
+
 </div>
 </div>
 
 <script>
-function openAddModal(){document.getElementById("addModal").style.display="flex"}
-function closeAddModal(){document.getElementById("addModal").style.display="none"}
+function openAddModal(){
+    document.getElementById("addModal").style.display="flex";
+}
+
+function closeAddModal(){
+    document.getElementById("addModal").style.display="none";
+}
+
+function openSalaryModal(){
+    document.getElementById("salaryModal").style.display="flex";
+    setSalaryEmployeeData();
+}
+
+function closeSalaryModal(){
+    document.getElementById("salaryModal").style.display="none";
+}
 
 document.querySelectorAll(".emp-card").forEach(function(card){
+
     card.addEventListener("click",function(e){
-        if(e.target.tagName==="BUTTON" || e.target.tagName==="A") return;
+
+        if(e.target.tagName==="BUTTON" || e.target.tagName==="A"){
+            return;
+        }
 
         document.querySelectorAll(".emp-card").forEach(c=>c.classList.remove("selected"));
         card.classList.add("selected");
@@ -506,16 +1498,99 @@ document.querySelectorAll(".emp-card").forEach(function(card){
         document.getElementById("emptyPanel").style.display="none";
         document.querySelectorAll(".profile").forEach(p=>p.classList.remove("active"));
 
-        document.getElementById(card.dataset.target).classList.add("active");
+        const target = document.getElementById(card.dataset.target);
+
+        if(target){
+            target.classList.add("active");
+        }
+
     });
+
 });
 
-document.getElementById("empSearch").addEventListener("input",function(){
-    const value=this.value.toLowerCase();
-    document.querySelectorAll(".emp-card").forEach(function(card){
-        const data=(card.dataset.search || "").toLowerCase();
-        card.style.display=data.includes(value) ? "block" : "none";
+const empSearch = document.getElementById("empSearch");
+
+if(empSearch){
+
+    empSearch.addEventListener("input",function(){
+
+        const value = this.value.toLowerCase();
+
+        document.querySelectorAll(".emp-card").forEach(function(card){
+
+            const data = (card.dataset.search || "").toLowerCase();
+
+            card.style.display = data.includes(value) ? "block" : "none";
+
+        });
+
     });
+
+}
+
+const paymentMode = document.getElementById("paymentMode");
+const bankSection = document.getElementById("bankSection");
+const salaryEmployee = document.getElementById("salaryEmployee");
+const bankAccount = document.getElementById("bankAccount");
+const salaryEmployeeName = document.getElementById("salaryEmployeeName");
+
+function setSalaryEmployeeData(){
+
+    if(!salaryEmployee){
+        return;
+    }
+
+    const selected = salaryEmployee.options[salaryEmployee.selectedIndex];
+
+    if(!selected){
+        return;
+    }
+
+    bankAccount.value = selected.dataset.bank || "";
+    salaryEmployeeName.value = selected.dataset.name || "";
+
+    if(paymentMode.value === "Bank"){
+        bankSection.style.display = "flex";
+    }else{
+        bankSection.style.display = "none";
+        bankAccount.value = "";
+    }
+}
+
+if(paymentMode){
+
+    paymentMode.addEventListener("change", function(){
+
+        if(this.value === "Bank"){
+            bankSection.style.display = "flex";
+            setSalaryEmployeeData();
+        }else{
+            bankSection.style.display = "none";
+            bankAccount.value = "";
+        }
+
+    });
+
+}
+
+if(salaryEmployee){
+
+    salaryEmployee.addEventListener("change", function(){
+        setSalaryEmployeeData();
+    });
+
+}
+
+window.addEventListener("click", function(e){
+
+    if(e.target.classList.contains("modal-bg")){
+        e.target.style.display="none";
+    }
+
+    if(e.target.classList.contains("modal-overlay")){
+        e.target.style.display="none";
+    }
+
 });
 </script>
 

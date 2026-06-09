@@ -1,61 +1,301 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Edit Transporter - Sai Fuel Mart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<meta charset="UTF-8">
+<title>Edit Transporter</title>
+
+<link rel="stylesheet"
+href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#f1f5f9;
+    padding:40px;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+}
+
+.card{
+    background:white;
+    border-radius:30px;
+    padding:30px;
+    box-shadow:0 10px 35px rgba(0,0,0,.06);
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:25px;
+}
+
+.header h1{
+    font-size:32px;
+    color:#07120C;
+}
+
+.back-btn{
+    text-decoration:none;
+    background:#07120C;
+    color:white;
+    padding:12px 18px;
+    border-radius:14px;
+    font-weight:700;
+}
+
+.summary{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:15px;
+    margin-bottom:25px;
+}
+
+.summary-box{
+    background:#f8fafc;
+    border-radius:18px;
+    padding:18px;
+}
+
+.summary-box span{
+    display:block;
+    font-size:12px;
+    color:#64748b;
+    margin-bottom:8px;
+}
+
+.summary-box h3{
+    font-size:22px;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+}
+
+.input-group{
+    display:flex;
+    flex-direction:column;
+}
+
+.input-group label{
+    font-size:13px;
+    font-weight:700;
+    margin-bottom:8px;
+    color:#475569;
+}
+
+.input-group input,
+.input-group select{
+    height:48px;
+    border:1px solid #dbe2ea;
+    border-radius:14px;
+    padding:0 14px;
+    outline:none;
+}
+
+.save-btn{
+    margin-top:25px;
+    width:100%;
+    height:52px;
+    border:none;
+    border-radius:16px;
+    background:#16a34a;
+    color:white;
+    font-size:15px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.save-btn:hover{
+    opacity:.95;
+}
+
+@media(max-width:768px){
+
+    .summary{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
+
+}
+
+</style>
+
 </head>
 
 <body>
 
-<div class="main-content">
+<div class="container">
 
-    <div class="topbar">
-        <div>
-            <h1>Edit Transporter</h1>
-            <p>Manual balance update</p>
-        </div>
-    </div>
+<div class="card">
 
-    <form method="POST" action="/update-transporter/{{ transporter['id'] }}" class="box">
+<div class="header">
 
-        <div class="form-grid">
+<h1>
+<i class="fa-solid fa-truck"></i>
+Edit Transporter
+</h1>
 
-            <div class="input-group">
-                <label>Party Name</label>
-                <input type="text" name="party_name" value="{{ transporter['party_name'] }}" required>
-            </div>
+<a href="/credit-transport" class="back-btn">
 
-            <div class="input-group">
-                <label>Opening Balance</label>
-                <input type="number" step="0.01" name="opening_balance" value="{{ transporter['opening_balance'] }}">
-            </div>
+<i class="fa-solid fa-arrow-left"></i>
+Back
 
-            <div class="input-group">
-                <label>Credit Given</label>
-                <input type="number" step="0.01" name="credit_given" value="{{ transporter['credit_given'] }}">
-            </div>
+</a>
 
-            <div class="input-group">
-                <label>Payment Received</label>
-                <input type="number" step="0.01" name="payment_received" value="{{ transporter['payment_received'] }}">
-            </div>
+</div>
 
-            <div class="input-group">
-                <label>Status</label>
-                <select name="status">
-                    <option {% if transporter['status'] == 'Active' %}selected{% endif %}>Active</option>
-                    <option {% if transporter['status'] == 'Inactive' %}selected{% endif %}>Inactive</option>
-                </select>
-            </div>
+<div class="summary">
 
-        </div>
+<div class="summary-box">
+<span>Fuel Credit</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["fuel_credit"] or 0) }}
+</h3>
+</div>
 
-        <br>
+<div class="summary-box">
+<span>Lube Credit</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["lube_credit"] or 0) }}
+</h3>
+</div>
 
-        <button class="save-btn-top" type="submit">Update Transporter</button>
-        <a href="/credit-transport" class="add-btn">Back</a>
+<div class="summary-box">
+<span>Received</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["payment_received"] or 0) }}
+</h3>
+</div>
 
-    </form>
+<div class="summary-box">
+<span>Balance Due</span>
+<h3>
+₹ {{ "%.2f"|format(transporter["balance_due"] or 0) }}
+</h3>
+</div>
+
+</div>
+
+<form
+method="POST"
+action="/update-transporter/{{ transporter['id'] }}">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Party Name</label>
+<input
+type="text"
+name="party_name"
+value="{{ transporter['party_name'] }}"
+required>
+</div>
+
+<div class="input-group">
+<label>Mobile No</label>
+<input
+type="text"
+name="mobile"
+value="{{ transporter['mobile'] or '' }}">
+</div>
+
+<div class="input-group">
+<label>Vehicle No</label>
+<input
+type="text"
+name="vehicle_no"
+value="{{ transporter['vehicle_no'] or '' }}">
+</div>
+
+<div class="input-group">
+<label>Status</label>
+
+<select name="status">
+
+<option value="Active"
+{% if transporter["status"]=="Active" %}
+selected
+{% endif %}
+>
+Active
+</option>
+
+<option value="Inactive"
+{% if transporter["status"]=="Inactive" %}
+selected
+{% endif %}
+>
+Inactive
+</option>
+
+</select>
+
+</div>
+
+<div class="input-group">
+<label>Fuel Credit</label>
+<input
+type="number"
+step="0.01"
+value="{{ transporter['fuel_credit'] or 0 }}"
+readonly>
+</div>
+
+<div class="input-group">
+<label>Lube Credit</label>
+<input
+type="number"
+step="0.01"
+value="{{ transporter['lube_credit'] or 0 }}"
+readonly>
+</div>
+
+<div class="input-group">
+<label>Total Credit</label>
+<input
+type="number"
+step="0.01"
+value="{{ transporter['credit_given'] or 0 }}"
+readonly>
+</div>
+
+<div class="input-group">
+<label>Balance Due</label>
+<input
+type="number"
+step="0.01"
+value="{{ transporter['balance_due'] or 0 }}"
+readonly>
+</div>
+
+</div>
+
+<button class="save-btn" type="submit">
+
+<i class="fa-solid fa-floppy-disk"></i>
+Update Transporter
+
+</button>
+
+</form>
+
+</div>
 
 </div>
 

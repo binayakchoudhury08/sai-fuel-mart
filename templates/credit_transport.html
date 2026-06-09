@@ -1,17 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Credit Transport - Sai Fuel Mart</title>
 
-<title>Credit Transport</title>
-
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
 <style>
-
 *{
     margin:0;
     padding:0;
@@ -21,6 +16,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 
 body{
     background:#f3f4f6;
+    color:#0f172a;
 }
 
 .container{
@@ -28,17 +24,16 @@ body{
     min-height:100vh;
 }
 
-/* SIDEBAR */
-
 .sidebar{
     width:270px;
     background:#07120C;
     color:white;
-    padding:24px 18px;
+    padding:26px 18px;
     position:fixed;
-    left:0;
     top:0;
+    left:0;
     bottom:0;
+    overflow-y:auto;
 }
 
 .logo{
@@ -47,27 +42,30 @@ body{
 
 .logo h2{
     font-size:24px;
-    margin-bottom:6px;
+    font-weight:900;
 }
 
 .logo p{
     color:#94a3b8;
-    font-size:12px;
+    font-size:13px;
+    margin-top:5px;
 }
 
 .sidebar nav{
     display:flex;
     flex-direction:column;
-    gap:10px;
+    gap:8px;
 }
 
 .sidebar nav a{
     color:#d1d5db;
     text-decoration:none;
     padding:14px 16px;
-    border-radius:16px;
-    transition:.2s;
-    font-weight:600;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-weight:700;
 }
 
 .sidebar nav a:hover,
@@ -76,19 +74,19 @@ body{
     color:white;
 }
 
-/* MAIN */
-
 .main-content{
     margin-left:270px;
     width:calc(100% - 270px);
     padding:30px;
+    min-height:100vh;
+    overflow:hidden;
 }
 
 .topbar{
     display:flex;
     justify-content:space-between;
     align-items:center;
-    margin-bottom:28px;
+    margin-bottom:24px;
 }
 
 .topbar h1{
@@ -98,35 +96,248 @@ body{
 
 .topbar p{
     color:#64748b;
-    margin-top:6px;
+    margin-top:5px;
 }
 
-/* BOX */
+.top-actions{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+}
+
+.primary-btn{
+    border:none;
+    background:#07120C;
+    color:white;
+    padding:13px 18px;
+    border-radius:14px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.green-btn{
+    background:#16a34a;
+}
+
+.dashboard-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:24px;
+}
+
+.stat-card{
+    background:white;
+    border-radius:24px;
+    padding:22px;
+    box-shadow:0 10px 30px rgba(0,0,0,.05);
+}
+
+.stat-card span{
+    font-size:13px;
+    color:#64748b;
+    font-weight:800;
+}
+
+.stat-card h2{
+    font-size:30px;
+    margin-top:10px;
+}
 
 .box{
     background:white;
+    padding:24px;
     border-radius:28px;
-    padding:28px;
-    margin-bottom:28px;
-    box-shadow:0 12px 35px rgba(0,0,0,.05);
+    margin-bottom:24px;
+    box-shadow:0 10px 35px rgba(0,0,0,.05);
+    overflow:hidden;
 }
 
 .box-title{
-    font-size:22px;
-    font-weight:800;
-    margin-bottom:24px;
-    color:#07120C;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:20px;
+    font-weight:900;
+    margin-bottom:20px;
+}
+
+.table-wrapper{
+    width:100%;
+    overflow-x:auto;
+    border-radius:18px;
+}
+
+.entry-table{
+    width:100%;
+    min-width:1200px;
+    border-collapse:collapse;
+    background:white;
+}
+
+.entry-table th{
+    background:#f8fafc;
+    color:#64748b;
+    padding:15px;
+    font-size:13px;
+    text-align:left;
+    white-space:nowrap;
+}
+
+.entry-table td{
+    padding:15px;
+    border-bottom:1px solid #eef2f7;
+    white-space:nowrap;
+    vertical-align:middle;
+}
+
+.party-box{
     display:flex;
     align-items:center;
     gap:12px;
 }
 
-/* GRID */
+.party-avatar{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    background:#07120C;
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+}
+
+.party-box h4{
+    margin:0;
+    font-size:15px;
+}
+
+.party-box p{
+    font-size:12px;
+    color:#64748b;
+    margin-top:3px;
+}
+
+.balance-pill{
+    background:#fee2e2;
+    color:#dc2626;
+    padding:8px 13px;
+    border-radius:999px;
+    font-weight:800;
+}
+
+.action-flex{
+    display:flex;
+    gap:8px;
+    align-items:center;
+}
+
+.edit-btn,
+.delete-btn,
+.history-btn{
+    text-decoration:none;
+    padding:9px 13px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:800;
+    display:inline-block;
+}
+
+.edit-btn{
+    background:#dbeafe;
+    color:#1d4ed8;
+}
+
+.history-btn{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.delete-btn{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.history-header-flex{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+    margin-bottom:18px;
+}
+
+.history-actions{
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+
+#entrySearch{
+    height:42px;
+    width:280px;
+    border:1px solid #dbe2ea;
+    border-radius:12px;
+    padding:0 14px;
+    outline:none;
+}
+
+#toggleHistory{
+    height:42px;
+    border:none;
+    background:#07120C;
+    color:white;
+    padding:0 18px;
+    border-radius:12px;
+    font-weight:800;
+    cursor:pointer;
+}
+
+.modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.45);
+    z-index:9999;
+    align-items:center;
+    justify-content:center;
+}
+
+.modal-box{
+    width:760px;
+    max-width:94%;
+    background:white;
+    border-radius:28px;
+    padding:28px;
+    box-shadow:0 25px 70px rgba(0,0,0,.2);
+}
+
+.modal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:22px;
+}
+
+.modal-head h2{
+    font-size:26px;
+}
+
+.close-btn{
+    border:none;
+    width:42px;
+    height:42px;
+    border-radius:14px;
+    background:#f1f5f9;
+    font-size:22px;
+    cursor:pointer;
+}
 
 .form-grid{
     display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:20px;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
 }
 
 .input-group{
@@ -135,204 +346,75 @@ body{
 }
 
 .input-group label{
-    margin-bottom:10px;
-    font-weight:700;
-    color:#374151;
+    font-size:13px;
+    font-weight:800;
+    color:#475569;
+    margin-bottom:8px;
 }
 
 .input-group input,
 .input-group select{
-    padding:14px;
-    border:1px solid #d1d5db;
+    height:46px;
+    border:1px solid #dbe2ea;
     border-radius:14px;
-    font-size:14px;
-}
-
-/* BUTTONS */
-
-.save-btn{
-    margin-top:24px;
-    background:#16a34a;
-    color:white;
-    border:none;
-    padding:14px 24px;
-    border-radius:14px;
-    cursor:pointer;
-    font-weight:700;
-}
-
-.edit-btn{
-    background:#2563eb;
-    color:white;
-    padding:8px 14px;
-    border-radius:10px;
-    text-decoration:none;
-    font-size:12px;
-}
-
-.delete-btn{
-    background:#dc2626;
-    color:white;
-    padding:8px 14px;
-    border-radius:10px;
-    text-decoration:none;
-    font-size:12px;
-}
-
-/* TABLE */
-
-.table-wrap{
-    overflow:auto;
-}
-
-.entry-table{
-    width:100%;
-    border-collapse:collapse;
-}
-
-.entry-table th{
-    background:#f8fafc;
-    color:#475569;
-    padding:14px;
-    text-align:left;
-}
-
-.entry-table td{
-    padding:14px;
-    border-top:1px solid #e5e7eb;
-}
-
-/* CARDS */
-
-.summary-grid{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:20px;
-}
-
-.summary-card{
-    background:#07120C;
-    color:white;
-    padding:24px;
-    border-radius:22px;
-}
-
-.summary-card span{
-    color:#94a3b8;
-    font-size:14px;
-}
-
-.summary-card h2{
-    margin-top:12px;
-    font-size:30px;
-}
-
-/* ACTION */
-
-.action-flex{
-    display:flex;
-    gap:8px;
-}
-
-@media(max-width:1100px){
-
-    .form-grid{
-        grid-template-columns:1fr 1fr;
-    }
-
-    .summary-grid{
-        grid-template-columns:1fr 1fr;
-    }
-}
-.box{
-    max-width:100%;
-    overflow:hidden;
-}
-
-.title-flex{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:14px;
-    margin-bottom:20px;
-}
-
-.title-actions{
-    display:flex;
-    align-items:center;
-    gap:12px;
-}
-
-.title-actions input{
-    width:260px;
-    padding:10px 14px;
-    border:1px solid #d1d5db;
-    border-radius:12px;
+    padding:0 14px;
     outline:none;
 }
 
-.toggle-btn{
+.save-btn{
+    margin-top:20px;
+    width:100%;
+    height:48px;
     border:none;
-    background:#07120C;
+    border-radius:16px;
+    background:#16a34a;
     color:white;
-    padding:10px 16px;
-    border-radius:12px;
-    font-size:13px;
-    font-weight:800;
+    font-weight:900;
     cursor:pointer;
 }
 
-.toggle-btn:hover{
-    background:#16a34a;
+@media(max-width:1100px){
+    .sidebar{
+        position:relative;
+        width:100%;
+        height:auto;
+    }
+
+    .container{
+        flex-direction:column;
+    }
+
+    .main-content{
+        margin-left:0;
+        width:100%;
+        padding:20px;
+    }
+
+    .dashboard-grid{
+        grid-template-columns:1fr;
+    }
+
+    .form-grid{
+        grid-template-columns:1fr;
+    }
 }
-
 </style>
-
 </head>
 
 <body>
 
 <div class="container">
 
-<!-- SIDEBAR -->
-
 <aside class="sidebar">
 
 <div class="logo">
 <h2>SAI FUEL MART</h2>
-<p>Fueling Your Trust</p>
+<p>FUELING YOUR TRUST</p>
 </div>
 
 <nav>
 
-{% if session.get("role") == "admin" %}
-
-<a class="active" href="/dashboard">
-<i class="fa-solid fa-house"></i>
-Dashboard
-</a>
-
-<a href="/reports">
-<i class="fa-solid fa-chart-line"></i>
-Reports
-</a>
-
-<a href="/backup-database">
-<i class="fa-solid fa-database"></i>
-Backup
-</a>
-
-<a href="/logout">
-<i class="fa-solid fa-right-from-bracket"></i>
-Logout
-</a>
-
-{% endif %}
-
-
-{% if session.get("role") == "manager" %}
-
-<a class="active" href="/dashboard">
+<a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
 </a>
@@ -352,12 +434,15 @@ Nozzle Management
 Tank Level
 </a>
 
-<a href="/credit-transport">
+<a class="active" href="/credit-transport">
 <i class="fa-solid fa-truck"></i>
 Credit Transport
 </a>
 
-<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+<a href="/digital-collection">
+<i class="fa-solid fa-credit-card"></i>
+Digital Collection
+</a>
 
 <a href="/lube-stock">
 <i class="fa-solid fa-bottle-droplet"></i>
@@ -384,13 +469,9 @@ Settings
 Logout
 </a>
 
-{% endif %}
-
 </nav>
 
 </aside>
-
-<!-- MAIN -->
 
 <main class="main-content">
 
@@ -398,287 +479,134 @@ Logout
 
 <div>
 <h1>Credit Transport</h1>
-<p>Manage transporter credits, payment and HSD entries</p>
+<p>Transporter credit, HSD register, receipts and ledger history</p>
 </div>
 
-</div>
+<div class="top-actions">
 
-<!-- SUMMARY -->
-
-<div class="summary-grid">
-
-<div class="summary-card">
-<span>Total Transporters</span>
-<h2>{{ transporters|length }}</h2>
-</div>
-
-<div class="summary-card">
-<span>Total Entries</span>
-<h2>{{ entries|length }}</h2>
-</div>
-
-<div class="summary-card">
-<span>HSD Rate</span>
-<h2>₹ {{ hsd_rate }}</h2>
-</div>
-
-<div class="summary-card">
-<span>Status</span>
-<h2>Active</h2>
-</div>
-
-</div>
-
-<br>
-
-<!-- ADD TRANSPORTER -->
-
-<div class="box">
-
-<div class="box-title">
+<button class="primary-btn green-btn" onclick="openModal('addTransporterModal')">
 <i class="fa-solid fa-plus"></i>
 Add Transporter
-</div>
-
-<form method="POST"
-action="/save-transporter">
-
-<div class="form-grid">
-
-<div class="input-group">
-<label>Transporter Name</label>
-<input type="text"
-name="party_name"
-required>
-</div>
-
-<div class="input-group">
-<label>Opening Balance</label>
-<input type="number"
-step="0.01"
-name="opening_balance"
-value="0">
-</div>
-
-<div class="input-group">
-<label>Status</label>
-
-<select name="status">
-
-<option value="Active">
-Active
-</option>
-
-<option value="Inactive">
-Inactive
-</option>
-
-</select>
-
-</div>
-
-</div>
-
-<button class="save-btn">
-Save Transporter
 </button>
 
-</form>
-
-</div>
-
-<!-- TRANSPORT ENTRY -->
-
-<div class="box">
-
-<div class="box-title">
-<i class="fa-solid fa-truck-fast"></i>
-Transport Entry Register
-</div>
-
-<form method="POST"
-action="/save-transport-entry">
-
-<div class="form-grid">
-
-<div class="input-group">
-<label>Date</label>
-<input type="date"
-name="entry_date"
-required>
-</div>
-
-<div class="input-group">
-<label>Transporter</label>
-
-<select name="transporter_name">
-
-{% for t in transporters %}
-
-<option value="{{ t['party_name'] }}">
-{{ t["party_name"] }}
-</option>
-
-{% endfor %}
-
-</select>
-
-</div>
-
-<div class="input-group">
-<label>Challan No.</label>
-<input type="text"
-name="challan_no">
-</div>
-
-<div class="input-group">
-<label>Vehicle No.</label>
-<input type="text"
-name="vehicle_no">
-</div>
-
-<div class="input-group">
-<label>Slip No.</label>
-<input type="text"
-name="slip_no">
-</div>
-
-<div class="input-group">
-<label>HSD Qty</label>
-<input type="number"
-step="0.01"
-name="hsd_qty"
-id="hsd_qty">
-</div>
-
-<div class="input-group">
-<label>Rate</label>
-<input type="number"
-step="0.01"
-name="rate"
-id="rate"
-value="{{ hsd_rate }}">
-</div>
-
-<div class="input-group">
-<label>HSD Amount</label>
-<input type="number"
-step="0.01"
-id="hsd_amount"
-readonly>
-</div>
-
-<div class="input-group">
-<label>Cash Taken</label>
-<input type="number"
-step="0.01"
-name="cash_taken"
-id="cash_taken">
-</div>
-
-<div class="input-group">
-<label>Total Amount</label>
-<input type="number"
-step="0.01"
-id="total_amount"
-readonly>
-</div>
-
-</div>
-
-<button class="save-btn">
-Save Entry
+<button class="primary-btn" onclick="openModal('entryModal')">
+<i class="fa-solid fa-file-circle-plus"></i>
+Transport Entry
 </button>
 
-</form>
+<button class="primary-btn" onclick="openModal('receiveModal')">
+<i class="fa-solid fa-hand-holding-dollar"></i>
+Receive Amount
+</button>
 
 </div>
 
-<!-- TRANSPORTERS -->
+</div>
+
+<div class="dashboard-grid">
+
+<div class="stat-card">
+<span>Total Transporters</span>
+<h2>{{ total_transporters or 0 }}</h2>
+</div>
+
+<div class="stat-card">
+<span>Today's Entries</span>
+<h2>{{ today_entries or 0 }}</h2>
+</div>
+
+<div class="stat-card">
+<span>Current HSD Rate</span>
+<h2>₹ {{ "%.2f"|format(hsd_rate or 0) }}</h2>
+</div>
+
+<div class="stat-card">
+<span>Total Credit</span>
+<h2>₹ {{ "%.2f"|format(total_credit or 0) }}</h2>
+</div>
+
+</div>
 
 <div class="box">
-
-<div class="title-flex">
 
 <div class="box-title">
 <i class="fa-solid fa-users"></i>
-Transporters
+Transporter Credit Summary
 </div>
 
-<div class="title-actions">
-<input type="text" id="transporterSearch" placeholder="Search transporter...">
+<div class="table-wrapper">
 
-<button class="toggle-btn" onclick="toggleTransporters()" id="toggleTransportersBtn">
-<i class="fa-solid fa-eye-slash"></i> Hide Data
-</button>
-</div>
+<table class="entry-table">
 
-</div>
-
-<div class="table-wrap">
-
-<table class="entry-table" id="transportersTable">
-
+<thead>
 <tr>
-
-<th>Name</th>
-<th>Opening</th>
-<th>Credit</th>
+<th>Party</th>
+<th>Fuel Credit</th>
+<th>Lube Credit</th>
+<th>Total Credit</th>
 <th>Received</th>
 <th>Balance</th>
-<th>Status</th>
 <th>Action</th>
-
 </tr>
+</thead>
 
-{% for row in transporters %}
+<tbody>
+
+{% for t in transporters %}
 
 <tr>
 
-<td>{{ row["party_name"] }}</td>
+<td>
+<div class="party-box">
+<div class="party-avatar">
+{{ t["party_name"][0] }}
+</div>
+<div>
+<h4>{{ t["party_name"] }}</h4>
+<p>{{ t["vehicle_no"] or "-" }}</p>
+</div>
+</div>
+</td>
+
+<td>₹ {{ "%.2f"|format(t["fuel_credit"] or 0) }}</td>
+
+<td>₹ {{ "%.2f"|format(t["lube_credit"] or 0) }}</td>
+
+<td>₹ {{ "%.2f"|format(t["credit_given"] or 0) }}</td>
+
+<td>₹ {{ "%.2f"|format(t["payment_received"] or 0) }}</td>
 
 <td>
-₹ {{ row["opening_balance"] }}
+<span class="balance-pill">
+₹ {{ "%.2f"|format(t["balance_due"] or 0) }}
+</span>
 </td>
 
 <td>
-₹ {{ row["credit_given"] }}
-</td>
-
-<td>
-₹ {{ row["payment_received"] }}
-</td>
-
-<td>
-<b>
-₹ {{ row["balance_due"] }}
-</b>
-</td>
-
-<td>{{ row["status"] }}</td>
-
-<td>
-
 <div class="action-flex">
 
-<a href="/edit-transporter/{{ row['id'] }}"
-class="edit-btn">
+<a href="/transporter-history/{{ t['id'] }}" class="history-btn">
+History
+</a>
+
+<a href="/edit-transporter/{{ t['id'] }}" class="edit-btn">
 Edit
 </a>
 
-<a href="/delete-transporter/{{ row['id'] }}"
+<a href="/delete-transporter/{{ t['id'] }}"
 class="delete-btn"
 onclick="return confirm('Delete transporter?')">
 Delete
 </a>
 
 </div>
-
 </td>
 
 </tr>
 
 {% endfor %}
+
+</tbody>
 
 </table>
 
@@ -686,93 +614,94 @@ Delete
 
 </div>
 
-<!-- ENTRY REPORT -->
+<div class="box history-box">
 
-<div class="box">
+<div class="history-header-flex">
 
-<div class="title-flex">
-
-<div class="box-title">
-<i class="fa-solid fa-table"></i>
+<div class="box-title" style="margin-bottom:0;">
+<i class="fa-solid fa-clock-rotate-left"></i>
 Transport Entry History
 </div>
 
-<div class="title-actions">
-<input type="text" id="entrySearch" placeholder="Search date/vehicle/slip...">
+<div class="history-actions">
 
-<button class="toggle-btn" onclick="toggleEntryHistory()" id="toggleEntryBtn">
-<i class="fa-solid fa-eye-slash"></i> Hide Data
+<input
+type="text"
+id="entrySearch"
+placeholder="Search transporter/date/vehicle/slip...">
+
+<button
+type="button"
+id="toggleHistory">
+
+Hide Data
+
 </button>
-</div>
 
 </div>
 
-<div class="table-wrap">
+</div>
 
-<table class="entry-table" id="entryHistoryTable">
+<div class="table-wrapper" id="historyTableWrapper">
 
+<table class="entry-table">
+
+<thead>
 <tr>
-
 <th>Date</th>
-<th>SL</th>
+<th>SL No</th>
 <th>Transporter</th>
+<th>Challan</th>
 <th>Vehicle</th>
 <th>Slip</th>
-<th>Qty</th>
+<th>HSD Qty</th>
 <th>Rate</th>
+<th>HSD Amount</th>
+<th>Cash Taken</th>
 <th>Total</th>
 <th>Action</th>
-
 </tr>
+</thead>
 
-{% for row in entries %}
+<tbody>
 
-<tr>
+{% for e in entries %}
 
-<td>{{ row["entry_date"] }}</td>
+<tr class="history-row">
 
-<td>{{ row["sl_no"] }}</td>
-
-<td>{{ row["transporter_name"] }}</td>
-
-<td>{{ row["vehicle_no"] }}</td>
-
-<td>{{ row["slip_no"] }}</td>
-
-<td>{{ row["hsd_qty"] }}</td>
-
-<td>
-₹ {{ row["rate"] }}
-</td>
-
-<td>
-<b>
-₹ {{ row["total_amount"] }}
-</b>
-</td>
+<td>{{ e["entry_date"] }}</td>
+<td>{{ e["sl_no"] }}</td>
+<td>{{ e["transporter_name"] }}</td>
+<td>{{ e["challan_no"] }}</td>
+<td>{{ e["vehicle_no"] }}</td>
+<td>{{ e["slip_no"] }}</td>
+<td>{{ e["hsd_qty"] }}</td>
+<td>₹ {{ "%.2f"|format(e["rate"] or 0) }}</td>
+<td>₹ {{ "%.2f"|format(e["hsd_amount"] or 0) }}</td>
+<td>₹ {{ "%.2f"|format(e["cash_taken"] or 0) }}</td>
+<td><b>₹ {{ "%.2f"|format(e["total_amount"] or 0) }}</b></td>
 
 <td>
-
 <div class="action-flex">
 
-<a href="/edit-transport-entry/{{ row['id'] }}"
-class="edit-btn">
+<a href="/edit-transport-entry/{{ e['id'] }}" class="edit-btn">
 Edit
 </a>
 
-<a href="/delete-transport-entry/{{ row['id'] }}"
+<a href="/delete-transport-entry/{{ e['id'] }}"
 class="delete-btn"
-onclick="return confirm('Delete entry?')">
+onclick="return confirm('Delete this entry?')">
 Delete
 </a>
 
 </div>
-
 </td>
 
 </tr>
 
 {% endfor %}
+
+</tbody>
 
 </table>
 
@@ -784,109 +713,321 @@ Delete
 
 </div>
 
+<!-- ADD TRANSPORTER MODAL -->
+
+<div class="modal" id="addTransporterModal">
+
+<div class="modal-box">
+
+<div class="modal-head">
+<h2>Add Transporter</h2>
+<button class="close-btn" onclick="closeModal('addTransporterModal')">×</button>
+</div>
+
+<form method="POST" action="/add-transporter">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Party Name</label>
+<input type="text" name="party_name" required>
+</div>
+
+<div class="input-group">
+<label>Mobile No</label>
+<input type="text" name="mobile">
+</div>
+
+<div class="input-group">
+<label>Vehicle No</label>
+<input type="text" name="vehicle_no">
+</div>
+
+<div class="input-group">
+<label>Opening Balance</label>
+<input type="number" step="0.01" name="opening_balance" value="0">
+</div>
+
+<div class="input-group">
+<label>Status</label>
+<select name="status">
+<option value="Active">Active</option>
+<option value="Inactive">Inactive</option>
+</select>
+</div>
+
+</div>
+
+<button class="save-btn" type="submit">
+Save Transporter
+</button>
+
+</form>
+
+</div>
+
+</div>
+
+<!-- TRANSPORT ENTRY MODAL -->
+
+<div class="modal" id="entryModal">
+
+<div class="modal-box">
+
+<div class="modal-head">
+<h2>Transport Entry Register</h2>
+<button class="close-btn" onclick="closeModal('entryModal')">×</button>
+</div>
+
+<form method="POST" action="/save-transport-entry">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date" name="entry_date" required>
+</div>
+
+<div class="input-group">
+<label>Transporter</label>
+<select name="transporter_id" id="entryTransporter" required>
+<option value="">Select Party</option>
+
+{% for t in transporters %}
+
+<option
+value="{{ t['id'] }}"
+data-name="{{ t['party_name'] }}"
+data-vehicle="{{ t['vehicle_no'] or '' }}">
+
+{{ t["party_name"] }}
+
+</option>
+
+{% endfor %}
+
+</select>
+</div>
+
+<input type="hidden" name="transporter_name" id="entryTransporterName">
+
+<div class="input-group">
+<label>Challan No</label>
+<input type="text" name="challan_no">
+</div>
+
+<div class="input-group">
+<label>Vehicle No</label>
+<input type="text" name="vehicle_no" id="entryVehicle">
+</div>
+
+<div class="input-group">
+<label>Slip No</label>
+<input type="text" name="slip_no">
+</div>
+
+<div class="input-group">
+<label>HSD Qty</label>
+<input type="number" step="0.01" name="hsd_qty" id="hsdQty">
+</div>
+
+<div class="input-group">
+<label>Rate</label>
+<input type="number" step="0.01" name="rate" id="hsdRate" value="{{ hsd_rate or 0 }}" readonly>
+</div>
+
+<div class="input-group">
+<label>HSD Amount</label>
+<input type="number" step="0.01" id="hsdAmount" readonly>
+</div>
+
+<div class="input-group">
+<label>Cash Taken</label>
+<input type="number" step="0.01" name="cash_taken" id="cashTaken" value="0">
+</div>
+
+<div class="input-group">
+<label>Total Amount</label>
+<input type="number" step="0.01" id="totalAmount" readonly>
+</div>
+
+</div>
+
+<button class="save-btn" type="submit">
+Save Transport Entry
+</button>
+
+</form>
+
+</div>
+
+</div>
+
+<!-- RECEIVE AMOUNT MODAL -->
+
+<div class="modal" id="receiveModal">
+
+<div class="modal-box">
+
+<div class="modal-head">
+<h2>Receive Amount</h2>
+<button class="close-btn" onclick="closeModal('receiveModal')">×</button>
+</div>
+
+<form method="POST" action="/save-transport-payment">
+
+<div class="form-grid">
+
+<div class="input-group">
+<label>Date</label>
+<input type="date" name="date" required>
+</div>
+
+<div class="input-group">
+<label>Party Name</label>
+<select name="transporter_id" required>
+<option value="">Select Party</option>
+
+{% for t in transporters %}
+
+<option value="{{ t['id'] }}">
+{{ t["party_name"] }}
+</option>
+
+{% endfor %}
+
+</select>
+</div>
+
+<div class="input-group">
+<label>Type</label>
+<select name="payment_type">
+<option value="Fuel">Fuel</option>
+<option value="Lube">Lube</option>
+</select>
+</div>
+
+<div class="input-group">
+<label>Amount Received</label>
+<input type="number" step="0.01" name="payment_amount" required>
+</div>
+
+</div>
+
+<button class="save-btn" type="submit">
+Receive Amount
+</button>
+
+</form>
+
+</div>
+
+</div>
+
 <script>
-
-function calculateTransportAmount(){
-
-    let qty =
-    parseFloat(
-        document.getElementById("hsd_qty").value
-    ) || 0;
-
-    let rate =
-    parseFloat(
-        document.getElementById("rate").value
-    ) || 0;
-
-    let cash =
-    parseFloat(
-        document.getElementById("cash_taken").value
-    ) || 0;
-
-    let hsdAmount =
-    qty * rate;
-
-    let total =
-    hsdAmount + cash;
-
-    document.getElementById(
-        "hsd_amount"
-    ).value =
-    hsdAmount.toFixed(2);
-
-    document.getElementById(
-        "total_amount"
-    ).value =
-    total.toFixed(2);
+function openModal(id){
+    document.getElementById(id).style.display = "flex";
 }
 
-document.getElementById(
-    "hsd_qty"
-).addEventListener(
-    "input",
-    calculateTransportAmount
-);
+function closeModal(id){
+    document.getElementById(id).style.display = "none";
+}
 
-document.getElementById(
-    "rate"
-).addEventListener(
-    "input",
-    calculateTransportAmount
-);
+const entryTransporter = document.getElementById("entryTransporter");
+const entryTransporterName = document.getElementById("entryTransporterName");
+const entryVehicle = document.getElementById("entryVehicle");
 
-document.getElementById(
-    "cash_taken"
-).addEventListener(
-    "input",
-    calculateTransportAmount
-);
+if(entryTransporter){
+    entryTransporter.addEventListener("change", function(){
 
-calculateTransportAmount();
+        const selected =
+        entryTransporter.options[entryTransporter.selectedIndex];
 
-function toggleTransporters(){
-    const table = document.getElementById("transportersTable");
-    const btn = document.getElementById("toggleTransportersBtn");
+        entryTransporterName.value =
+        selected.dataset.name || "";
 
-    if(table.style.display === "none"){
-        table.style.display = "table";
-        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Data';
-    }else{
-        table.style.display = "none";
-        btn.innerHTML = '<i class="fa-solid fa-eye"></i> Show Data';
+        entryVehicle.value =
+        selected.dataset.vehicle || "";
+
+    });
+}
+
+const hsdQty = document.getElementById("hsdQty");
+const hsdRate = document.getElementById("hsdRate");
+const hsdAmount = document.getElementById("hsdAmount");
+const cashTaken = document.getElementById("cashTaken");
+const totalAmount = document.getElementById("totalAmount");
+
+function calcEntryAmount(){
+
+    const qty = parseFloat(hsdQty?.value) || 0;
+    const rate = parseFloat(hsdRate?.value) || 0;
+    const cash = parseFloat(cashTaken?.value) || 0;
+
+    const amount = qty * rate;
+
+    if(hsdAmount){
+        hsdAmount.value = amount.toFixed(2);
+    }
+
+    if(totalAmount){
+        totalAmount.value = (amount + cash).toFixed(2);
     }
 }
 
-function toggleEntryHistory(){
-    const table = document.getElementById("entryHistoryTable");
-    const btn = document.getElementById("toggleEntryBtn");
-
-    if(table.style.display === "none"){
-        table.style.display = "table";
-        btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Hide Data';
-    }else{
-        table.style.display = "none";
-        btn.innerHTML = '<i class="fa-solid fa-eye"></i> Show Data';
-    }
+if(hsdQty){
+    hsdQty.addEventListener("input", calcEntryAmount);
 }
 
-document.getElementById("transporterSearch").addEventListener("input", function(){
-    const value = this.value.toLowerCase();
+if(cashTaken){
+    cashTaken.addEventListener("input", calcEntryAmount);
+}
 
-    document.querySelectorAll("#transportersTable tr").forEach(function(row, index){
-        if(index === 0) return;
-        row.style.display = row.innerText.toLowerCase().includes(value) ? "table-row" : "none";
+const toggleBtn = document.getElementById("toggleHistory");
+const historyWrapper = document.getElementById("historyTableWrapper");
+
+if(toggleBtn && historyWrapper){
+
+    toggleBtn.addEventListener("click", function(){
+
+        if(historyWrapper.style.display === "none"){
+
+            historyWrapper.style.display = "block";
+            toggleBtn.innerText = "Hide Data";
+
+        }else{
+
+            historyWrapper.style.display = "none";
+            toggleBtn.innerText = "Show Data";
+
+        }
+
     });
-});
 
-document.getElementById("entrySearch").addEventListener("input", function(){
-    const value = this.value.toLowerCase();
+}
 
-    document.querySelectorAll("#entryHistoryTable tr").forEach(function(row, index){
-        if(index === 0) return;
-        row.style.display = row.innerText.toLowerCase().includes(value) ? "table-row" : "none";
+const entrySearch = document.getElementById("entrySearch");
+
+if(entrySearch){
+
+    entrySearch.addEventListener("input", function(){
+
+        const value =
+        this.value.toLowerCase();
+
+        document.querySelectorAll(".history-row")
+        .forEach(function(row){
+
+            row.style.display =
+            row.innerText.toLowerCase().includes(value)
+            ? ""
+            : "none";
+
+        });
+
     });
-});
 
+}
 </script>
 
 </body>

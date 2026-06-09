@@ -1,0 +1,748 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Analytics - Sai Fuel Mart</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Segoe UI',sans-serif;
+}
+
+body{
+    background:#eef3f8;
+    color:#0f172a;
+}
+
+.container{
+    display:flex;
+    min-height:100vh;
+}
+
+.sidebar{
+    width:270px;
+    background:#07120C;
+    color:white;
+    padding:26px 18px;
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    overflow-y:auto;
+}
+
+.logo{
+    margin-bottom:35px;
+}
+
+.logo h2{
+    font-size:24px;
+    font-weight:900;
+}
+
+.logo p{
+    color:#94a3b8;
+    font-size:12px;
+    margin-top:6px;
+}
+
+.sidebar nav{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.sidebar nav a{
+    color:#d1d5db;
+    text-decoration:none;
+    padding:14px 16px;
+    border-radius:14px;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    font-weight:700;
+}
+
+.sidebar nav a.active,
+.sidebar nav a:hover{
+    background:#16a34a;
+    color:white;
+}
+
+.main{
+    margin-left:270px;
+    width:calc(100% - 270px);
+    padding:30px;
+}
+
+.topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:25px;
+}
+
+.topbar h1{
+    font-size:36px;
+    font-weight:900;
+}
+
+.topbar p{
+    color:#64748b;
+    margin-top:5px;
+}
+
+.export-btn{
+    background:#07120C;
+    color:white;
+    padding:13px 18px;
+    border-radius:14px;
+    text-decoration:none;
+    font-weight:900;
+}
+
+.grid-4{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:24px;
+}
+
+.card{
+    background:white;
+    padding:22px;
+    border-radius:26px;
+    box-shadow:0 12px 35px rgba(0,0,0,.06);
+}
+
+.card span{
+    color:#64748b;
+    font-size:13px;
+    font-weight:800;
+}
+
+.card h2{
+    margin-top:10px;
+    font-size:28px;
+}
+
+.green{color:#16a34a;}
+.red{color:#dc2626;}
+.blue{color:#2563eb;}
+.orange{color:#f59e0b;}
+
+.section{
+    background:white;
+    border-radius:30px;
+    padding:24px;
+    margin-bottom:24px;
+    box-shadow:0 12px 35px rgba(0,0,0,.06);
+}
+
+.section-title{
+    font-size:22px;
+    font-weight:900;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-bottom:18px;
+}
+
+.analytics-grid{
+    display:grid;
+    grid-template-columns:1.4fr .8fr;
+    gap:22px;
+}
+
+.chart-box{
+    height:340px;
+    background:#f8fafc;
+    border-radius:24px;
+    padding:20px;
+}
+
+.table-wrap{
+    width:100%;
+    overflow-x:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th{
+    background:#f8fafc;
+    padding:14px;
+    text-align:left;
+    color:#475569;
+    font-size:13px;
+}
+
+td{
+    padding:14px;
+    border-bottom:1px solid #e5e7eb;
+}
+
+.alert-list{
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+
+.alert{
+    padding:15px;
+    border-radius:16px;
+    background:#fff7ed;
+    color:#c2410c;
+    font-weight:800;
+}
+
+.success-alert{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.progress-row{
+    margin-bottom:16px;
+}
+
+.progress-head{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    font-weight:800;
+    margin-bottom:8px;
+}
+
+.bar{
+    height:12px;
+    border-radius:999px;
+    background:#e5e7eb;
+    overflow:hidden;
+}
+
+.fill{
+    height:100%;
+    background:#16a34a;
+    border-radius:999px;
+}
+
+@media(max-width:1100px){
+    .sidebar{
+        position:relative;
+        width:100%;
+        height:auto;
+    }
+
+    .container{
+        flex-direction:column;
+    }
+
+    .main{
+        margin-left:0;
+        width:100%;
+        padding:20px;
+    }
+
+    .grid-4,
+    .analytics-grid{
+        grid-template-columns:1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<aside class="sidebar">
+
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>FUELING YOUR TRUST</p>
+</div>
+
+<nav>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/full-system-export">
+    <i class="fa-solid fa-file-export"></i>
+    Full Data Excel
+</a>
+
+<a class="active" href="/analytics">
+    <i class="fa-solid fa-chart-pie"></i>
+    Analytics
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+
+{% if session.get("role") == "manager" %}
+
+<a class="active" href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+</nav>
+
+</aside>
+
+<main class="main">
+
+<div class="topbar">
+
+<div>
+
+<h1>Analytics</h1>
+
+<p>
+Owner control room for sales, cash, credit, staff, lube and profit
+</p>
+
+<form method="GET" action="/analytics" style="margin-top:15px;display:flex;gap:10px;align-items:center;">
+
+    <input
+        type="month"
+        name="month"
+        value="{{ selected_month }}"
+        style="
+        padding:10px 15px;
+        border:1px solid #d1d5db;
+        border-radius:10px;
+        font-weight:700;">
+
+    <button
+        type="submit"
+        style="
+        background:#16a34a;
+        color:white;
+        border:none;
+        padding:10px 18px;
+        border-radius:10px;
+        font-weight:800;
+        cursor:pointer;">
+
+        View Analytics
+
+    </button>
+
+</form>
+
+</div>
+
+
+
+{% if session.get("role") == "admin" %}
+<a href="/full-system-export" class="export-btn">
+<i class="fa-solid fa-file-excel"></i>
+Full Data Excel
+</a>
+{% endif %}
+
+</div>
+
+<div class="grid-4">
+
+<div class="card">
+<span>Today's Sale</span>
+<h2 class="green">₹ {{ "%.2f"|format(today_sale or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Cash In Hand</span>
+<h2>₹ {{ "%.2f"|format(cash_in_hand or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Outstanding Credit</span>
+<h2 class="red">₹ {{ "%.2f"|format(outstanding_credit or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Net Profit</span>
+<h2 class="blue">₹ {{ "%.2f"|format(net_profit or 0) }}</h2>
+</div>
+
+</div>
+
+<div class="grid-4">
+
+<div class="card">
+<span>Fuel Sale Today</span>
+<h2>₹ {{ "%.2f"|format(fuel_sale or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Lube Sale Today</span>
+<h2>₹ {{ "%.2f"|format(lube_sale or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Total Expense</span>
+<h2 class="red">₹ {{ "%.2f"|format(total_expense or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Lube Stock Value</span>
+<h2>₹ {{ "%.2f"|format(total_lube_value or 0) }}</h2>
+</div>
+
+</div>
+
+<div class="grid-4">
+
+<div class="card">
+<span>Total Transporters</span>
+<h2>{{ total_transporters or 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Total Credit</span>
+<h2>₹ {{ "%.2f"|format(total_credit or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Total Received</span>
+<h2 class="green">₹ {{ "%.2f"|format(total_received or 0) }}</h2>
+</div>
+
+<div class="card">
+<span>Top Lube Product</span>
+<h2>{{ top_product_name or "-" }}</h2>
+</div>
+
+</div>
+
+<div class="grid-4">
+
+<div class="card">
+<span>Total Staff</span>
+<h2>{{ total_staff or 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Present Today</span>
+<h2 class="green">{{ present_today or 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Absent Today</span>
+<h2 class="red">{{ absent_today or 0 }}</h2>
+</div>
+
+<div class="card">
+<span>Salary Paid This Month</span>
+<h2>₹ {{ "%.2f"|format(salary_paid or 0) }}</h2>
+</div>
+
+</div>
+
+<div class="analytics-grid">
+
+<div class="section">
+
+<div class="section-title">
+<i class="fa-solid fa-chart-line"></i>
+Monthly Sales Trend
+</div>
+
+<div class="chart-box">
+<canvas id="salesChart"></canvas>
+</div>
+
+</div>
+
+<div class="section">
+
+<div class="section-title">
+<i class="fa-solid fa-bell"></i>
+Alerts
+</div>
+
+<div class="alert-list">
+
+{% if low_stock and low_stock > 0 %}
+<div class="alert">
+⚠ {{ low_stock }} lube items are low in stock
+</div>
+{% endif %}
+
+{% if outstanding_credit and outstanding_credit > 0 %}
+<div class="alert">
+⚠ Outstanding credit pending ₹ {{ "%.2f"|format(outstanding_credit or 0) }}
+</div>
+{% endif %}
+
+{% if absent_today and absent_today > 0 %}
+<div class="alert">
+⚠ {{ absent_today }} staff absent today
+</div>
+{% endif %}
+
+{% if (not low_stock or low_stock == 0) and (not outstanding_credit or outstanding_credit == 0) and (not absent_today or absent_today == 0) %}
+<div class="alert success-alert">
+✅ No critical alerts
+</div>
+{% endif %}
+
+</div>
+
+</div>
+
+</div>
+
+<div class="analytics-grid">
+
+<div class="section">
+
+<div class="section-title">
+<i class="fa-solid fa-truck"></i>
+Top Creditors
+</div>
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+<tr>
+<th>Party</th>
+<th>Balance Due</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for c in top_creditors %}
+
+<tr>
+<td>{{ c["party_name"] }}</td>
+<td class="red">₹ {{ "%.2f"|format(c["balance_due"] or 0) }}</td>
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+<div class="section">
+
+<div class="section-title">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube & Staff Health
+</div>
+
+<div class="progress-row">
+<div class="progress-head">
+<span>Low Stock Items</span>
+<span>{{ low_stock or 0 }}</span>
+</div>
+
+<div class="bar">
+<div class="fill" style="width:50%;"></div>
+</div>
+
+</div>
+
+<div class="progress-row">
+
+    <div class="progress-head">
+        <span>Present Staff</span>
+        <span>{{ present_today or 0 }}/{{ total_staff or 0 }}</span>
+    </div>
+
+    <div class="bar">
+        <div class="fill" style="width:50%;"></div>
+    </div>
+
+</div>
+
+</div>
+
+</div>
+
+</main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    let trendLabels = [];
+    let fuelData = [];
+    let lubeData = [];
+
+    try {
+
+        trendLabels = JSON.parse('{{ trend_labels|safe }}');
+        fuelData = JSON.parse('{{ fuel_data|safe }}');
+        lubeData = JSON.parse('{{ lube_data|safe }}');
+
+    } catch(err) {
+
+        console.log("Chart Data Error", err);
+
+    }
+
+    const canvas =
+    document.getElementById("salesChart");
+
+    if (!canvas) return;
+
+    new Chart(canvas, {
+
+        type: "line",
+
+        data: {
+
+            labels: trendLabels,
+
+            datasets: [
+
+                {
+                    label: "Fuel Sale",
+                    data: fuelData,
+                    borderColor: "#16a34a",
+                    backgroundColor: "transparent",
+                    borderWidth: 3,
+                    tension: 0.35
+                },
+
+                {
+                    label: "Lube Sale",
+                    data: lubeData,
+                    borderColor: "#2563eb",
+                    backgroundColor: "transparent",
+                    borderWidth: 3,
+                    tension: 0.35
+                }
+
+            ]
+
+        },
+
+        options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            plugins: {
+
+                legend: {
+
+                    position: "bottom"
+
+                }
+
+            },
+
+            scales: {
+
+                y: {
+
+                    beginAtZero: true
+
+                }
+
+            }
+
+        }
+
+    });
+
+});
+
+</script>
+</body>
+</html>

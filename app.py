@@ -5,8 +5,11 @@ import os
 import json
 from io import BytesIO
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
+import tempfile
+
 
 app = Flask(__name__)
 app.secret_key = "sai-fuel-mart-secret-key"
@@ -126,6 +129,8 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+     
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS tank_level (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -143,6 +148,30 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    cur.execute("""
+CREATE TABLE IF NOT EXISTS salary_payments(
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    payment_date TEXT,
+
+    emp_id TEXT,
+
+    employee_name TEXT,
+
+    payment_mode TEXT,
+
+    bank_account TEXT,
+
+    amount REAL,
+
+    month_name TEXT,
+
+    remarks TEXT
+
+)
+""")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS staff_master (
@@ -166,19 +195,72 @@ def init_db():
             pass
 
         
-
+      
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS credit_transporters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            party_name TEXT,
-            opening_balance REAL DEFAULT 0,
-            credit_given REAL DEFAULT 0,
-            payment_received REAL DEFAULT 0,
-            balance_due REAL DEFAULT 0,
-            status TEXT
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS credit_transporters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        party_name TEXT,
+        opening_balance REAL DEFAULT 0,
+        credit_given REAL DEFAULT 0,
+        payment_received REAL DEFAULT 0,
+        balance_due REAL DEFAULT 0,
+        status TEXT
+    )
+""")
 
+    for col, typ in [
+
+    ("mobile", "TEXT"),
+    ("vehicle_no", "TEXT"),
+
+    ("fuel_credit", "REAL DEFAULT 0"),
+    ("lube_credit", "REAL DEFAULT 0"),
+
+    ("amount_received", "REAL DEFAULT 0")
+
+]:
+        try:
+            cur.execute(
+            f"ALTER TABLE credit_transporters ADD COLUMN {col} {typ}"
+        )
+        except sqlite3.OperationalError:
+         pass
+
+     
+    
+    try:
+       cur.execute(
+        "ALTER TABLE transport_entries ADD COLUMN transporter_id INTEGER"
+    )
+    except sqlite3.OperationalError:
+     pass
+    cur.execute("""
+
+    CREATE TABLE IF NOT EXISTS transporter_ledger (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        date TEXT,
+
+        transporter_id INTEGER,
+        transporter_name TEXT,
+
+        entry_type TEXT,
+
+        fuel_credit REAL DEFAULT 0,
+        lube_credit REAL DEFAULT 0,
+
+        received_amount REAL DEFAULT 0,
+
+        balance_after REAL DEFAULT 0,
+
+        remarks TEXT,
+
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+
+    )
+
+""") 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS lube_transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,6 +284,21 @@ def init_db():
             payment_amount REAL
         )
     """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS credit_lube_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        transporter_id INTEGER,
+        transporter_name TEXT,
+        product_id INTEGER,
+        product_name TEXT,
+        qty REAL,
+        rate REAL,
+        amount REAL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+""")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS transport_entries (
@@ -434,6 +531,46 @@ def dashboard():
         show_backup_popup=show_backup_popup
     )
 
+@app.route("/receive-transport-payment/<int:id>", methods=["POST"])
+def receive_transport_payment(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    amount = float(request.form.get("amount", 0))
+
+    if amount <= 0:
+        return redirect(url_for("credit_transport"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+
+        UPDATE credit_transporters
+
+        SET
+
+            amount_received =
+            COALESCE(amount_received,0) + ?,
+
+            balance_due =
+            balance_due - ?
+
+        WHERE id=?
+
+    """, (
+
+        amount,
+        amount,
+        id
+
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("credit_transport"))
 
 @app.route("/backup-database")
 def backup_database():
@@ -463,18 +600,17 @@ def save_daily_closing():
         return jsonify({"status": "error", "message": "Not logged in"})
 
     data = request.get_json()
-    if not data.get("date"):
-     return jsonify({
-        "status": "error",
-        "message": "Date missing"
-    })
+
+    if not data or not data.get("date"):
+        return jsonify({"status": "error", "message": "Date missing"})
+
     conn = None
 
     try:
         conn = get_conn()
         cur = conn.cursor()
 
-        cur.execute("SELECT id FROM daily_closing WHERE date = ?", (data["date"],))
+        cur.execute("SELECT id FROM daily_closing WHERE date=?", (data["date"],))
         existing = cur.fetchone()
 
         if existing:
@@ -483,57 +619,85 @@ def save_daily_closing():
 
         cur.execute("""
             INSERT INTO daily_closing (
-                date, ms_litres, hsd_litres, cng_sale, total_fuel_sale, lube_sale,
-                digital_collection, phonepe, card_swipe, hp_pay, hpcl_otp,
-                upi_other, credit_given, transport_received, net_credit_due,
+                date, ms_litres, hsd_litres, cng_sale,
+                total_fuel_sale, lube_sale, digital_collection,
+                phonepe, card_swipe, hp_pay, hpcl_otp, upi_other,
+                credit_given, transport_received, net_credit_due,
                 total_expense, cash_in_hand
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            data["date"], data["ms_litres"], data["hsd_litres"], data.get("cng_sale", 0),
-            data["total_fuel_sale"], data["lube_sale"], data["digital_collection"],
-            data.get("phonepe", 0), data.get("card_swipe", 0), data.get("hp_pay", 0),
-            data.get("hpcl_otp", 0), data.get("upi_other", 0), data["credit_given"],
-            data["transport_received"], data["net_credit_due"], data["total_expense"],
-            data["cash_in_hand"]
+            data["date"],
+            float(data.get("ms_litres", 0)),
+            float(data.get("hsd_litres", 0)),
+            float(data.get("cng_sale", 0)),
+            float(data.get("total_fuel_sale", 0)),
+            float(data.get("lube_sale", 0)),
+            float(data.get("digital_collection", 0)),
+            float(data.get("phonepe", 0)),
+            float(data.get("card_swipe", 0)),
+            float(data.get("hp_pay", 0)),
+            float(data.get("hpcl_otp", 0)),
+            float(data.get("upi_other", 0)),
+            float(data.get("credit_given", 0)),
+            float(data.get("transport_received", 0)),
+            float(data.get("net_credit_due", 0)),
+            float(data.get("total_expense", 0)),
+            float(data.get("cash_in_hand", 0))
         ))
 
+        # SAVE NOZZLES
         for item in data.get("nozzle_entries", []):
+
             nozzle_id = item.get("nozzle_id")
-            opening = float(item.get("opening", 0))
-            closing = float(item.get("closing", 0))
-            testing = float(item.get("testing", 0))
-            sale = max(round(closing - opening - testing, 2), 0)
 
             if not nozzle_id:
                 continue
 
+            opening = float(item.get("opening", 0))
+            closing = float(item.get("closing", 0))
+            testing = float(item.get("testing", 0))
+
+            sale = max(round(closing - opening - testing, 2), 0)
+
             cur.execute("""
                 INSERT INTO nozzle_entries (
-                    entry_date, nozzle_id, opening_reading, closing_reading,
-                    testing_qty, total_sale, created_at
+                    entry_date, nozzle_id, opening_reading,
+                    closing_reading, testing_qty, total_sale, created_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
-                data["date"], nozzle_id, opening, closing, testing, sale,
+                data["date"],
+                nozzle_id,
+                opening,
+                closing,
+                testing,
+                sale,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             ))
 
+        # SAVE LUBE CASH / CREDIT
         for item in data.get("lube_sales", []):
+
             qty = float(item.get("qty", 0))
             rate = float(item.get("rate", 0))
             amount = float(item.get("amount", 0))
+
             product_id = item.get("product_id")
             product_name = item.get("product_name", "")
+
+            mode = item.get("mode", "Cash")
+            transporter_id = item.get("transporter_id", "")
+            transporter_name = item.get("transporter_name", "")
 
             if qty <= 0 or not product_id:
                 continue
 
             cur.execute("""
                 UPDATE lube_stock
-                SET sale_qty = sale_qty + ?,
-                    closing_stock = closing_stock - ?
-                WHERE id = ?
+                SET sale_qty = COALESCE(sale_qty,0) + ?,
+                    closing_stock = COALESCE(closing_stock,0) - ?
+                WHERE id=?
             """, (qty, qty, product_id))
 
             cur.execute("""
@@ -543,23 +707,106 @@ def save_daily_closing():
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                data["date"], product_id, product_name, "Sale",
-                qty, rate, amount, "Daily Closing Sale"
+                data["date"],
+                product_id,
+                product_name,
+                "Sale",
+                qty,
+                rate,
+                amount,
+                f"{mode} Lube Sale"
             ))
 
+            if mode == "Credit":
+
+                if not transporter_id:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"Please select transporter for credit lube: {product_name}"
+                    })
+
+                cur.execute("""
+                    UPDATE credit_transporters
+                    SET lube_credit = COALESCE(lube_credit,0) + ?,
+                        credit_given = COALESCE(credit_given,0) + ?,
+                        balance_due = COALESCE(balance_due,0) + ?
+                    WHERE id=?
+                """, (
+                    amount,
+                    amount,
+                    amount,
+                    transporter_id
+                ))
+
+                cur.execute("""
+                    SELECT party_name, balance_due
+                    FROM credit_transporters
+                    WHERE id=?
+                """, (transporter_id,))
+
+                tr = cur.fetchone()
+
+                cur.execute("""
+                    INSERT INTO transporter_ledger (
+                        date, transporter_id, transporter_name,
+                        entry_type, lube_credit, balance_after, remarks
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data["date"],
+                    transporter_id,
+                    tr["party_name"] if tr else transporter_name,
+                    "Lube Credit",
+                    amount,
+                    tr["balance_due"] if tr else amount,
+                    product_name
+                ))
+
+        # SAVE FUEL CREDIT FROM DAILY CLOSING
         for item in data.get("credit_transport_sales", []):
+
             amount = float(item.get("amount", 0))
-            transporter_id = item.get("transporter_id")
+            transporter_id = item.get("transporter_id", "")
 
             if amount <= 0 or not transporter_id:
                 continue
 
             cur.execute("""
                 UPDATE credit_transporters
-                SET credit_given = credit_given + ?,
-                    balance_due = balance_due + ?
-                WHERE id = ?
-            """, (amount, amount, transporter_id))
+                SET fuel_credit = COALESCE(fuel_credit,0) + ?,
+                    credit_given = COALESCE(credit_given,0) + ?,
+                    balance_due = COALESCE(balance_due,0) + ?
+                WHERE id=?
+            """, (
+                amount,
+                amount,
+                amount,
+                transporter_id
+            ))
+
+            cur.execute("""
+                SELECT party_name, balance_due
+                FROM credit_transporters
+                WHERE id=?
+            """, (transporter_id,))
+
+            tr = cur.fetchone()
+
+            cur.execute("""
+                INSERT INTO transporter_ledger (
+                    date, transporter_id, transporter_name,
+                    entry_type, fuel_credit, balance_after, remarks
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data["date"],
+                transporter_id,
+                tr["party_name"] if tr else "",
+                "Fuel Credit",
+                amount,
+                tr["balance_due"] if tr else amount,
+                "Fuel Credit from Daily Closing"
+            ))
 
         conn.commit()
 
@@ -569,6 +816,7 @@ def save_daily_closing():
         })
 
     except Exception as e:
+
         if conn:
             conn.rollback()
 
@@ -578,43 +826,9 @@ def save_daily_closing():
         })
 
     finally:
+
         if conn:
             conn.close()
-
-@app.route("/delete-daily-closing/<int:id>")
-def delete_daily_closing(id):
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = None
-
-    try:
-        conn = get_conn()
-        cur = conn.cursor()
-
-        cur.execute("SELECT date FROM daily_closing WHERE id=?", (id,))
-        row = cur.fetchone()
-
-        if row:
-            report_date = row["date"]
-
-            cur.execute("DELETE FROM daily_closing WHERE id=?", (id,))
-            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=?", (report_date,))
-
-        conn.commit()
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        return f"Error deleting daily closing: {e}"
-
-    finally:
-        if conn:
-            conn.close()
-
-    return redirect(url_for("reports"))
-
 
 @app.route("/save-lube-product", methods=["POST"])
 def save_lube_product():
@@ -838,6 +1052,98 @@ def print_daily_report(date):
     )
 
 
+@app.route("/edit-transport-entry/<int:id>")
+def edit_transport_entry(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM transport_entries WHERE id=?",
+        (id,)
+    )
+
+    entry = cur.fetchone()
+
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        ORDER BY party_name
+    """)
+
+    transporters = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "edit_transport_entry.html",
+        entry=entry,
+        transporters=transporters
+    )
+
+@app.route(
+    "/update-transport-entry/<int:id>",
+    methods=["POST"]
+)
+def update_transport_entry(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    hsd_qty = float(
+        request.form.get("hsd_qty") or 0
+    )
+
+    rate = float(
+        request.form.get("rate") or 0
+    )
+
+    cash_taken = float(
+        request.form.get("cash_taken") or 0
+    )
+
+    hsd_amount = hsd_qty * rate
+    total_amount = hsd_amount + cash_taken
+
+    cur.execute("""
+        UPDATE transport_entries
+        SET
+            entry_date=?,
+            transporter_id=?,
+            challan_no=?,
+            vehicle_no=?,
+            slip_no=?,
+            hsd_qty=?,
+            rate=?,
+            hsd_amount=?,
+            cash_taken=?,
+            total_amount=?
+        WHERE id=?
+    """, (
+
+        request.form["entry_date"],
+        request.form["transporter_id"],
+        request.form.get("challan_no",""),
+        request.form.get("vehicle_no",""),
+        request.form.get("slip_no",""),
+
+        hsd_qty,
+        rate,
+        hsd_amount,
+        cash_taken,
+        total_amount,
+
+        id
+
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(
+        url_for("credit_transport")
+    )
+
 @app.route("/edit-lube-transaction/<int:id>")
 def edit_lube_transaction(id):
 
@@ -888,6 +1194,41 @@ def get_daily_closing(date):
 # =========================================
 # EDIT DAILY CLOSING
 # =========================================
+
+@app.route("/save-salary-payment", methods=["POST"])
+def save_salary_payment():
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO salary_payments(
+            payment_date,
+            emp_id,
+            employee_name,
+            payment_mode,
+            bank_account,
+            amount,
+            month_name,
+            remarks
+        )
+        VALUES(?,?,?,?,?,?,?,?)
+    """, (
+        request.form["payment_date"],
+        request.form["emp_id"],
+        request.form["employee_name"],
+        request.form["payment_mode"],
+        request.form.get("bank_account",""),
+        float(request.form["amount"]),
+        request.form["month_name"],
+        request.form.get("remarks","")
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
 
 @app.route("/edit-attendance/<int:id>")
 def edit_attendance(id):
@@ -1765,20 +2106,51 @@ def delete_tank_level(id):
 
 @app.route("/credit-transport")
 def credit_transport():
+
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM credit_transporters ORDER BY id DESC")
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        ORDER BY party_name
+    """)
     transporters = cur.fetchall()
 
-    cur.execute("SELECT * FROM transport_entries ORDER BY entry_date DESC, sl_no DESC")
+    cur.execute("""
+        SELECT *
+        FROM transport_entries
+        ORDER BY entry_date DESC,id DESC
+    """)
     entries = cur.fetchall()
 
-    cur.execute("SELECT hsd_rate FROM settings WHERE id = 1")
-    settings_data = cur.fetchone()
+    cur.execute("""
+        SELECT COUNT(*) as total
+        FROM credit_transporters
+    """)
+    total_transporters = cur.fetchone()["total"]
+
+    cur.execute("""
+SELECT SUM(credit_given)
+FROM credit_transporters
+""")
+
+    row = cur.fetchone()
+
+    total_credit = row[0] if row and row[0] else 0
+
+    cur.execute("""
+SELECT hsd_rate
+FROM settings
+LIMIT 1
+""")
+
+    row = cur.fetchone()
+
+    hsd_rate = row["hsd_rate"] if row else 0
 
     conn.close()
 
@@ -1786,183 +2158,93 @@ def credit_transport():
         "credit_transport.html",
         transporters=transporters,
         entries=entries,
-        hsd_rate=settings_data["hsd_rate"]
+        total_transporters=total_transporters,
+        hsd_rate=hsd_rate,
+        total_credit=total_credit
     )
 
-
-@app.route("/save-transporter", methods=["POST"])
-def save_transporter():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    opening_balance = float(request.form["opening_balance"] or 0)
+@app.route("/add-transporter", methods=["POST"])
+def add_transporter():
 
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO credit_transporters (
-            party_name, opening_balance, credit_given,
-            payment_received, balance_due, status
+        INSERT INTO credit_transporters(
+            party_name,
+            mobile,
+            vehicle_no,
+            opening_balance,
+            balance_due,
+            status
         )
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        request.form["party_name"],
-        opening_balance,
-        0,
-        0,
-        opening_balance,
-        request.form["status"]
+        VALUES(?,?,?,?,?,?)
+    """,(
+        request.form.get("party_name",""),
+request.form.get("mobile",""),
+request.form.get("vehicle_no",""),
+float(request.form.get("opening_balance",0)),
+float(request.form.get("opening_balance",0)),
+request.form.get("status","Active")
     ))
 
     conn.commit()
     conn.close()
 
     return redirect(url_for("credit_transport"))
-
-
-@app.route("/save-transport-payment", methods=["POST"])
-def save_transport_payment():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    payment_amount = float(request.form["payment_amount"] or 0)
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO transport_payments (
-            date, transporter_id, payment_amount
-        )
-        VALUES (?, ?, ?)
-    """, (
-        request.form["date"],
-        request.form["transporter_id"],
-        payment_amount
-    ))
-
-    cur.execute("""
-        UPDATE credit_transporters
-        SET payment_received = payment_received + ?,
-            balance_due = balance_due - ?
-        WHERE id = ?
-    """, (
-        payment_amount,
-        payment_amount,
-        request.form["transporter_id"]
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("credit_transport"))
-
 
 @app.route("/save-transport-entry", methods=["POST"])
 def save_transport_entry():
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
 
     entry_date = request.form["entry_date"]
 
-    conn = get_conn()
-    cur = conn.cursor()
+    cur.execute("""
+        SELECT COUNT(*) as total
+        FROM transport_entries
+        WHERE entry_date=?
+    """,(entry_date,))
 
-    cur.execute("SELECT COUNT(*) AS total FROM transport_entries WHERE entry_date = ?", (entry_date,))
     sl_no = cur.fetchone()["total"] + 1
 
-    hsd_qty = float(request.form["hsd_qty"] or 0)
-    rate = float(request.form["rate"] or 0)
-    cash_taken = float(request.form["cash_taken"] or 0)
+    qty = float(request.form.get("hsd_qty") or 0)
+    rate = float(request.form.get("rate") or 0)
+    cash_taken = float(request.form.get("cash_taken") or 0)
 
-    hsd_amount = round(hsd_qty * rate, 2)
-    total_amount = round(hsd_amount + cash_taken, 2)
+    hsd_amount = qty * rate
+    total_amount = hsd_amount + cash_taken
 
     cur.execute("""
-        INSERT INTO transport_entries (
-            entry_date, sl_no, transporter_name, challan_no, vehicle_no, slip_no,
-            hsd_qty, rate, hsd_amount, cash_taken, total_amount, created_at
+        INSERT INTO transport_entries(
+            entry_date,
+            sl_no,
+            transporter_id,
+            transporter_name,
+            challan_no,
+            vehicle_no,
+            slip_no,
+            hsd_qty,
+            rate,
+            hsd_amount,
+            cash_taken,
+            total_amount
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+    """,(
         entry_date,
         sl_no,
-        request.form.get("transporter_name", ""),
-        request.form.get("challan_no", ""),
-        request.form.get("vehicle_no", ""),
-        request.form.get("slip_no", ""),
-        hsd_qty,
-        rate,
-        hsd_amount,
-        cash_taken,
-        total_amount,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("credit_transport"))
-
-
-@app.route("/edit-transport-entry/<int:id>")
-def edit_transport_entry(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM transport_entries WHERE id = ?", (id,))
-    entry = cur.fetchone()
-
-    cur.execute("SELECT * FROM credit_transporters ORDER BY party_name ASC")
-    transporters = cur.fetchall()
-
-    conn.close()
-
-    return render_template(
-        "edit_transport_entry.html",
-        entry=entry,
-        transporters=transporters
-    )
-
-
-@app.route("/update-transport-entry/<int:id>", methods=["POST"])
-def update_transport_entry(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    hsd_qty = float(request.form["hsd_qty"] or 0)
-    rate = float(request.form["rate"] or 0)
-    cash_taken = float(request.form["cash_taken"] or 0)
-
-    hsd_amount = round(hsd_qty * rate, 2)
-    total_amount = round(hsd_amount + cash_taken, 2)
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        UPDATE transport_entries
-        SET entry_date=?, transporter_name=?, challan_no=?, vehicle_no=?,
-            slip_no=?, hsd_qty=?, rate=?, hsd_amount=?, cash_taken=?,
-            total_amount=?, created_at=?
-        WHERE id=?
-    """, (
-        request.form["entry_date"],
+        request.form["transporter_id"],
         request.form["transporter_name"],
         request.form["challan_no"],
         request.form["vehicle_no"],
         request.form["slip_no"],
-        hsd_qty,
+        qty,
         rate,
         hsd_amount,
         cash_taken,
-        total_amount,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        id
+        total_amount
     ))
 
     conn.commit()
@@ -1970,65 +2252,63 @@ def update_transport_entry(id):
 
     return redirect(url_for("credit_transport"))
 
+@app.route("/save-transport-payment", methods=["POST"])
+def save_transport_payment():
 
-@app.route("/delete-transport-entry/<int:id>")
-def delete_transport_entry(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
+    transporter_id = request.form["transporter_id"]
 
-    conn = get_conn()
-    cur = conn.cursor()
+    amount = float(
+        request.form["payment_amount"]
+    )
 
-    cur.execute("DELETE FROM transport_entries WHERE id = ?", (id,))
+    date = request.form["date"]
 
-    conn.commit()
-    conn.close()
-
-    return redirect(url_for("credit_transport"))
-
-
-@app.route("/edit-transporter/<int:id>")
-def edit_transporter(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT * FROM credit_transporters WHERE id = ?", (id,))
-    transporter = cur.fetchone()
-
-    conn.close()
-
-    return render_template("edit_transporter.html", transporter=transporter)
-
-
-@app.route("/update-transporter/<int:id>", methods=["POST"])
-def update_transporter(id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    opening_balance = float(request.form["opening_balance"] or 0)
-    credit_given = float(request.form["credit_given"] or 0)
-    payment_received = float(request.form["payment_received"] or 0)
-    balance_due = opening_balance + credit_given - payment_received
+    payment_type = request.form["payment_type"]
 
     conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
         UPDATE credit_transporters
-        SET party_name=?, opening_balance=?, credit_given=?,
-            payment_received=?, balance_due=?, status=?
+        SET
+        payment_received=
+        COALESCE(payment_received,0)+?,
+        balance_due=
+        balance_due-?
         WHERE id=?
-    """, (
-        request.form["party_name"],
-        opening_balance,
-        credit_given,
-        payment_received,
-        balance_due,
-        request.form["status"],
-        id
+    """,(
+        amount,
+        amount,
+        transporter_id
+    ))
+
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        WHERE id=?
+    """,(transporter_id,))
+
+    party = cur.fetchone()
+
+    cur.execute("""
+        INSERT INTO transporter_ledger(
+            date,
+            transporter_id,
+            transporter_name,
+            entry_type,
+            received_amount,
+            balance_after,
+            remarks
+        )
+        VALUES(?,?,?,?,?,?,?)
+    """,(
+        date,
+        transporter_id,
+        party["party_name"],
+        payment_type,
+        amount,
+        party["balance_due"],
+        "Payment Received"
     ))
 
     conn.commit()
@@ -2036,17 +2316,146 @@ def update_transporter(id):
 
     return redirect(url_for("credit_transport"))
 
+@app.route("/transporter-history/<int:id>")
+def transporter_history(id):
 
-@app.route("/delete-transporter/<int:id>")
-def delete_transporter(id):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        WHERE id=?
+    """,(id,))
+
+    transporter = cur.fetchone()
+
+    cur.execute("""
+        SELECT *
+        FROM transporter_ledger
+        WHERE transporter_id=?
+        ORDER BY id DESC
+    """,(id,))
+
+    history = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "transporter_history.html",
+        transporter=transporter,
+        history=history
+    )
+
+@app.route("/edit-transporter/<int:id>")
+def edit_transporter(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        WHERE id=?
+    """,(id,))
+
+    transporter = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "edit_transporter.html",
+        transporter=transporter
+    )
+
+@app.route("/update-transporter/<int:id>",methods=["POST"])
+def update_transporter(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE credit_transporters
+        SET
+        party_name=?,
+        mobile=?,
+        vehicle_no=?,
+        status=?
+        WHERE id=?
+    """,(
+        request.form.get("party_name",""),
+request.form.get("mobile",""),
+request.form.get("vehicle_no",""),
+request.form.get("status","Active"),
+id
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("credit_transport"))
+
+@app.route("/delete-daily-closing/<int:id>")
+def delete_daily_closing(id):
+
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("DELETE FROM credit_transporters WHERE id = ?", (id,))
-    cur.execute("DELETE FROM transport_payments WHERE transporter_id = ?", (id,))
+    cur.execute(
+        "SELECT date FROM daily_closing WHERE id=?",
+        (id,)
+    )
+
+    row = cur.fetchone()
+
+    if row:
+
+        report_date = row["date"]
+
+        cur.execute(
+            "DELETE FROM daily_closing WHERE id=?",
+            (id,)
+        )
+
+        cur.execute(
+            "DELETE FROM nozzle_entries WHERE entry_date=?",
+            (report_date,)
+        )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("reports"))
+
+@app.route("/delete-transporter/<int:id>")
+def delete_transporter(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM credit_transporters
+        WHERE id=?
+    """,(id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("credit_transport"))
+
+@app.route("/delete-transport-entry/<int:id>")
+def delete_transport_entry(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM transport_entries
+        WHERE id=?
+    """,(id,))
 
     conn.commit()
     conn.close()
@@ -3215,17 +3624,15 @@ def attendance():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    today = datetime.now().strftime("%Y-%m-%d")
-
     conn = get_conn()
     cur = conn.cursor()
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
 
     cur.execute("""
         SELECT *
         FROM staff_master
-        ORDER BY
-            CASE WHEN status='Active' THEN 1 ELSE 2 END,
-            staff_name ASC
+        ORDER BY id DESC
     """)
     staff_list = cur.fetchall()
 
@@ -3237,92 +3644,171 @@ def attendance():
     attendance_list = cur.fetchall()
 
     cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM staff_master
-        WHERE status='Active'
+        SELECT *
+        FROM salary_payments
+        ORDER BY payment_date DESC, id DESC
     """)
-    total_staff = cur.fetchone()["total"]
+    salaries = cur.fetchall()
 
-    cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM attendance
-        WHERE date=? AND attendance_status='Present'
-    """, (today,))
-    present_today = cur.fetchone()["total"]
+    total_staff = len(staff_list)
 
-    cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM attendance
-        WHERE date=? AND attendance_status='Absent'
-    """, (today,))
-    absent_today = cur.fetchone()["total"]
+    present_today = 0
+    absent_today = 0
+    leave_today = 0
 
-    cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM attendance
-        WHERE date=? AND attendance_status='Leave'
-    """, (today,))
-    leave_today = cur.fetchone()["total"]
+    for row in attendance_list:
+        if row["date"] == current_date:
+            if row["attendance_status"] == "Present":
+                present_today += 1
+            elif row["attendance_status"] == "Absent":
+                absent_today += 1
+            elif row["attendance_status"] == "Leave":
+                leave_today += 1
 
     staff_attendance = {}
 
     for staff in staff_list:
-        name = staff["staff_name"]
 
-        cur.execute("""
-            SELECT *
-            FROM attendance
-            WHERE staff_name=?
-            ORDER BY date DESC, id DESC
-        """, (name,))
-        records = cur.fetchall()
+        staff_name = staff["staff_name"]
 
-        present = sum(1 for r in records if r["attendance_status"] == "Present")
-        absent = sum(1 for r in records if r["attendance_status"] == "Absent")
-        leave = sum(1 for r in records if r["attendance_status"] == "Leave")
-
-        today_status = ""
-        today_time = ""
-
-        cur.execute("""
-            SELECT attendance_status
-            FROM attendance
-            WHERE staff_name=? AND date=?
-            ORDER BY id DESC
-            LIMIT 1
-        """, (name, today))
-        today_row = cur.fetchone()
-
-        if today_row:
-            today_status = today_row["attendance_status"]
-
-        staff_attendance[name] = {
-            "records": records,
-            "present": present,
-            "absent": absent,
-            "leave": leave,
-            "today_status": today_status,
-            "today_time": today_time
+        staff_attendance[staff_name] = {
+            "present": 0,
+            "absent": 0,
+            "leave": 0,
+            "records": []
         }
 
-    cur.execute("SELECT COUNT(*) AS total FROM staff_master")
-    total_emp = cur.fetchone()["total"] + 1
-    next_emp_id = f"EMP{total_emp:03d}"
+        for att in attendance_list:
+
+            if att["staff_name"] == staff_name:
+
+                staff_attendance[staff_name]["records"].append(att)
+
+                if att["attendance_status"] == "Present":
+                    staff_attendance[staff_name]["present"] += 1
+
+                elif att["attendance_status"] == "Absent":
+                    staff_attendance[staff_name]["absent"] += 1
+
+                elif att["attendance_status"] == "Leave":
+                    staff_attendance[staff_name]["leave"] += 1
+
+    salary_by_staff = {}
+
+    for s in salaries:
+
+        employee_name = s["employee_name"]
+
+        if employee_name not in salary_by_staff:
+            salary_by_staff[employee_name] = []
+
+        salary_by_staff[employee_name].append(s)
+
+    cur.execute("""
+        SELECT emp_id
+        FROM staff_master
+        ORDER BY id DESC
+        LIMIT 1
+    """)
+    last_emp = cur.fetchone()
+
+    if last_emp and last_emp["emp_id"]:
+        try:
+            last_num = int(last_emp["emp_id"].replace("EMP", ""))
+            next_emp_id = f"EMP{last_num + 1:03d}"
+        except:
+            next_emp_id = "EMP001"
+    else:
+        next_emp_id = "EMP001"
 
     conn.close()
 
     return render_template(
         "attendance.html",
-        current_date=today,
         staff_list=staff_list,
         attendance_list=attendance_list,
-        next_emp_id=next_emp_id,
         staff_attendance=staff_attendance,
+        current_date=current_date,
         total_staff=total_staff,
         present_today=present_today,
         absent_today=absent_today,
-        leave_today=leave_today
+        leave_today=leave_today,
+        next_emp_id=next_emp_id,
+        salaries=salaries,
+        salary_by_staff=salary_by_staff
     )
+
+
+@app.route("/update-salary/<int:id>", methods=["POST"])
+def update_salary(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE salary_payments
+        SET
+            payment_date=?,
+            month_name=?,
+            employee_name=?,
+            payment_mode=?,
+            bank_account=?,
+            amount=?,
+            remarks=?
+        WHERE id=?
+    """, (
+
+        request.form["payment_date"],
+        request.form["month_name"],
+        request.form["employee_name"],
+        request.form["payment_mode"],
+        request.form.get("bank_account",""),
+        float(request.form["amount"]),
+        request.form.get("remarks",""),
+        id
+
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
+
+@app.route("/edit-salary/<int:id>")
+def edit_salary(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM salary_payments WHERE id=?",
+        (id,)
+    )
+
+    salary = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "edit_salary.html",
+        salary=salary
+    )
+
+@app.route("/delete-salary/<int:id>")
+def delete_salary(id):
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "DELETE FROM salary_payments WHERE id=?",
+        (id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("attendance"))
 
 @app.route("/export-attendance-excel")
 def export_attendance_excel():
@@ -3330,73 +3816,235 @@ def export_attendance_excel():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    if not is_admin():
-        return redirect(url_for("dashboard"))
-
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT
-            sm.emp_id,
-            sm.staff_name,
-            sm.role,
-            sm.department,
-            sm.joined_date,
-            sm.bank_account,
-            sm.shift,
-            sm.status,
-            a.date,
-            a.attendance_status
-        FROM staff_master sm
-        LEFT JOIN attendance a
-        ON sm.staff_name = a.staff_name
-        ORDER BY sm.staff_name ASC, a.date DESC
-    """)
-
-    rows = cur.fetchall()
-
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Attendance"
 
-    ws.append([
-        "Employee ID",
-        "Employee Name",
-        "Role",
-        "Department",
-        "Joined Date",
-        "Bank Account",
-        "Shift",
-        "Employee Status",
-        "Attendance Date",
-        "Attendance Status"
+    # ==========================
+    # SHEET 1 : ATTENDANCE SUMMARY
+    # ==========================
+
+    ws1 = wb.active
+    ws1.title = "Attendance Summary"
+
+    ws1.append([
+        "Employee",
+        "Present",
+        "Absent",
+        "Leave",
+        "Salary Paid"
     ])
 
-    for row in rows:
-        ws.append([
-            row["emp_id"],
-            row["staff_name"],
-            row["role"],
-            row["department"],
-            row["joined_date"],
-            row["bank_account"],
-            row["shift"],
-            row["status"],
+    for cell in ws1[1]:
+        cell.font = Font(bold=True)
+
+    cur.execute("""
+        SELECT *
+        FROM staff_master
+        ORDER BY staff_name
+    """)
+    employees = cur.fetchall()
+
+    for emp in employees:
+
+        staff_name = emp["staff_name"]
+
+        cur.execute("""
+            SELECT attendance_status
+            FROM attendance
+            WHERE staff_name=?
+        """, (staff_name,))
+
+        records = cur.fetchall()
+
+        present = 0
+        absent = 0
+        leave = 0
+
+        for r in records:
+
+            if r["attendance_status"] == "Present":
+                present += 1
+
+            elif r["attendance_status"] == "Absent":
+                absent += 1
+
+            elif r["attendance_status"] == "Leave":
+                leave += 1
+
+        cur.execute("""
+            SELECT SUM(amount) total_salary
+            FROM salary_payments
+            WHERE employee_name=?
+        """, (staff_name,))
+
+        sal = cur.fetchone()
+
+        salary_paid = (
+            sal["total_salary"]
+            if sal and sal["total_salary"]
+            else 0
+        )
+
+        ws1.append([
+            staff_name,
+            present,
+            absent,
+            leave,
+            salary_paid
+        ])
+
+    # ==========================
+    # SHEET 2 : ATTENDANCE DETAILS
+    # ==========================
+
+    ws2 = wb.create_sheet("Attendance Details")
+
+    ws2.append([
+        "Date",
+        "Employee",
+        "Status"
+    ])
+
+    for cell in ws2[1]:
+        cell.font = Font(bold=True)
+
+    cur.execute("""
+        SELECT *
+        FROM attendance
+        ORDER BY date DESC
+    """)
+
+    attendance_rows = cur.fetchall()
+
+    for row in attendance_rows:
+
+        ws2.append([
             row["date"],
+            row["staff_name"],
             row["attendance_status"]
         ])
 
-    style_excel_sheet(ws)
+    # ==========================
+    # SHEET 3 : SALARY HISTORY
+    # ==========================
+
+    ws3 = wb.create_sheet("Salary Payments")
+
+    ws3.append([
+        "Date",
+        "Month",
+        "Employee",
+        "Mode",
+        "Bank Account",
+        "Amount",
+        "Remarks"
+    ])
+
+    for cell in ws3[1]:
+        cell.font = Font(bold=True)
+
+    cur.execute("""
+        SELECT *
+        FROM salary_payments
+        ORDER BY payment_date DESC
+    """)
+
+    salaries = cur.fetchall()
+
+    for s in salaries:
+
+        ws3.append([
+            s["payment_date"],
+            s["month_name"],
+            s["employee_name"],
+            s["payment_mode"],
+            s["bank_account"],
+            s["amount"],
+            s["remarks"]
+        ])
+
+    # ==========================
+    # EMPLOYEE-WISE SHEETS
+    # ==========================
+
+    for emp in employees:
+
+        staff_name = emp["staff_name"]
+
+        sheet_name = staff_name[:31]
+
+        ws = wb.create_sheet(sheet_name)
+
+        ws.append([
+            "Date",
+            "Attendance Status"
+        ])
+
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+
+        cur.execute("""
+            SELECT *
+            FROM attendance
+            WHERE staff_name=?
+            ORDER BY date
+        """, (staff_name,))
+
+        emp_attendance = cur.fetchall()
+
+        present = 0
+        absent = 0
+        leave = 0
+
+        for a in emp_attendance:
+
+            ws.append([
+                a["date"],
+                a["attendance_status"]
+            ])
+
+            if a["attendance_status"] == "Present":
+                present += 1
+
+            elif a["attendance_status"] == "Absent":
+                absent += 1
+
+            elif a["attendance_status"] == "Leave":
+                leave += 1
+
+        cur.execute("""
+            SELECT SUM(amount) total_salary
+            FROM salary_payments
+            WHERE employee_name=?
+        """, (staff_name,))
+
+        sal = cur.fetchone()
+
+        salary_paid = (
+            sal["total_salary"]
+            if sal and sal["total_salary"]
+            else 0
+        )
+
+        ws.append([])
+        ws.append(["Present", present])
+        ws.append(["Absent", absent])
+        ws.append(["Leave", leave])
+        ws.append(["Salary Paid", salary_paid])
 
     conn.close()
 
-    file = BytesIO()
-    wb.save(file)
-    file.seek(0)
+    temp_file = tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".xlsx"
+    )
+
+    wb.save(temp_file.name)
 
     return send_file(
-        file,
+        temp_file.name,
         as_attachment=True,
         download_name="Attendance_Report.xlsx"
     )
@@ -3524,6 +4172,601 @@ def delete_lube(id):
 
     return redirect(url_for("lube_stock"))
 
+@app.route("/full-system-export")
+def full_system_export():
+
+    if not session.get("logged_in") or session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    wb = Workbook()
+
+    header_fill = PatternFill("solid", fgColor="07120C")
+    sub_fill = PatternFill("solid", fgColor="16A34A")
+    light_fill = PatternFill("solid", fgColor="F1F5F9")
+    white_font = Font(color="FFFFFF", bold=True)
+    title_font = Font(size=18, bold=True, color="07120C")
+    header_font = Font(bold=True, color="FFFFFF")
+    border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+
+    def style_sheet(ws):
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(vertical="center")
+                cell.border = border
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+
+            for cell in col:
+                try:
+                    max_len = max(max_len, len(str(cell.value or "")))
+                except:
+                    pass
+
+            ws.column_dimensions[col_letter].width = min(max_len + 4, 32)
+
+    def export_table(sheet_name, table_name):
+        cur.execute(f"SELECT * FROM {table_name}")
+        rows = cur.fetchall()
+
+        ws = wb.create_sheet(sheet_name)
+
+        if not rows:
+            ws.append(["No Data"])
+            return ws
+
+        headers = rows[0].keys()
+        ws.append(list(headers))
+
+        for r in rows:
+            ws.append([r[h] for h in headers])
+
+        style_sheet(ws)
+        ws.freeze_panes = "A2"
+
+        return ws
+
+    # =========================
+    # DASHBOARD SHEET
+    # =========================
+
+    ws = wb.active
+    ws.title = "Dashboard"
+
+    ws.merge_cells("A1:H1")
+    ws["A1"] = "SAI FUEL MART - FULL SYSTEM EXPORT"
+    ws["A1"].font = title_font
+    ws["A1"].alignment = Alignment(horizontal="center")
+    ws["A1"].fill = light_fill
+
+    cur.execute("""
+        SELECT
+            COALESCE(SUM(total_fuel_sale),0) AS fuel_sale,
+            COALESCE(SUM(lube_sale),0) AS lube_sale,
+            COALESCE(SUM(digital_collection),0) AS digital,
+            COALESCE(SUM(credit_given),0) AS credit,
+            COALESCE(SUM(total_expense),0) AS expense,
+            COALESCE(SUM(cash_in_hand),0) AS cash
+        FROM daily_closing
+    """)
+    d = cur.fetchone()
+
+    cur.execute("SELECT COUNT(*) AS total FROM credit_transporters")
+    total_transporters = cur.fetchone()["total"]
+
+    cur.execute("SELECT COUNT(*) AS total FROM staff_master")
+    total_staff = cur.fetchone()["total"]
+
+    cur.execute("SELECT COALESCE(SUM(balance_due),0) AS total FROM credit_transporters")
+    total_due = cur.fetchone()["total"]
+
+    dashboard_data = [
+        ["Metric", "Value"],
+        ["Total Fuel Sale", d["fuel_sale"]],
+        ["Total Lube Sale", d["lube_sale"]],
+        ["Digital Collection", d["digital"]],
+        ["Total Credit Given", d["credit"]],
+        ["Total Expense", d["expense"]],
+        ["Cash In Hand", d["cash"]],
+        ["Total Transporters", total_transporters],
+        ["Total Staff", total_staff],
+        ["Outstanding Credit", total_due],
+        ["Generated On", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+    ]
+
+    start_row = 3
+    for r in dashboard_data:
+        ws.append(r)
+
+    for cell in ws[start_row]:
+        cell.fill = header_fill
+        cell.font = white_font
+
+    for row in ws.iter_rows(min_row=start_row):
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(vertical="center")
+
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 22
+
+    # =========================
+    # MONTHLY TREND
+    # =========================
+
+    cur.execute("""
+        SELECT
+            substr(date,1,7) AS month,
+            ROUND(SUM(total_fuel_sale),2) AS fuel,
+            ROUND(SUM(lube_sale),2) AS lube,
+            ROUND(SUM(credit_given),2) AS credit
+        FROM daily_closing
+        GROUP BY substr(date,1,7)
+        ORDER BY month
+    """)
+    monthly = cur.fetchall()
+
+    ws["D3"] = "Monthly Trend"
+    ws["D3"].font = Font(bold=True, size=14)
+
+    ws.append([])
+    ws["D5"] = "Month"
+    ws["E5"] = "Fuel Sale"
+    ws["F5"] = "Lube Sale"
+    ws["G5"] = "Credit"
+
+    for c in ["D5", "E5", "F5", "G5"]:
+        ws[c].fill = sub_fill
+        ws[c].font = white_font
+
+    row_no = 6
+    for m in monthly:
+        ws[f"D{row_no}"] = m["month"]
+        ws[f"E{row_no}"] = m["fuel"]
+        ws[f"F{row_no}"] = m["lube"]
+        ws[f"G{row_no}"] = m["credit"]
+        row_no += 1
+
+    if row_no > 6:
+        chart = LineChart()
+        chart.title = "Monthly Fuel / Lube / Credit Trend"
+        chart.y_axis.title = "Amount"
+        chart.x_axis.title = "Month"
+
+        data_ref = Reference(ws, min_col=5, max_col=7, min_row=5, max_row=row_no-1)
+        cats = Reference(ws, min_col=4, min_row=6, max_row=row_no-1)
+
+        chart.add_data(data_ref, titles_from_data=True)
+        chart.set_categories(cats)
+        chart.height = 8
+        chart.width = 18
+
+        ws.add_chart(chart, "D14")
+
+    # =========================
+    # SHEETS FROM TABLES
+    # =========================
+
+    tables = [
+        ("Daily Closing", "daily_closing"),
+        ("Nozzle Entries", "nozzle_entries"),
+        ("Nozzle Master", "nozzle_master"),
+        ("Tank Level", "tank_level"),
+        ("Credit Transporters", "credit_transporters"),
+        ("Transport Entries", "transport_entries"),
+        ("Transport Ledger", "transporter_ledger"),
+        ("Attendance", "attendance"),
+        ("Staff Master", "staff_master"),
+        ("Salary Payments", "salary_payments"),
+        ("Lube Stock", "lube_stock"),
+        ("Lube Transactions", "lube_transactions"),
+        ("Settings", "settings")
+    ]
+
+    for sheet_name, table_name in tables:
+        try:
+            export_table(sheet_name, table_name)
+        except Exception:
+            ws_err = wb.create_sheet(sheet_name)
+            ws_err.append(["Table not found or no access", table_name])
+
+    # =========================
+    # ATTENDANCE SUMMARY SHEET
+    # =========================
+
+    ws_att = wb.create_sheet("Attendance Summary")
+    ws_att.append(["Employee", "Present", "Absent", "Leave", "Salary Paid"])
+
+    cur.execute("SELECT * FROM staff_master ORDER BY staff_name")
+    staff_rows = cur.fetchall()
+
+    for staff in staff_rows:
+        name = staff["staff_name"]
+
+        cur.execute("""
+            SELECT attendance_status
+            FROM attendance
+            WHERE staff_name=?
+        """, (name,))
+        records = cur.fetchall()
+
+        present = sum(1 for r in records if r["attendance_status"] == "Present")
+        absent = sum(1 for r in records if r["attendance_status"] == "Absent")
+        leave = sum(1 for r in records if r["attendance_status"] == "Leave")
+
+        cur.execute("""
+            SELECT COALESCE(SUM(amount),0) AS total
+            FROM salary_payments
+            WHERE employee_name=?
+        """, (name,))
+        salary = cur.fetchone()["total"]
+
+        ws_att.append([name, present, absent, leave, salary])
+
+    style_sheet(ws_att)
+
+    # =========================
+    # TRANSPORT SUMMARY SHEET
+    # =========================
+
+    ws_tr = wb.create_sheet("Transport Summary")
+    ws_tr.append(["Party", "Fuel Credit", "Lube Credit", "Total Credit", "Received", "Balance"])
+
+    cur.execute("""
+        SELECT party_name, fuel_credit, lube_credit,
+               credit_given, payment_received, balance_due
+        FROM credit_transporters
+        ORDER BY balance_due DESC
+    """)
+    trs = cur.fetchall()
+
+    for t in trs:
+        ws_tr.append([
+            t["party_name"],
+            t["fuel_credit"],
+            t["lube_credit"],
+            t["credit_given"],
+            t["payment_received"],
+            t["balance_due"]
+        ])
+
+    style_sheet(ws_tr)
+
+    if len(trs) > 0:
+        pie = PieChart()
+        pie.title = "Outstanding Credit by Transporter"
+
+        labels = Reference(ws_tr, min_col=1, min_row=2, max_row=len(trs)+1)
+        data = Reference(ws_tr, min_col=6, min_row=1, max_row=len(trs)+1)
+
+        pie.add_data(data, titles_from_data=True)
+        pie.set_categories(labels)
+        pie.height = 8
+        pie.width = 12
+
+        ws_tr.add_chart(pie, "H2")
+
+    # =========================
+    # LUBE SUMMARY SHEET
+    # =========================
+
+    ws_lube = wb.create_sheet("Lube Summary")
+    ws_lube.append(["Product", "Opening", "Purchase", "Sale", "Closing", "Rate", "Closing Value"])
+
+    cur.execute("""
+        SELECT *
+        FROM lube_stock
+        ORDER BY product_name
+    """)
+    lube_rows = cur.fetchall()
+
+    for l in lube_rows:
+        closing_value = float(l["closing_stock"] or 0) * float(l["selling_rate"] or 0)
+
+        ws_lube.append([
+            l["product_name"],
+            l["opening_stock"],
+            l["purchase_qty"],
+            l["sale_qty"],
+            l["closing_stock"],
+            l["selling_rate"],
+            closing_value
+        ])
+
+    style_sheet(ws_lube)
+
+    # =========================
+    # CHART DASHBOARD EXTRA
+    # =========================
+
+    ws_chart = wb.create_sheet("Charts")
+
+    ws_chart.append(["Chart Type", "Description"])
+    ws_chart.append(["Line Chart", "Monthly fuel, lube and credit trend is on Dashboard sheet"])
+    ws_chart.append(["Pie Chart", "Outstanding credit by transporter is on Transport Summary sheet"])
+    style_sheet(ws_chart)
+
+    # =========================
+    # FORMAT ALL SHEETS
+    # =========================
+
+    for sheet in wb.worksheets:
+        sheet.freeze_panes = "A2"
+
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.alignment = Alignment(vertical="center")
+
+    conn.close()
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    wb.save(temp_file.name)
+
+    file_name = "Sai_Fuel_Mart_Full_System_Export.xlsx"
+
+    return send_file(
+        temp_file.name,
+        as_attachment=True,
+        download_name=file_name
+    )
+
+@app.route("/analytics")
+def analytics():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    current_month = request.args.get(
+    "month",
+    datetime.now().strftime("%Y-%m")
+)
+
+    # =========================
+    # TODAY SALES
+    # =========================
+
+    cur.execute("""
+SELECT
+COALESCE(SUM(total_fuel_sale),0) fuel_sale,
+COALESCE(SUM(lube_sale),0) lube_sale,
+COALESCE(SUM(cash_in_hand),0) cash_in_hand,
+COALESCE(SUM(total_expense),0) expense
+FROM daily_closing
+WHERE substr(date,1,7)=?
+""",(current_month,))
+
+    sales = cur.fetchone()
+
+    fuel_sale = float(sales["fuel_sale"] or 0)
+    lube_sale = float(sales["lube_sale"] or 0)
+    cash_in_hand = float(sales["cash_in_hand"] or 0)
+    total_expense = float(sales["expense"] or 0)
+
+    today_sale = fuel_sale + lube_sale
+
+    net_profit = today_sale - total_expense
+
+    # =========================
+    # CREDIT TRANSPORT
+    # =========================
+
+    cur.execute("""
+        SELECT
+            COUNT(*) total_transporters,
+            COALESCE(SUM(credit_given),0) total_credit,
+            COALESCE(SUM(payment_received),0) total_received,
+            COALESCE(SUM(balance_due),0) outstanding
+        FROM credit_transporters
+    """)
+
+    transport = cur.fetchone()
+
+    # =========================
+    # STAFF
+    # =========================
+
+    cur.execute("""
+        SELECT COUNT(*) total_staff
+        FROM staff_master
+        WHERE status='Active'
+    """)
+
+    total_staff = cur.fetchone()["total_staff"]
+
+    cur.execute("""
+        SELECT attendance_status
+        FROM attendance
+        WHERE substr(date,1,7)=?
+    """, (current_month,))
+
+    attendance_rows = cur.fetchall()
+
+    present_today = 0
+    absent_today = 0
+    leave_today = 0
+
+    for row in attendance_rows:
+
+        if row["attendance_status"] == "Present":
+            present_today += 1
+
+        elif row["attendance_status"] == "Absent":
+            absent_today += 1
+
+        elif row["attendance_status"] == "Leave":
+            leave_today += 1
+
+    # =========================
+    # SALARY
+    # =========================
+
+    cur.execute("""
+        SELECT
+        COALESCE(SUM(amount),0) salary_paid
+        FROM salary_payments
+        WHERE substr(payment_date,1,7)=?
+    """, (current_month,))
+
+    salary_paid = cur.fetchone()["salary_paid"]
+
+    # =========================
+    # LUBE ANALYTICS
+    # =========================
+
+    cur.execute("""
+        SELECT
+            product_name,
+            closing_stock,
+            selling_rate
+        FROM lube_stock
+    """)
+
+    lube_rows = cur.fetchall()
+
+    total_lube_value = 0
+
+    for item in lube_rows:
+
+        stock = float(item["closing_stock"] or 0)
+        rate = float(item["selling_rate"] or 0)
+
+        total_lube_value += stock * rate
+
+    cur.execute("""
+        SELECT
+        product_name,
+        sale_qty
+        FROM lube_stock
+        ORDER BY sale_qty DESC
+        LIMIT 1
+    """)
+
+    top_product = cur.fetchone()
+
+    top_product_name = (
+        top_product["product_name"]
+        if top_product
+        else "-"
+    )
+
+    # =========================
+    # LOW STOCK ALERTS
+    # =========================
+
+    cur.execute("""
+        SELECT COUNT(*) low_stock
+        FROM lube_stock
+        WHERE closing_stock < 10
+    """)
+
+    low_stock = cur.fetchone()["low_stock"]
+
+    # =========================
+    # TOP CREDITORS
+    # =========================
+
+    cur.execute("""
+        SELECT
+            party_name,
+            balance_due
+        FROM credit_transporters
+        ORDER BY balance_due DESC
+        LIMIT 10
+    """)
+
+    top_creditors = cur.fetchall()
+
+    # =========================
+    # MONTHLY TREND
+    # =========================
+
+    cur.execute("""
+        SELECT
+            substr(date,1,7) month,
+            ROUND(SUM(total_fuel_sale),2) fuel_sale,
+            ROUND(SUM(lube_sale),2) lube_sale
+        FROM daily_closing
+        GROUP BY substr(date,1,7)
+        ORDER BY month
+    """)
+
+    monthly_trend = cur.fetchall()
+
+    conn.close()
+
+    import json
+
+    trend_labels = json.dumps(
+    [x["month"] for x in monthly_trend]
+)
+
+    fuel_data = json.dumps(
+    [float(x["fuel_sale"] or 0) for x in monthly_trend]
+)
+
+    lube_data = json.dumps(
+    [float(x["lube_sale"] or 0) for x in monthly_trend]
+)
+
+    if total_staff > 0:
+     staff_percent = int((present_today * 100) / total_staff)
+    else:
+     staff_percent = 0
+
+
+    return render_template(
+        "analytics.html",
+
+        today_sale=today_sale,
+        fuel_sale=fuel_sale,
+        lube_sale=lube_sale,
+
+        cash_in_hand=cash_in_hand,
+        total_expense=total_expense,
+        net_profit=net_profit,
+
+        total_transporters=transport["total_transporters"],
+        total_credit=transport["total_credit"],
+        total_received=transport["total_received"],
+        outstanding_credit=transport["outstanding"],
+
+        total_staff=total_staff,
+        present_today=present_today,
+        absent_today=absent_today,
+        leave_today=leave_today,
+
+        salary_paid=salary_paid,
+
+        total_lube_value=total_lube_value,
+        top_product_name=top_product_name,
+
+        low_stock=low_stock,
+
+        top_creditors=top_creditors,
+        monthly_trend=monthly_trend,
+        trend_labels=trend_labels,
+        fuel_data=fuel_data,
+        lube_data=lube_data,
+        staff_percent=staff_percent,
+        
+    )
 
 @app.route("/logout")
 def logout():

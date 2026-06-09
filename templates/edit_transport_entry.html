@@ -1,135 +1,277 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>Edit Transport Entry</title>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
 <style>
-.edit-box{
-    max-width:1100px;
-    margin:35px auto;
+
+body{
+    background:#f3f4f6;
+    font-family:Segoe UI;
+    padding:40px;
+}
+
+.card{
+    max-width:900px;
+    margin:auto;
     background:white;
     padding:30px;
-    border-radius:28px;
-    box-shadow:0 18px 45px rgba(0,0,0,.08);
+    border-radius:25px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
 }
-.button-row{
-    margin-top:24px;
+
+h1{
+    margin-bottom:25px;
+    color:#07120C;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+}
+
+.group{
     display:flex;
-    gap:12px;
+    flex-direction:column;
 }
-.cancel-btn{
-    background:#e5e7eb;
-    color:#111827;
-    padding:14px 20px;
-    border-radius:14px;
-    text-decoration:none;
+
+label{
+    font-size:13px;
     font-weight:700;
+    margin-bottom:6px;
 }
+
+input,
+select{
+    height:45px;
+    border:1px solid #dbe2ea;
+    border-radius:10px;
+    padding:0 12px;
+}
+
+.save-btn{
+    width:100%;
+    margin-top:20px;
+    height:50px;
+    border:none;
+    border-radius:14px;
+    background:#16a34a;
+    color:white;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.back-btn{
+    display:inline-block;
+    margin-bottom:20px;
+    text-decoration:none;
+    background:#07120C;
+    color:white;
+    padding:10px 15px;
+    border-radius:10px;
+}
+
 </style>
 </head>
 
 <body>
 
-<div class="edit-box">
+<div class="card">
+
+<a
+href="/credit-transport"
+class="back-btn">
+
+← Back
+
+</a>
 
 <h1>Edit Transport Entry</h1>
-<br>
 
-<form method="POST" action="/update-transport-entry/{{ entry['id'] }}">
+<form
+method="POST"
+action="/update-transport-entry/{{ entry['id'] }}">
 
 <div class="form-grid">
 
-<div class="input-group">
+<div class="group">
 <label>Date</label>
-<input type="date" name="entry_date" value="{{ entry['entry_date'] }}" required>
+<input
+type="date"
+name="entry_date"
+value="{{ entry['entry_date'] }}"
+required>
 </div>
 
-<div class="input-group">
-<label>Transport Name</label>
-<select name="transporter_name" required>
-    {% for t in transporters %}
-    <option value="{{ t['party_name'] }}"
-        {% if entry['transporter_name'] == t['party_name'] %}selected{% endif %}>
-        {{ t["party_name"] }}
-    </option>
-    {% endfor %}
+<div class="group">
+<label>Transporter</label>
+
+<select
+name="transporter_id"
+required>
+
+{% for t in transporters %}
+
+<option
+value="{{ t['id'] }}"
+{% if t['id']==entry['transporter_id'] %}
+selected
+{% endif %}
+>
+
+{{ t["party_name"] }}
+
+</option>
+
+{% endfor %}
+
 </select>
+
 </div>
 
-<div class="input-group">
-<label>Challan No.</label>
-<input type="text" name="challan_no" value="{{ entry['challan_no'] }}">
+<div class="group">
+<label>Challan No</label>
+<input
+type="text"
+name="challan_no"
+value="{{ entry['challan_no'] }}">
 </div>
 
-<div class="input-group">
-<label>Vehicle No.</label>
-<input type="text" name="vehicle_no" value="{{ entry['vehicle_no'] }}">
+<div class="group">
+<label>Vehicle No</label>
+<input
+type="text"
+name="vehicle_no"
+value="{{ entry['vehicle_no'] }}">
 </div>
 
-<div class="input-group">
-<label>Slip No.</label>
-<input type="text" name="slip_no" value="{{ entry['slip_no'] }}">
+<div class="group">
+<label>Slip No</label>
+<input
+type="text"
+name="slip_no"
+value="{{ entry['slip_no'] }}">
 </div>
 
-<div class="input-group">
+<div class="group">
 <label>HSD Qty</label>
-<input type="number" step="0.01" id="hsd-qty" name="hsd_qty" value="{{ entry['hsd_qty'] }}">
+<input
+type="number"
+step="0.01"
+name="hsd_qty"
+id="hsd_qty"
+value="{{ entry['hsd_qty'] or 0 }}">
 </div>
 
-<div class="input-group">
+<div class="group">
 <label>Rate</label>
-<input type="number" step="0.01" id="rate" name="rate" value="{{ entry['rate'] }}">
+<input
+type="number"
+step="0.01"
+name="rate"
+id="rate"
+value="{{ entry['rate'] or 0 }}">
 </div>
 
-<div class="input-group">
-<label>HSD Amount</label>
-<input type="number" step="0.01" id="hsd-amount" value="{{ entry['hsd_amount'] }}" readonly>
-</div>
-
-<div class="input-group">
+<div class="group">
 <label>Cash Taken</label>
-<input type="number" step="0.01" id="cash-taken" name="cash_taken" value="{{ entry['cash_taken'] }}">
+<input
+type="number"
+step="0.01"
+name="cash_taken"
+id="cash_taken"
+value="{{ entry['cash_taken'] or 0 }}">
 </div>
 
-<div class="input-group">
+<div class="group">
+<label>HSD Amount</label>
+<input
+type="number"
+step="0.01"
+id="hsd_amount"
+value="{{ entry['hsd_amount'] or 0 }}"
+readonly>
+</div>
+
+<div class="group">
 <label>Total Amount</label>
-<input type="number" step="0.01" id="total-amount" value="{{ entry['total_amount'] }}" readonly>
+<input
+type="number"
+step="0.01"
+id="total_amount"
+value="{{ entry['total_amount'] or 0 }}"
+readonly>
 </div>
 
 </div>
 
-<div class="button-row">
-<button class="save-btn-top">
-    <i class="fa-solid fa-floppy-disk"></i>
-    Update Entry
+<button
+type="submit"
+class="save-btn">
+
+Update Entry
+
 </button>
-
-<a href="/credit-transport" class="cancel-btn">Cancel</a>
-</div>
 
 </form>
 
 </div>
 
 <script>
-function calcTransport(){
-    var qty = parseFloat(document.getElementById("hsd-qty").value) || 0;
-    var rate = parseFloat(document.getElementById("rate").value) || 0;
-    var cash = parseFloat(document.getElementById("cash-taken").value) || 0;
 
-    var hsdAmount = qty * rate;
-    var total = hsdAmount + cash;
+function calculateAmounts(){
 
-    document.getElementById("hsd-amount").value = hsdAmount.toFixed(2);
-    document.getElementById("total-amount").value = total.toFixed(2);
+    let qty =
+    parseFloat(
+        document.getElementById("hsd_qty").value
+    ) || 0;
+
+    let rate =
+    parseFloat(
+        document.getElementById("rate").value
+    ) || 0;
+
+    let cash =
+    parseFloat(
+        document.getElementById("cash_taken").value
+    ) || 0;
+
+    let hsdAmount =
+    qty * rate;
+
+    let total =
+    hsdAmount + cash;
+
+    document.getElementById("hsd_amount").value =
+    hsdAmount.toFixed(2);
+
+    document.getElementById("total_amount").value =
+    total.toFixed(2);
 }
 
-document.getElementById("hsd-qty").addEventListener("input", calcTransport);
-document.getElementById("rate").addEventListener("input", calcTransport);
-document.getElementById("cash-taken").addEventListener("input", calcTransport);
+document
+.getElementById("hsd_qty")
+.addEventListener(
+    "input",
+    calculateAmounts
+);
+
+document
+.getElementById("rate")
+.addEventListener(
+    "input",
+    calculateAmounts
+);
+
+document
+.getElementById("cash_taken")
+.addEventListener(
+    "input",
+    calculateAmounts
+);
+
 </script>
 
 </body>
