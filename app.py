@@ -4846,9 +4846,16 @@ def download_db():
     )
 
 def get_pg_conn():
+
+    import os
+
+    db_url = os.getenv("DATABASE_URL")
+
+    if not db_url:
+        return "DATABASE_URL NOT FOUND"
+
     return psycopg2.connect(
-        os.environ["DATABASE_URL"],
-        cursor_factory=psycopg2.extras.RealDictCursor,
+        db_url,
         sslmode="require"
     )
 
