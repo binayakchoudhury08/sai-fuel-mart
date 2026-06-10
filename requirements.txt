@@ -8,4 +8,4 @@ Jinja2
 itsdangerous
 click
 blinker
-psycopg2-binary==2.9.9
+psycopg2-binary
