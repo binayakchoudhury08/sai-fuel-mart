@@ -1233,18 +1233,18 @@ def save_salary_payment():
 
 
 @app.route("/edit-attendance/<int:id>")
-def edit_attendance(id):
+def edit_attendance():
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT *
         FROM attendance
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
     att = cur.fetchone()
 
@@ -1263,22 +1263,21 @@ def edit_attendance(id):
         staff_list=staff_list
     )
 
-
 @app.route("/update-attendance/<int:id>", methods=["POST"])
 def update_attendance(id):
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         UPDATE attendance
-        SET date=?,
-            staff_name=?,
-            attendance_status=?
-        WHERE id=?
+        SET date=%s,
+            staff_name=%s,
+            attendance_status=%s
+        WHERE id=%s
     """, (
         request.form["date"],
         request.form["staff_name"],
@@ -1291,19 +1290,18 @@ def update_attendance(id):
 
     return redirect(url_for("attendance"))
 
-
 @app.route("/delete-attendance/<int:id>")
 def delete_attendance(id):
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         DELETE FROM attendance
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     conn.commit()
@@ -1317,13 +1315,13 @@ def edit_staff(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT *
         FROM staff_master
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     staff = cur.fetchone()
@@ -1334,20 +1332,19 @@ def edit_staff(id):
         "edit_staff.html",
         staff=staff
     )
-
 @app.route("/update-staff/<int:id>", methods=["POST"])
 def update_staff(id):
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT staff_name
         FROM staff_master
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     old = cur.fetchone()
@@ -1357,15 +1354,15 @@ def update_staff(id):
     cur.execute("""
         UPDATE staff_master
         SET
-            emp_id=?,
-            staff_name=?,
-            role=?,
-            department=?,
-            joined_date=?,
-            bank_account=?,
-            shift=?,
-            status=?
-        WHERE id=?
+            emp_id=%s,
+            staff_name=%s,
+            role=%s,
+            department=%s,
+            joined_date=%s,
+            bank_account=%s,
+            shift=%s,
+            status=%s
+        WHERE id=%s
     """, (
 
         request.form.get("emp_id"),
@@ -1383,8 +1380,8 @@ def update_staff(id):
 
     cur.execute("""
         UPDATE attendance
-        SET staff_name=?
-        WHERE staff_name=?
+        SET staff_name=%s
+        WHERE staff_name=%s
     """, (
         request.form.get("staff_name"),
         old_name
@@ -1401,13 +1398,13 @@ def delete_staff(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT staff_name
         FROM staff_master
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     staff = cur.fetchone()
@@ -1416,25 +1413,20 @@ def delete_staff(id):
 
         staff_name = staff["staff_name"]
 
-        # DELETE ATTENDANCE
-
         cur.execute("""
             DELETE FROM attendance
-            WHERE staff_name=?
+            WHERE staff_name=%s
         """, (staff_name,))
-
-        # DELETE STAFF
 
         cur.execute("""
             DELETE FROM staff_master
-            WHERE id=?
+            WHERE id=%s
         """, (id,))
 
     conn.commit()
     conn.close()
 
     return redirect(url_for("attendance"))
-
 
 
 
