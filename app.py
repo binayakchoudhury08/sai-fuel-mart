@@ -4846,10 +4846,10 @@ def download_db():
     )
 
 def get_pg_conn():
-
     return psycopg2.connect(
         os.environ["DATABASE_URL"],
-        cursor_factory=psycopg2.extras.RealDictCursor
+        cursor_factory=psycopg2.extras.RealDictCursor,
+        sslmode="require"
     )
 
 @app.route("/test-supabase")
