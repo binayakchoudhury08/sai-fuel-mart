@@ -3189,7 +3189,7 @@ def settings():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
     cur.execute("SELECT * FROM settings WHERE id = 1")
     settings_data = cur.fetchone()
@@ -3211,7 +3211,7 @@ def save_settings():
     hsd_rate = float(request.form.get("hsd_rate", 0))
     cng_rate = float(request.form.get("cng_rate", 0))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     # CHECK EXISTING SETTINGS
