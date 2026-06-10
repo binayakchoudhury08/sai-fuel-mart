@@ -4831,5 +4831,17 @@ def logout():
 
 init_db()
 
+@app.route("/download-db")
+def download_db():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    return send_file(
+        "sai_fuel_mart.db",
+        as_attachment=True,
+        download_name="SaiFuelMart_Backup.db"
+    )
+
 if __name__ == "__main__":
     app.run(debug=True)
