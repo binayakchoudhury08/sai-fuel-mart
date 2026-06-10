@@ -3631,7 +3631,7 @@ def attendance():
     datetime.now().strftime("%Y-%m-%d")
 )
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -3664,7 +3664,7 @@ def attendance():
     leave_today = 0
 
     for row in attendance_list:
-        if row["date"] == current_date:
+        if str(row["date"]) == current_date:
             if row["attendance_status"] == "Present":
                 present_today += 1
             elif row["attendance_status"] == "Absent":
