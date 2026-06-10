@@ -1085,17 +1085,17 @@ Attendance Calendar
 
 {% if r["attendance_status"] == "Present" %}
 <div class="day present">
-{{ r["date"][-2:] }}
+{{ r["date"] }}
 <small>P</small>
 </div>
 {% elif r["attendance_status"] == "Absent" %}
 <div class="day absent">
-{{ r["date"][-2:] }}
+{{ r["date"] }}
 <small>A</small>
 </div>
 {% else %}
 <div class="day leave">
-{{ r["date"][-2:] }}
+{{ r["date"] }}
 <small>L</small>
 </div>
 {% endif %}
