@@ -4067,25 +4067,35 @@ def save_staff():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
-    cur = conn.cursor()
+    conn, cur = get_pg_cursor()
 
-    staff_name = request.form.get("staff_name", "").strip()
+    staff_name = request.form.get(
+        "staff_name",
+        ""
+    ).strip()
 
     if not staff_name:
+
         conn.close()
-        return redirect(url_for("attendance"))
+
+        return redirect(
+            url_for("attendance")
+        )
 
     cur.execute("""
         SELECT id
         FROM staff_master
-        WHERE LOWER(staff_name)=LOWER(?)
+        WHERE LOWER(staff_name)=LOWER(%s)
     """, (staff_name,))
+
     existing = cur.fetchone()
 
     if not existing:
+
         cur.execute("""
+
             INSERT INTO staff_master (
+
                 emp_id,
                 staff_name,
                 role,
@@ -4094,24 +4104,42 @@ def save_staff():
                 bank_account,
                 shift,
                 status
+
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+
+            VALUES (
+
+                %s,%s,%s,%s,%s,%s,%s,%s
+
+            )
+
         """, (
+
             request.form.get("emp_id", ""),
+
             staff_name,
+
             request.form.get("role", ""),
+
             request.form.get("department", ""),
-            request.form.get("joined_date", ""),
+
+            request.form.get("joined_date", None),
+
             request.form.get("bank_account", ""),
+
             request.form.get("shift", ""),
+
             request.form.get("status", "Active")
+
         ))
 
     conn.commit()
+
     conn.close()
 
-    return redirect(url_for("attendance"))
-
+    return redirect(
+        url_for("attendance")
+    )
 
 # =========================================
 # SAVE / UPDATE ATTENDANCE
@@ -4858,6 +4886,14 @@ def get_pg_conn():
         db_url,
         sslmode="require"
     )
+
+def get_pg_cursor():
+
+    conn = get_pg_conn()
+
+    cur = conn.cursor()
+
+    return conn, cur
 
 @app.route("/test-supabase")
 def test_supabase():
