@@ -56,22 +56,21 @@ Nozzle Management
 
                 <div class="input-group">
                     <label>MS Rate</label>
-                    <input type="number" step="0.01" name="ms_rate" value="{{ settings['ms_rate'] }}">
+                    <input type="number" step="0.01" name="ms_rate" value="{{ settings['ms_rate'] if settings else '' }}">
+
                 </div>
 
                 <div class="input-group">
                     <label>HSD Rate</label>
-                    <input type="number" step="0.01" name="hsd_rate" value="{{ settings['hsd_rate'] }}">
+                    <input type="number" step="0.01" name="hsd_rate" value="{{ settings['hsd_rate'] if settings else '' }}">
+
                 </div>
 
                 <div class="input-group">
 
 <label>CNG Rate</label>
 
-<input type="number"
-step="0.01"
-name="cng_rate"
-value="{{ settings['cng_rate'] if settings else '' }}">
+<input type="number" step="0.01" name="cng_rate" value="{{ settings['cng_rate'] if settings else '' }}">
 
 </div>
 

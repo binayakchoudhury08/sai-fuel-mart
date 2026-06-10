@@ -3191,7 +3191,7 @@ def settings():
 
     conn = get_pg_conn()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM settings WHERE id = 1")
+    cur.execute("SELECT * FROM settings WHERE id=1")
     settings_data = cur.fetchone()
     conn.close()
 
