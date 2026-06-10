@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, flash
 from datetime import timedelta, datetime
 import sqlite3
 import os
@@ -364,13 +364,13 @@ CREATE TABLE IF NOT EXISTS salary_payments(
 ]
 
     for nozzle in default_nozzles:
-        cur.execute("SELECT id FROM nozzle_master WHERE nozzle_name = ?", (nozzle[0],))
+        cur.execute("SELECT id FROM nozzle_master WHERE nozzle_name = %s", (nozzle[0],))
         if not cur.fetchone():
             cur.execute("""
                 INSERT INTO nozzle_master (
                     nozzle_name, machine_no, fuel_type, status
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, nozzle)
 
     conn.commit()
@@ -554,12 +554,12 @@ def receive_transport_payment(id):
         SET
 
             amount_received =
-            COALESCE(amount_received,0) + ?,
+            COALESCE(amount_received,0) + %s,
 
             balance_due =
-            balance_due - ?
+            balance_due - %s
 
-        WHERE id=?
+        WHERE id=%s
 
     """, (
 
@@ -612,12 +612,12 @@ def save_daily_closing():
         conn = get_conn()
         cur = conn.cursor()
 
-        cur.execute("SELECT id FROM daily_closing WHERE date=?", (data["date"],))
+        cur.execute("SELECT id FROM daily_closing WHERE date=%s", (data["date"],))
         existing = cur.fetchone()
 
         if existing:
-            cur.execute("DELETE FROM daily_closing WHERE id=?", (existing["id"],))
-            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=?", (data["date"],))
+            cur.execute("DELETE FROM daily_closing WHERE id=%s", (existing["id"],))
+            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=%s", (data["date"],))
 
         cur.execute("""
             INSERT INTO daily_closing (
@@ -627,7 +627,7 @@ def save_daily_closing():
                 credit_given, transport_received, net_credit_due,
                 total_expense, cash_in_hand
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             data["date"],
             float(data.get("ms_litres", 0)),
@@ -667,7 +667,7 @@ def save_daily_closing():
                     entry_date, nozzle_id, opening_reading,
                     closing_reading, testing_qty, total_sale, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 data["date"],
                 nozzle_id,
@@ -697,9 +697,9 @@ def save_daily_closing():
 
             cur.execute("""
                 UPDATE lube_stock
-                SET sale_qty = COALESCE(sale_qty,0) + ?,
-                    closing_stock = COALESCE(closing_stock,0) - ?
-                WHERE id=?
+                SET sale_qty = COALESCE(sale_qty,0) + %s,
+                    closing_stock = COALESCE(closing_stock,0) - %s
+                WHERE id=%s
             """, (qty, qty, product_id))
 
             cur.execute("""
@@ -707,7 +707,7 @@ def save_daily_closing():
                     date, product_id, product_name, transaction_type,
                     qty, rate, amount, remarks
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 data["date"],
                 product_id,
@@ -729,10 +729,10 @@ def save_daily_closing():
 
                 cur.execute("""
                     UPDATE credit_transporters
-                    SET lube_credit = COALESCE(lube_credit,0) + ?,
-                        credit_given = COALESCE(credit_given,0) + ?,
-                        balance_due = COALESCE(balance_due,0) + ?
-                    WHERE id=?
+                    SET lube_credit = COALESCE(lube_credit,0) + %s,
+                        credit_given = COALESCE(credit_given,0) + %s,
+                        balance_due = COALESCE(balance_due,0) + %s
+                    WHERE id=%s
                 """, (
                     amount,
                     amount,
@@ -743,7 +743,7 @@ def save_daily_closing():
                 cur.execute("""
                     SELECT party_name, balance_due
                     FROM credit_transporters
-                    WHERE id=?
+                    WHERE id=%s
                 """, (transporter_id,))
 
                 tr = cur.fetchone()
@@ -753,7 +753,7 @@ def save_daily_closing():
                         date, transporter_id, transporter_name,
                         entry_type, lube_credit, balance_after, remarks
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     data["date"],
                     transporter_id,
@@ -775,10 +775,10 @@ def save_daily_closing():
 
             cur.execute("""
                 UPDATE credit_transporters
-                SET fuel_credit = COALESCE(fuel_credit,0) + ?,
-                    credit_given = COALESCE(credit_given,0) + ?,
-                    balance_due = COALESCE(balance_due,0) + ?
-                WHERE id=?
+                SET fuel_credit = COALESCE(fuel_credit,0) + %s,
+                    credit_given = COALESCE(credit_given,0) + %s,
+                    balance_due = COALESCE(balance_due,0) + %s
+                WHERE id=%s
             """, (
                 amount,
                 amount,
@@ -789,7 +789,7 @@ def save_daily_closing():
             cur.execute("""
                 SELECT party_name, balance_due
                 FROM credit_transporters
-                WHERE id=?
+                WHERE id=%s
             """, (transporter_id,))
 
             tr = cur.fetchone()
@@ -799,7 +799,7 @@ def save_daily_closing():
                     date, transporter_id, transporter_name,
                     entry_type, fuel_credit, balance_after, remarks
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 data["date"],
                 transporter_id,
@@ -861,7 +861,7 @@ def save_lube_product():
 
         )
 
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
 
     """, (
 
@@ -940,7 +940,7 @@ def daily_closing():
                 FROM nozzle_entries prev
 
                 WHERE prev.nozzle_id = nm.id
-                AND prev.entry_date < ?
+                AND prev.entry_date < %s
 
                 ORDER BY prev.entry_date DESC,
                          prev.id DESC
@@ -962,7 +962,7 @@ def daily_closing():
     LEFT JOIN nozzle_entries ne
 
     ON nm.id = ne.nozzle_id
-    AND ne.entry_date = ?
+    AND ne.entry_date = %s
 
     ORDER BY
     nm.fuel_type,
@@ -1015,7 +1015,7 @@ def print_daily_report(date):
     cur.execute("""
         SELECT *
         FROM daily_closing
-        WHERE substr(date, 1, 10) = ?
+        WHERE substr(date, 1, 10) = %s
         ORDER BY id DESC
         LIMIT 1
     """, (date,))
@@ -1030,7 +1030,7 @@ def print_daily_report(date):
         FROM nozzle_entries
         LEFT JOIN nozzle_master
         ON nozzle_entries.nozzle_id = nozzle_master.id
-        WHERE substr(nozzle_entries.entry_date, 1, 10) = ?
+        WHERE substr(nozzle_entries.entry_date, 1, 10) = %s
         ORDER BY nozzle_master.fuel_type, nozzle_master.nozzle_name
     """, (date,))
     nozzle_rows = cur.fetchall()
@@ -1038,7 +1038,7 @@ def print_daily_report(date):
     cur.execute("""
         SELECT *
         FROM tank_level
-        WHERE substr(date, 1, 10) = ?
+        WHERE substr(date, 1, 10) = %s
         ORDER BY fuel_type ASC, id DESC
     """, (date,))
     tank_rows = cur.fetchall()
@@ -1061,7 +1061,7 @@ def edit_transport_entry(id):
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT * FROM transport_entries WHERE id=?",
+        "SELECT * FROM transport_entries WHERE id=%s",
         (id,)
     )
 
@@ -1110,17 +1110,17 @@ def update_transport_entry(id):
     cur.execute("""
         UPDATE transport_entries
         SET
-            entry_date=?,
-            transporter_id=?,
-            challan_no=?,
-            vehicle_no=?,
-            slip_no=?,
-            hsd_qty=?,
-            rate=?,
-            hsd_amount=?,
-            cash_taken=?,
-            total_amount=?
-        WHERE id=?
+            entry_date=%s,
+            transporter_id=%s,
+            challan_no=%s,
+            vehicle_no=%s,
+            slip_no=%s,
+            hsd_qty=%s,
+            rate=%s,
+            hsd_amount=%s,
+            cash_taken=%s,
+            total_amount=%s
+        WHERE id=%s
     """, (
 
         request.form["entry_date"],
@@ -1158,7 +1158,7 @@ def edit_lube_transaction(id):
     cur.execute("""
         SELECT *
         FROM lube_transactions
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
     tx = cur.fetchone()
 
@@ -1174,13 +1174,13 @@ def get_daily_closing(date):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM daily_closing WHERE date = ? ORDER BY id DESC LIMIT 1", (date,))
+    cur.execute("SELECT * FROM daily_closing WHERE date = %s ORDER BY id DESC LIMIT 1", (date,))
     row = cur.fetchone()
 
     cur.execute("""
         SELECT COALESCE(SUM(payment_amount), 0) AS total_received
         FROM transport_payments
-        WHERE date <= ?
+        WHERE date <= %s
     """, (date,))
     transport_total = cur.fetchone()["total_received"]
 
@@ -1200,7 +1200,7 @@ def get_daily_closing(date):
 @app.route("/save-salary-payment", methods=["POST"])
 def save_salary_payment():
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1214,7 +1214,7 @@ def save_salary_payment():
             month_name,
             remarks
         )
-        VALUES(?,?,?,?,?,?,?,?)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         request.form["payment_date"],
         request.form["emp_id"],
@@ -1233,7 +1233,7 @@ def save_salary_payment():
 
 
 @app.route("/edit-attendance/<int:id>")
-def edit_attendance():
+def edit_attendance(id):
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
@@ -1443,7 +1443,7 @@ def edit_daily_closing(id):
     cur.execute("""
         SELECT *
         FROM daily_closing
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     row = cur.fetchone()
@@ -1476,23 +1476,23 @@ def update_daily_closing(id):
 
         SET
 
-            date=?,
+            date=%s,
 
-            ms_litres=?,
-            hsd_litres=?,
-            cng_sale=?,
+            ms_litres=%s,
+            hsd_litres=%s,
+            cng_sale=%s,
 
-            total_fuel_sale=?,
+            total_fuel_sale=%s,
 
-            lube_sale=?,
+            lube_sale=%s,
 
-            digital_collection=?,
+            digital_collection=%s,
 
-            total_expense=?,
+            total_expense=%s,
 
-            cash_in_hand=?
+            cash_in_hand=%s
 
-        WHERE id=?
+        WHERE id=%s
 
     """, (
 
@@ -1583,7 +1583,7 @@ def save_nozzle_master():
             fuel_type,
             status
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (
         nozzle_name,
         machine_no,
@@ -1609,7 +1609,7 @@ def edit_nozzle_master(id):
     cur.execute("""
         SELECT *
         FROM nozzle_master
-        WHERE id = ?
+        WHERE id = %s
     """, (id,))
     nozzle = cur.fetchone()
 
@@ -1637,11 +1637,11 @@ def update_nozzle_master(id):
 
     cur.execute("""
         UPDATE nozzle_master
-        SET nozzle_name = ?,
-            machine_no = ?,
-            fuel_type = ?,
-            status = ?
-        WHERE id = ?
+        SET nozzle_name = %s,
+            machine_no = %s,
+            fuel_type = %s,
+            status = %s
+        WHERE id = %s
     """, (
         nozzle_name,
         machine_no,
@@ -1667,12 +1667,12 @@ def delete_nozzle_master(id):
 
     cur.execute("""
         DELETE FROM nozzle_entries
-        WHERE nozzle_id = ?
+        WHERE nozzle_id = %s
     """, (id,))
 
     cur.execute("""
         DELETE FROM nozzle_master
-        WHERE id = ?
+        WHERE id = %s
     """, (id,))
 
     conn.commit()
@@ -1717,7 +1717,7 @@ def save_nozzle_entry():
             total_sale,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (
         entry_date,
         nozzle_id,
@@ -1746,7 +1746,7 @@ def edit_nozzle_entry(id):
     cur.execute("""
         SELECT *
         FROM nozzle_entries
-        WHERE id = ?
+        WHERE id = %s
     """, (id,))
     entry = cur.fetchone()
 
@@ -1792,14 +1792,14 @@ def update_nozzle_entry(id):
 
     cur.execute("""
         UPDATE nozzle_entries
-        SET entry_date = ?,
-            nozzle_id = ?,
-            opening_reading = ?,
-            closing_reading = ?,
-            testing_qty = ?,
-            total_sale = ?,
-            created_at = ?
-        WHERE id = ?
+        SET entry_date = %s,
+            nozzle_id = %s,
+            opening_reading = %s,
+            closing_reading = %s,
+            testing_qty = %s,
+            total_sale = %s,
+            created_at = %s
+        WHERE id = %s
     """, (
         entry_date,
         nozzle_id,
@@ -1828,7 +1828,7 @@ def delete_nozzle_entry(id):
 
     cur.execute("""
         DELETE FROM nozzle_entries
-        WHERE id = ?
+        WHERE id = %s
     """, (id,))
 
     conn.commit()
@@ -1861,7 +1861,7 @@ def get_nozzle_sales(date):
         LEFT JOIN nozzle_master
         ON nozzle_entries.nozzle_id = nozzle_master.id
 
-        WHERE substr(nozzle_entries.entry_date,1,10)=?
+        WHERE substr(nozzle_entries.entry_date,1,10)=%s
 
         ORDER BY nozzle_master.fuel_type,
                  nozzle_master.nozzle_name
@@ -1960,7 +1960,7 @@ def save_tank_level():
     cur.execute("""
         SELECT ms_litres, hsd_litres
         FROM daily_closing
-        WHERE date = ?
+        WHERE date = %s
         ORDER BY id DESC
         LIMIT 1
     """, (request.form["date"],))
@@ -1989,7 +1989,7 @@ def save_tank_level():
             sale_stock, gain_qty, shortage_qty, current_stock,
             gain_amount, shortage_amount, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         request.form["date"],
         fuel_type,
@@ -2019,7 +2019,7 @@ def edit_tank_level(id):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM tank_level WHERE id = ?", (id,))
+    cur.execute("SELECT * FROM tank_level WHERE id = %s", (id,))
     row = cur.fetchone()
 
     conn.close()
@@ -2056,10 +2056,10 @@ def update_tank_level(id):
 
     cur.execute("""
         UPDATE tank_level
-        SET date=?, fuel_type=?, opening_stock=?, received_stock=?,
-            own_tanker_stock=?, sale_stock=?, gain_qty=?, shortage_qty=?,
-            current_stock=?, gain_amount=?, shortage_amount=?, created_at=?
-        WHERE id=?
+        SET date=%s, fuel_type=%s, opening_stock=%s, received_stock=%s,
+            own_tanker_stock=%s, sale_stock=%s, gain_qty=%s, shortage_qty=%s,
+            current_stock=%s, gain_amount=%s, shortage_amount=%s, created_at=%s
+        WHERE id=%s
     """, (
         request.form["date"],
         request.form["fuel_type"],
@@ -2090,7 +2090,7 @@ def delete_tank_level(id):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("DELETE FROM tank_level WHERE id = ?", (id,))
+    cur.execute("DELETE FROM tank_level WHERE id = %s", (id,))
 
     conn.commit()
     conn.close()
@@ -2172,7 +2172,7 @@ def add_transporter():
             balance_due,
             status
         )
-        VALUES(?,?,?,?,?,?)
+        VALUES(%s,%s,%s,%s,%s,%s)
     """,(
         request.form.get("party_name",""),
 request.form.get("mobile",""),
@@ -2198,7 +2198,7 @@ def save_transport_entry():
     cur.execute("""
         SELECT COUNT(*) as total
         FROM transport_entries
-        WHERE entry_date=?
+        WHERE entry_date=%s
     """,(entry_date,))
 
     sl_no = cur.fetchone()["total"] + 1
@@ -2225,7 +2225,7 @@ def save_transport_entry():
             cash_taken,
             total_amount
         )
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """,(
         entry_date,
         sl_no,
@@ -2266,10 +2266,10 @@ def save_transport_payment():
         UPDATE credit_transporters
         SET
         payment_received=
-        COALESCE(payment_received,0)+?,
+        COALESCE(payment_received,0)+%s,
         balance_due=
-        balance_due-?
-        WHERE id=?
+        balance_due-%s
+        WHERE id=%s
     """,(
         amount,
         amount,
@@ -2279,7 +2279,7 @@ def save_transport_payment():
     cur.execute("""
         SELECT *
         FROM credit_transporters
-        WHERE id=?
+        WHERE id=%s
     """,(transporter_id,))
 
     party = cur.fetchone()
@@ -2294,7 +2294,7 @@ def save_transport_payment():
             balance_after,
             remarks
         )
-        VALUES(?,?,?,?,?,?,?)
+        VALUES(%s,%s,%s,%s,%s,%s,%s)
     """,(
         date,
         transporter_id,
@@ -2319,7 +2319,7 @@ def transporter_history(id):
     cur.execute("""
         SELECT *
         FROM credit_transporters
-        WHERE id=?
+        WHERE id=%s
     """,(id,))
 
     transporter = cur.fetchone()
@@ -2327,7 +2327,7 @@ def transporter_history(id):
     cur.execute("""
         SELECT *
         FROM transporter_ledger
-        WHERE transporter_id=?
+        WHERE transporter_id=%s
         ORDER BY id DESC
     """,(id,))
 
@@ -2350,7 +2350,7 @@ def edit_transporter(id):
     cur.execute("""
         SELECT *
         FROM credit_transporters
-        WHERE id=?
+        WHERE id=%s
     """,(id,))
 
     transporter = cur.fetchone()
@@ -2371,11 +2371,11 @@ def update_transporter(id):
     cur.execute("""
         UPDATE credit_transporters
         SET
-        party_name=?,
-        mobile=?,
-        vehicle_no=?,
-        status=?
-        WHERE id=?
+        party_name=%s,
+        mobile=%s,
+        vehicle_no=%s,
+        status=%s
+        WHERE id=%s
     """,(
         request.form.get("party_name",""),
 request.form.get("mobile",""),
@@ -2399,7 +2399,7 @@ def delete_daily_closing(id):
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT date FROM daily_closing WHERE id=?",
+        "SELECT date FROM daily_closing WHERE id=%s",
         (id,)
     )
 
@@ -2410,12 +2410,12 @@ def delete_daily_closing(id):
         report_date = row["date"]
 
         cur.execute(
-            "DELETE FROM daily_closing WHERE id=?",
+            "DELETE FROM daily_closing WHERE id=%s",
             (id,)
         )
 
         cur.execute(
-            "DELETE FROM nozzle_entries WHERE entry_date=?",
+            "DELETE FROM nozzle_entries WHERE entry_date=%s",
             (report_date,)
         )
 
@@ -2432,7 +2432,7 @@ def delete_transporter(id):
 
     cur.execute("""
         DELETE FROM credit_transporters
-        WHERE id=?
+        WHERE id=%s
     """,(id,))
 
     conn.commit()
@@ -2448,7 +2448,7 @@ def delete_transport_entry(id):
 
     cur.execute("""
         DELETE FROM transport_entries
-        WHERE id=?
+        WHERE id=%s
     """,(id,))
 
     conn.commit()
@@ -2587,15 +2587,15 @@ def reports():
     daily_params = []
 
     if from_date:
-        daily_query += " AND dc.date >= ?"
+        daily_query += " AND dc.date >= %s"
         daily_params.append(from_date)
 
     if to_date:
-        daily_query += " AND dc.date <= ?"
+        daily_query += " AND dc.date <= %s"
         daily_params.append(to_date)
 
     if search:
-        daily_query += " AND dc.date LIKE ?"
+        daily_query += " AND dc.date LIKE %s"
         daily_params.append(f"%{search}%")
 
     daily_query += " ORDER BY dc.date DESC, dc.id DESC"
@@ -2618,22 +2618,22 @@ def reports():
     nozzle_params = []
 
     if from_date:
-        nozzle_query += " AND nozzle_entries.entry_date >= ?"
+        nozzle_query += " AND nozzle_entries.entry_date >= %s"
         nozzle_params.append(from_date)
 
     if to_date:
-        nozzle_query += " AND nozzle_entries.entry_date <= ?"
+        nozzle_query += " AND nozzle_entries.entry_date <= %s"
         nozzle_params.append(to_date)
 
     if fuel_type:
-        nozzle_query += " AND nozzle_master.fuel_type = ?"
+        nozzle_query += " AND nozzle_master.fuel_type = %s"
         nozzle_params.append(fuel_type)
 
     if search:
         nozzle_query += """
             AND (
-                nozzle_master.nozzle_name LIKE ?
-                OR nozzle_master.machine_no LIKE ?
+                nozzle_master.nozzle_name LIKE %s
+                OR nozzle_master.machine_no LIKE %s
             )
         """
         nozzle_params.extend([f"%{search}%", f"%{search}%"])
@@ -2654,15 +2654,15 @@ def reports():
     tank_params = []
 
     if from_date:
-        tank_query += " AND date >= ?"
+        tank_query += " AND date >= %s"
         tank_params.append(from_date)
 
     if to_date:
-        tank_query += " AND date <= ?"
+        tank_query += " AND date <= %s"
         tank_params.append(to_date)
 
     if fuel_type:
-        tank_query += " AND fuel_type = ?"
+        tank_query += " AND fuel_type = %s"
         tank_params.append(fuel_type)
 
     tank_query += " ORDER BY date DESC, id DESC"
@@ -2679,7 +2679,7 @@ def reports():
     lube_params = []
 
     if search:
-        lube_query += " AND product_name LIKE ?"
+        lube_query += " AND product_name LIKE %s"
         lube_params.append(f"%{search}%")
 
     lube_query += " ORDER BY product_name ASC"
@@ -2696,7 +2696,7 @@ def reports():
     transport_params = []
 
     if search:
-        transport_query += " AND party_name LIKE ?"
+        transport_query += " AND party_name LIKE %s"
         transport_params.append(f"%{search}%")
 
     transport_query += " ORDER BY balance_due DESC, party_name ASC"
@@ -2713,20 +2713,20 @@ def reports():
     transport_entry_params = []
 
     if from_date:
-        transport_entry_query += " AND entry_date >= ?"
+        transport_entry_query += " AND entry_date >= %s"
         transport_entry_params.append(from_date)
 
     if to_date:
-        transport_entry_query += " AND entry_date <= ?"
+        transport_entry_query += " AND entry_date <= %s"
         transport_entry_params.append(to_date)
 
     if search:
         transport_entry_query += """
             AND (
-                transporter_name LIKE ?
-                OR challan_no LIKE ?
-                OR vehicle_no LIKE ?
-                OR slip_no LIKE ?
+                transporter_name LIKE %s
+                OR challan_no LIKE %s
+                OR vehicle_no LIKE %s
+                OR slip_no LIKE %s
             )
         """
         transport_entry_params.extend([
@@ -3131,7 +3131,7 @@ def delete_report(id):
 
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("DELETE FROM daily_closing WHERE id = ?", (id,))
+    cur.execute("DELETE FROM daily_closing WHERE id = %s", (id,))
     conn.commit()
     conn.close()
 
@@ -3145,7 +3145,7 @@ def edit_report(id):
 
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM daily_closing WHERE id = ?", (id,))
+    cur.execute("SELECT * FROM daily_closing WHERE id = %s", (id,))
     row = cur.fetchone()
     conn.close()
 
@@ -3162,11 +3162,11 @@ def update_report(id):
 
     cur.execute("""
         UPDATE daily_closing
-        SET date=?, ms_litres=?, hsd_litres=?, cng_sale=?, total_fuel_sale=?,
-            lube_sale=?, digital_collection=?, phonepe=?, card_swipe=?,
-            hp_pay=?, hpcl_otp=?, upi_other=?, credit_given=?,
-            transport_received=?, net_credit_due=?, total_expense=?, cash_in_hand=?
-        WHERE id=?
+        SET date=%s, ms_litres=%s, hsd_litres=%s, cng_sale=%s, total_fuel_sale=%s,
+            lube_sale=%s, digital_collection=%s, phonepe=%s, card_swipe=%s,
+            hp_pay=%s, hpcl_otp=%s, upi_other=%s, credit_given=%s,
+            transport_received=%s, net_credit_due=%s, total_expense=%s, cash_in_hand=%s
+        WHERE id=%s
     """, (
         request.form["date"], request.form["ms_litres"], request.form["hsd_litres"],
         request.form.get("cng_sale",0), request.form["total_fuel_sale"], request.form["lube_sale"],
@@ -3234,11 +3234,11 @@ def save_settings():
 
             SET
 
-                ms_rate=?,
-                hsd_rate=?,
-                cng_rate=?
+                ms_rate=%s,
+                hsd_rate=%s,
+                cng_rate=%s
 
-            WHERE id=?
+            WHERE id=%s
 
         """, (
 
@@ -3264,7 +3264,7 @@ def save_settings():
 
             )
 
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
 
         """, (
 
@@ -3320,7 +3320,7 @@ def lube_stock():
         cur.execute("""
             SELECT *
             FROM lube_transactions
-            WHERE product_id=?
+            WHERE product_id=%s
             ORDER BY date DESC, id DESC
         """, (product_id,))
         transactions = cur.fetchall()
@@ -3365,7 +3365,7 @@ def save_lube_transaction():
     cur.execute("""
         SELECT product_name
         FROM lube_stock
-        WHERE id=?
+        WHERE id=%s
     """, (product_id,))
     product = cur.fetchone()
 
@@ -3380,7 +3380,7 @@ def save_lube_transaction():
             date, product_id, product_name, transaction_type,
             qty, rate, amount, remarks
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         date, product_id, product_name, transaction_type,
         qty, rate, amount, remarks
@@ -3389,17 +3389,17 @@ def save_lube_transaction():
     if transaction_type == "Purchase":
         cur.execute("""
             UPDATE lube_stock
-            SET purchase_qty = purchase_qty + ?,
-                closing_stock = closing_stock + ?
-            WHERE id=?
+            SET purchase_qty = purchase_qty + %s,
+                closing_stock = closing_stock + %s
+            WHERE id=%s
         """, (qty, qty, product_id))
 
     elif transaction_type == "Sale":
         cur.execute("""
             UPDATE lube_stock
-            SET sale_qty = sale_qty + ?,
-                closing_stock = closing_stock - ?
-            WHERE id=?
+            SET sale_qty = sale_qty + %s,
+                closing_stock = closing_stock - %s
+            WHERE id=%s
         """, (qty, qty, product_id))
 
     conn.commit()
@@ -3419,7 +3419,7 @@ def delete_lube_transaction(id):
     cur.execute("""
         SELECT *
         FROM lube_transactions
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
     tx = cur.fetchone()
 
@@ -3430,22 +3430,22 @@ def delete_lube_transaction(id):
         if tx["transaction_type"] == "Purchase":
             cur.execute("""
                 UPDATE lube_stock
-                SET purchase_qty = purchase_qty - ?,
-                    closing_stock = closing_stock - ?
-                WHERE id=?
+                SET purchase_qty = purchase_qty - %s,
+                    closing_stock = closing_stock - %s
+                WHERE id=%s
             """, (qty, qty, product_id))
 
         elif tx["transaction_type"] == "Sale":
             cur.execute("""
                 UPDATE lube_stock
-                SET sale_qty = sale_qty - ?,
-                    closing_stock = closing_stock + ?
-                WHERE id=?
+                SET sale_qty = sale_qty - %s,
+                    closing_stock = closing_stock + %s
+                WHERE id=%s
             """, (qty, qty, product_id))
 
         cur.execute("""
             DELETE FROM lube_transactions
-            WHERE id=?
+            WHERE id=%s
         """, (id,))
 
     conn.commit()
@@ -3465,7 +3465,7 @@ def edit_lube(id):
     cur.execute("""
         SELECT *
         FROM lube_stock
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
 
     item = cur.fetchone()
@@ -3489,7 +3489,7 @@ def update_lube_transaction(id):
     cur.execute("""
         SELECT *
         FROM lube_transactions
-        WHERE id=?
+        WHERE id=%s
     """, (id,))
     old = cur.fetchone()
 
@@ -3505,17 +3505,17 @@ def update_lube_transaction(id):
     if old_type == "Purchase":
         cur.execute("""
             UPDATE lube_stock
-            SET purchase_qty = purchase_qty - ?,
-                closing_stock = closing_stock - ?
-            WHERE id=?
+            SET purchase_qty = purchase_qty - %s,
+                closing_stock = closing_stock - %s
+            WHERE id=%s
         """, (old_qty, old_qty, product_id))
 
     elif old_type == "Sale":
         cur.execute("""
             UPDATE lube_stock
-            SET sale_qty = sale_qty - ?,
-                closing_stock = closing_stock + ?
-            WHERE id=?
+            SET sale_qty = sale_qty - %s,
+                closing_stock = closing_stock + %s
+            WHERE id=%s
         """, (old_qty, old_qty, product_id))
 
     new_date = request.form.get("date")
@@ -3529,28 +3529,28 @@ def update_lube_transaction(id):
     if new_type == "Purchase":
         cur.execute("""
             UPDATE lube_stock
-            SET purchase_qty = purchase_qty + ?,
-                closing_stock = closing_stock + ?
-            WHERE id=?
+            SET purchase_qty = purchase_qty + %s,
+                closing_stock = closing_stock + %s
+            WHERE id=%s
         """, (new_qty, new_qty, product_id))
 
     elif new_type == "Sale":
         cur.execute("""
             UPDATE lube_stock
-            SET sale_qty = sale_qty + ?,
-                closing_stock = closing_stock - ?
-            WHERE id=?
+            SET sale_qty = sale_qty + %s,
+                closing_stock = closing_stock - %s
+            WHERE id=%s
         """, (new_qty, new_qty, product_id))
 
     cur.execute("""
         UPDATE lube_transactions
-        SET date=?,
-            transaction_type=?,
-            qty=?,
-            rate=?,
-            amount=?,
-            remarks=?
-        WHERE id=?
+        SET date=%s,
+            transaction_type=%s,
+            qty=%s,
+            rate=%s,
+            amount=%s,
+            remarks=%s
+        WHERE id=%s
     """, (
         new_date,
         new_type,
@@ -3578,13 +3578,13 @@ def update_lube(id):
     cur.execute("""
         UPDATE lube_stock
         SET
-            product_name=?,
-            selling_rate=?,
-            opening_stock=?,
-            purchase_qty=?,
-            sale_qty=?,
-            closing_stock=?
-        WHERE id=?
+            product_name=%s,
+            selling_rate=%s,
+            opening_stock=%s,
+            purchase_qty=%s,
+            sale_qty=%s,
+            closing_stock=%s
+        WHERE id=%s
     """, (
 
         request.form.get("product_name"),
@@ -3742,20 +3742,20 @@ def attendance():
 @app.route("/update-salary/<int:id>", methods=["POST"])
 def update_salary(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         UPDATE salary_payments
         SET
-            payment_date=?,
-            month_name=?,
-            employee_name=?,
-            payment_mode=?,
-            bank_account=?,
-            amount=?,
-            remarks=?
-        WHERE id=?
+            payment_date=%s,
+            month_name=%s,
+            employee_name=%s,
+            payment_mode=%s,
+            bank_account=%s,
+            amount=%s,
+            remarks=%s
+        WHERE id=%s
     """, (
 
         request.form["payment_date"],
@@ -3777,11 +3777,11 @@ def update_salary(id):
 @app.route("/edit-salary/<int:id>")
 def edit_salary(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute(
-        "SELECT * FROM salary_payments WHERE id=?",
+        "SELECT * FROM salary_payments WHERE id=%s",
         (id,)
     )
 
@@ -3797,11 +3797,11 @@ def edit_salary(id):
 @app.route("/delete-salary/<int:id>")
 def delete_salary(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute(
-        "DELETE FROM salary_payments WHERE id=?",
+        "DELETE FROM salary_payments WHERE id=%s",
         (id,)
     )
 
@@ -3816,7 +3816,7 @@ def export_attendance_excel():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     wb = Workbook()
@@ -3853,7 +3853,7 @@ def export_attendance_excel():
         cur.execute("""
             SELECT attendance_status
             FROM attendance
-            WHERE staff_name=?
+            WHERE staff_name=%s
         """, (staff_name,))
 
         records = cur.fetchall()
@@ -3876,7 +3876,7 @@ def export_attendance_excel():
         cur.execute("""
             SELECT SUM(amount) total_salary
             FROM salary_payments
-            WHERE employee_name=?
+            WHERE employee_name=%s
         """, (staff_name,))
 
         sal = cur.fetchone()
@@ -3988,7 +3988,7 @@ def export_attendance_excel():
         cur.execute("""
             SELECT *
             FROM attendance
-            WHERE staff_name=?
+            WHERE staff_name=%s
             ORDER BY date
         """, (staff_name,))
 
@@ -4017,7 +4017,7 @@ def export_attendance_excel():
         cur.execute("""
             SELECT SUM(amount) total_salary
             FROM salary_payments
-            WHERE employee_name=?
+            WHERE employee_name=%s
         """, (staff_name,))
 
         sal = cur.fetchone()
@@ -4231,7 +4231,7 @@ def delete_lube(id):
 
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("DELETE FROM lube_stock WHERE id = ?", (id,))
+    cur.execute("DELETE FROM lube_stock WHERE id = %s", (id,))
     conn.commit()
     conn.close()
 
@@ -4465,7 +4465,7 @@ def full_system_export():
         cur.execute("""
             SELECT attendance_status
             FROM attendance
-            WHERE staff_name=?
+            WHERE staff_name=%s
         """, (name,))
         records = cur.fetchall()
 
@@ -4476,7 +4476,7 @@ def full_system_export():
         cur.execute("""
             SELECT COALESCE(SUM(amount),0) AS total
             FROM salary_payments
-            WHERE employee_name=?
+            WHERE employee_name=%s
         """, (name,))
         salary = cur.fetchone()["total"]
 
@@ -4614,7 +4614,7 @@ COALESCE(SUM(lube_sale),0) lube_sale,
 COALESCE(SUM(cash_in_hand),0) cash_in_hand,
 COALESCE(SUM(total_expense),0) expense
 FROM daily_closing
-WHERE substr(date,1,7)=?
+WHERE substr(date,1,7)=%s
 """,(current_month,))
 
     sales = cur.fetchone()
@@ -4658,7 +4658,7 @@ WHERE substr(date,1,7)=?
     cur.execute("""
         SELECT attendance_status
         FROM attendance
-        WHERE substr(date,1,7)=?
+        WHERE substr(date,1,7)=%s
     """, (current_month,))
 
     attendance_rows = cur.fetchall()
@@ -4686,7 +4686,7 @@ WHERE substr(date,1,7)=?
         SELECT
         COALESCE(SUM(amount),0) salary_paid
         FROM salary_payments
-        WHERE substr(payment_date,1,7)=?
+        WHERE substr(payment_date,1,7)=%s
     """, (current_month,))
 
     salary_paid = cur.fetchone()["salary_paid"]
