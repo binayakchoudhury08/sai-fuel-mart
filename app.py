@@ -364,13 +364,13 @@ CREATE TABLE IF NOT EXISTS salary_payments(
 ]
 
     for nozzle in default_nozzles:
-        cur.execute("SELECT id FROM nozzle_master WHERE nozzle_name = %s", (nozzle[0],))
+        cur.execute("SELECT id FROM nozzle_master WHERE nozzle_name = ?", (nozzle[0],))
         if not cur.fetchone():
             cur.execute("""
                 INSERT INTO nozzle_master (
                     nozzle_name, machine_no, fuel_type, status
                 )
-                VALUES (%s, %s, %s, %s)
+                VALUES (?, ?, ?, ?)
             """, nozzle)
 
     conn.commit()
