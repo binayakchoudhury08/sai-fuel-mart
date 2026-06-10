@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, j
 from datetime import timedelta, datetime
 import sqlite3
 import os
+import psycopg2
+import psycopg2.extras
 import json
 from io import BytesIO
 from openpyxl import Workbook
@@ -4842,6 +4844,27 @@ def download_db():
         as_attachment=True,
         download_name="SaiFuelMart_Backup.db"
     )
+
+def get_pg_conn():
+
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+
+@app.route("/test-supabase")
+def test_supabase():
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT NOW()")
+
+    result = cur.fetchone()
+
+    conn.close()
+
+    return str(result)
 
 if __name__ == "__main__":
     app.run(debug=True)
