@@ -4168,13 +4168,9 @@ def save_attendance():
 
     if not staff_name or not attendance_status:
         return redirect(
-            url_for(
-                "attendance",
-                date=attendance_date
-            )
+            url_for("attendance", date=attendance_date)
         )
 
-    # Prevent future attendance
     selected = datetime.strptime(
         attendance_date,
         "%Y-%m-%d"
@@ -4182,25 +4178,19 @@ def save_attendance():
 
     if selected.date() > datetime.now().date():
 
-        flash(
-            "Future attendance not allowed",
-            "error"
-        )
+        flash("Future attendance not allowed", "error")
 
         return redirect(
-            url_for(
-                "attendance",
-                date=attendance_date
-            )
+            url_for("attendance", date=attendance_date)
         )
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
         SELECT id
         FROM attendance
-        WHERE date=? AND staff_name=?
+        WHERE date=%s AND staff_name=%s
         LIMIT 1
     """, (
         attendance_date,
@@ -4213,8 +4203,8 @@ def save_attendance():
 
         cur.execute("""
             UPDATE attendance
-            SET attendance_status=?
-            WHERE id=?
+            SET attendance_status=%s
+            WHERE id=%s
         """, (
             attendance_status,
             existing["id"]
@@ -4228,7 +4218,7 @@ def save_attendance():
                 staff_name,
                 attendance_status
             )
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (
             attendance_date,
             staff_name,
@@ -4239,11 +4229,9 @@ def save_attendance():
     conn.close()
 
     return redirect(
-        url_for(
-            "attendance",
-            date=attendance_date
-        )
+        url_for("attendance", date=attendance_date)
     )
+
 @app.route("/delete-lube/<int:id>")
 def delete_lube(id):
     if not session.get("logged_in"):
