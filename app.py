@@ -4889,43 +4889,5 @@ def get_pg_cursor():
 
     return conn, cur
 
-@app.route("/test-supabase")
-def test_supabase():
-
-    conn = get_pg_conn()
-    cur = conn.cursor()
-
-    cur.execute("SELECT NOW()")
-
-    result = cur.fetchone()
-
-    conn.close()
-
-    return str(result)
-
-@app.route("/test-insert")
-def test_insert():
-
-    conn = get_pg_conn()
-
-    cur = conn.cursor()
-
-    cur.execute("""
-        INSERT INTO staff_master(
-            staff_name,
-            mobile
-        )
-        VALUES(%s,%s)
-    """,(
-        "TEST STAFF",
-        "9999999999"
-    ))
-
-    conn.commit()
-
-    conn.close()
-
-    return "Inserted Successfully"
-
 if __name__ == "__main__":
     app.run(debug=True)
