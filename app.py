@@ -431,7 +431,7 @@ def dashboard():
     cur.execute("SELECT * FROM daily_closing ORDER BY id DESC LIMIT 1")
     latest = cur.fetchone()
 
-    monthly = cur.execute("""
+    cur.execute("""
 
     SELECT
 
@@ -463,7 +463,8 @@ def dashboard():
 
     WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
 
-""").fetchone()
+""")
+    monthly = cur.fetchone()
 
     cur.execute("""
     SELECT
