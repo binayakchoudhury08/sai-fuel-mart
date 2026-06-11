@@ -4374,15 +4374,15 @@ def full_system_export():
     # =========================
 
     cur.execute("""
-        SELECT
-            substr(date,1,7) AS month,
-            ROUND(SUM(total_fuel_sale),2) AS fuel,
-            ROUND(SUM(lube_sale),2) AS lube,
-            ROUND(SUM(credit_given),2) AS credit
-        FROM daily_closing
-        GROUP BY substr(date,1,7)
-        ORDER BY month
-    """)
+    SELECT
+        TO_CHAR(date, 'YYYY-MM') AS month,
+        ROUND(SUM(total_fuel_sale),2) AS fuel,
+        ROUND(SUM(lube_sale),2) AS lube,
+        ROUND(SUM(credit_given),2) AS credit
+    FROM daily_closing
+    GROUP BY TO_CHAR(date, 'YYYY-MM')
+    ORDER BY TO_CHAR(date, 'YYYY-MM')
+""")
     monthly = cur.fetchall()
 
     ws["D3"] = "Monthly Trend"
