@@ -1015,7 +1015,7 @@ def print_daily_report(date):
     cur.execute("""
         SELECT *
         FROM daily_closing
-        WHERE substr(date, 1, 10) = %s
+        WHERE TO_CHAR(date, 'YYYY-MM-DD') = %s
         ORDER BY id DESC
         LIMIT 1
     """, (date,))
@@ -1030,7 +1030,7 @@ def print_daily_report(date):
         FROM nozzle_entries
         LEFT JOIN nozzle_master
         ON nozzle_entries.nozzle_id = nozzle_master.id
-        WHERE substr(nozzle_entries.entry_date, 1, 10) = %s
+        WHERE TO_CHAR(nozzle_entries.entry_date, 'YYYY-MM-DD') = %s
         ORDER BY nozzle_master.fuel_type, nozzle_master.nozzle_name
     """, (date,))
     nozzle_rows = cur.fetchall()
@@ -1038,7 +1038,7 @@ def print_daily_report(date):
     cur.execute("""
         SELECT *
         FROM tank_level
-        WHERE substr(date, 1, 10) = %s
+        WHERE TO_CHAR(date, 'YYYY-MM-DD') = %s
         ORDER BY fuel_type ASC, id DESC
     """, (date,))
     tank_rows = cur.fetchall()
@@ -1861,7 +1861,7 @@ def get_nozzle_sales(date):
         LEFT JOIN nozzle_master
         ON nozzle_entries.nozzle_id = nozzle_master.id
 
-        WHERE substr(nozzle_entries.entry_date,1,10)=%s
+        WHERE TO_CHAR(nozzle_entries.entry_date, 'YYYY-MM-DD')=%s
 
         ORDER BY nozzle_master.fuel_type,
                  nozzle_master.nozzle_name
@@ -2519,7 +2519,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'MS1'
         ),0) AS ms1,
 
@@ -2527,7 +2527,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'MS2'
         ),0) AS ms2,
 
@@ -2535,7 +2535,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'MS3'
         ),0) AS ms3,
 
@@ -2543,7 +2543,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'HSD1'
         ),0) AS hsd1,
 
@@ -2551,7 +2551,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'HSD2'
         ),0) AS hsd2,
 
@@ -2559,7 +2559,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'HSD3'
         ),0) AS hsd3,
 
@@ -2567,7 +2567,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'CNG1'
         ),0) AS cng1,
 
@@ -2575,7 +2575,7 @@ def reports():
             SELECT SUM(ne.total_sale)
             FROM nozzle_entries ne
             JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE substr(ne.entry_date,1,10) = substr(dc.date,1,10)
+            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
             AND nm.nozzle_name = 'CNG2'
         ),0) AS cng2
 
@@ -4614,7 +4614,7 @@ COALESCE(SUM(lube_sale),0) lube_sale,
 COALESCE(SUM(cash_in_hand),0) cash_in_hand,
 COALESCE(SUM(total_expense),0) expense
 FROM daily_closing
-WHERE substr(date,1,7)=%s
+WHERE TO_CHAR(date, 'YYYY-MM')=%s
 """,(current_month,))
 
     sales = cur.fetchone()
@@ -4686,7 +4686,7 @@ WHERE substr(date,1,7)=%s
         SELECT
         COALESCE(SUM(amount),0) salary_paid
         FROM salary_payments
-        WHERE substr(payment_date,1,7)=%s
+        WHERE TO_CHAR(payment_date, 'YYYY-MM')=%s
     """, (current_month,))
 
     salary_paid = cur.fetchone()["salary_paid"]
@@ -4764,11 +4764,11 @@ WHERE substr(date,1,7)=%s
 
     cur.execute("""
         SELECT
-            substr(date,1,7) month,
+            TO_CHAR(date, 'YYYY-MM') month,
             ROUND(SUM(total_fuel_sale),2) fuel_sale,
             ROUND(SUM(lube_sale),2) lube_sale
         FROM daily_closing
-        GROUP BY substr(date,1,7)
+        GROUP BY TO_CHAR(date, 'YYYY-MM')
         ORDER BY month
     """)
 
