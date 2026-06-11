@@ -2134,7 +2134,7 @@ FROM credit_transporters
 
     row = cur.fetchone()
 
-    total_credit = row[0] if row and row[0] else 0
+    total_credit = row["total_credit"] if row and row["total_credit"] else 0
 
     cur.execute("""
 SELECT hsd_rate
