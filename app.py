@@ -461,7 +461,7 @@ def dashboard():
 
     FROM daily_closing
 
-    WHERE strftime('%Y-%m', date)=strftime('%Y-%m','now')
+    WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
 
 """).fetchone()
 
@@ -1921,7 +1921,7 @@ def tank_level():
             SUM(gain_amount) AS total_gain_amount,
             SUM(shortage_amount) AS total_shortage_amount
         FROM tank_level
-        WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now')
+        TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     """)
     monthly = cur.fetchone()
 
@@ -2474,7 +2474,7 @@ def digital_collection():
             SUM(upi_other) AS total_upi,
             SUM(transport_received) AS total_transport
         FROM daily_closing
-        WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now')
+        TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     """)
     monthly = cur.fetchone()
 
