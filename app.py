@@ -1529,7 +1529,7 @@ def nozzle_management():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1573,7 +1573,7 @@ def save_nozzle_master():
     fuel_type = request.form.get("fuel_type", "").strip()
     status = request.form.get("status", "Active").strip()
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1603,7 +1603,7 @@ def edit_nozzle_master(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1632,7 +1632,7 @@ def update_nozzle_master(id):
     fuel_type = request.form.get("fuel_type", "").strip()
     status = request.form.get("status", "Active").strip()
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1662,7 +1662,7 @@ def delete_nozzle_master(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1704,7 +1704,7 @@ def save_nozzle_entry():
     if total_sale < 0:
      total_sale = 0
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1740,7 +1740,7 @@ def edit_nozzle_entry(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1787,7 +1787,7 @@ def update_nozzle_entry(id):
     if total_sale < 0:
         total_sale = 0
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1823,7 +1823,7 @@ def delete_nozzle_entry(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1843,7 +1843,7 @@ def get_nozzle_sales(date):
     if not session.get("logged_in"):
         return jsonify([])
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
