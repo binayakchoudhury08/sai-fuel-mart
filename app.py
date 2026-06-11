@@ -70,7 +70,6 @@ def style_excel_sheet(ws):
 
         ws.column_dimensions[get_column_letter(col_no)].width = max_length + 4
 
-
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
@@ -426,7 +425,7 @@ def dashboard():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM daily_closing ORDER BY id DESC LIMIT 1")
@@ -544,7 +543,7 @@ def receive_transport_payment(id):
     if amount <= 0:
         return redirect(url_for("credit_transport"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -609,7 +608,7 @@ def save_daily_closing():
     conn = None
 
     try:
-        conn = get_conn()
+        conn = get_pg_conn()
         cur = conn.cursor()
 
         cur.execute("SELECT id FROM daily_closing WHERE date=%s", (data["date"],))
@@ -838,7 +837,7 @@ def save_lube_product():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     product_name = request.form.get("product_name")
@@ -890,7 +889,7 @@ def daily_closing():
         datetime.now().strftime("%Y-%m-%d")
     )
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1009,7 +1008,7 @@ def print_daily_report(date):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1057,7 +1056,7 @@ def print_daily_report(date):
 @app.route("/edit-transport-entry/<int:id>")
 def edit_transport_entry(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute(
@@ -1089,7 +1088,7 @@ def edit_transport_entry(id):
 )
 def update_transport_entry(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     hsd_qty = float(
@@ -1152,7 +1151,7 @@ def edit_lube_transaction(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1171,7 +1170,7 @@ def edit_lube_transaction(id):
 
 @app.route("/get-daily-closing/<date>")
 def get_daily_closing(date):
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM daily_closing WHERE date = %s ORDER BY id DESC LIMIT 1", (date,))
@@ -1437,7 +1436,7 @@ def edit_daily_closing(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1467,7 +1466,7 @@ def update_daily_closing(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -1909,7 +1908,7 @@ def tank_level():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM tank_level ORDER BY date DESC, id DESC")
@@ -1954,7 +1953,7 @@ def save_tank_level():
     own_tanker_stock = float(request.form["own_tanker_stock"] or 0)
     actual_dip = float(request.form["dip_stock"] or 0)
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2016,7 +2015,7 @@ def edit_tank_level(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM tank_level WHERE id = %s", (id,))
@@ -2041,7 +2040,7 @@ def update_tank_level(id):
     theoretical_stock = opening_stock + received_stock + own_tanker_stock - sale_stock
     difference = round(actual_dip - theoretical_stock, 2)
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT ms_rate, hsd_rate FROM settings WHERE id = 1")
@@ -2087,7 +2086,7 @@ def delete_tank_level(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("DELETE FROM tank_level WHERE id = %s", (id,))
@@ -2104,7 +2103,7 @@ def credit_transport():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2160,7 +2159,7 @@ LIMIT 1
 @app.route("/add-transporter", methods=["POST"])
 def add_transporter():
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2190,7 +2189,7 @@ request.form.get("status","Active")
 @app.route("/save-transport-entry", methods=["POST"])
 def save_transport_entry():
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     entry_date = request.form["entry_date"]
@@ -2259,7 +2258,7 @@ def save_transport_payment():
 
     payment_type = request.form["payment_type"]
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2313,7 +2312,7 @@ def save_transport_payment():
 @app.route("/transporter-history/<int:id>")
 def transporter_history(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2344,7 +2343,7 @@ def transporter_history(id):
 @app.route("/edit-transporter/<int:id>")
 def edit_transporter(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2365,7 +2364,7 @@ def edit_transporter(id):
 @app.route("/update-transporter/<int:id>",methods=["POST"])
 def update_transporter(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2395,7 +2394,7 @@ def delete_daily_closing(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute(
@@ -2427,7 +2426,7 @@ def delete_daily_closing(id):
 @app.route("/delete-transporter/<int:id>")
 def delete_transporter(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2443,7 +2442,7 @@ def delete_transporter(id):
 @app.route("/delete-transport-entry/<int:id>")
 def delete_transport_entry(id):
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2462,7 +2461,7 @@ def digital_collection():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2499,7 +2498,7 @@ def reports():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     from_date = request.args.get("from_date", "")
@@ -2763,7 +2762,7 @@ def export_full_backup():
     if not is_admin():
         return redirect(url_for("dashboard"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
     wb = Workbook()
 
@@ -2877,7 +2876,7 @@ def export_nozzle_report():
 
     # export code
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -2931,7 +2930,7 @@ def export_reports():
 
     # export code
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM daily_closing ORDER BY date DESC")
@@ -2975,7 +2974,7 @@ def export_tank_report():
     if not is_admin():
         return redirect(url_for("dashboard"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM tank_level ORDER BY date DESC")
@@ -3017,7 +3016,7 @@ def export_lube_report():
     if not is_admin():
         return redirect(url_for("dashboard"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM lube_stock ORDER BY closing_stock ASC")
@@ -3053,7 +3052,7 @@ def export_transport_report():
 
     if not is_admin():
         return redirect(url_for("dashboard"))
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM credit_transporters ORDER BY balance_due DESC")
@@ -3091,7 +3090,7 @@ def export_transport_entry_report():
     if not is_admin():
         return redirect(url_for("dashboard"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM transport_entries ORDER BY entry_date DESC, sl_no DESC")
@@ -3129,7 +3128,7 @@ def delete_report(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM daily_closing WHERE id = %s", (id,))
     conn.commit()
@@ -3143,7 +3142,7 @@ def edit_report(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
     cur.execute("SELECT * FROM daily_closing WHERE id = %s", (id,))
     row = cur.fetchone()
@@ -3157,7 +3156,7 @@ def update_report(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3287,7 +3286,7 @@ def lube_stock():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3359,7 +3358,7 @@ def save_lube_transaction():
 
     amount = round(qty * rate, 2)
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3413,7 +3412,7 @@ def delete_lube_transaction(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3459,7 +3458,7 @@ def edit_lube(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3483,7 +3482,7 @@ def update_lube_transaction(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -3572,7 +3571,7 @@ def update_lube(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -4229,7 +4228,7 @@ def delete_lube(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
     cur.execute("DELETE FROM lube_stock WHERE id = %s", (id,))
     conn.commit()
@@ -4243,7 +4242,7 @@ def full_system_export():
     if not session.get("logged_in") or session.get("role") != "admin":
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     wb = Workbook()
@@ -4595,7 +4594,7 @@ def analytics():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    conn = get_conn()
+    conn = get_pg_conn()
     cur = conn.cursor()
 
     current_month = request.args.get(
@@ -4839,7 +4838,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-init_db()
+## init_db()
 
 @app.route("/download-db")
 def download_db():
