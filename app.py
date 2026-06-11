@@ -4764,7 +4764,7 @@ WHERE TO_CHAR(date, 'YYYY-MM')=%s
 
     cur.execute("""
         SELECT
-            TO_CHAR(date, 'YYYY-MM') month,
+            TO_CHAR(date, 'YYYY-MM') AS month,
             ROUND(SUM(total_fuel_sale),2) fuel_sale,
             ROUND(SUM(lube_sale),2) lube_sale
         FROM daily_closing
