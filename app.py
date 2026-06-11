@@ -4658,7 +4658,7 @@ WHERE TO_CHAR(date, 'YYYY-MM')=%s
     cur.execute("""
         SELECT attendance_status
         FROM attendance
-        WHERE substr(date,1,7)=%s
+        WHERE TO_CHAR(date, 'YYYY-MM')=%s
     """, (current_month,))
 
     attendance_rows = cur.fetchall()
