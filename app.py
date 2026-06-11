@@ -1922,7 +1922,7 @@ def tank_level():
             SUM(gain_amount) AS total_gain_amount,
             SUM(shortage_amount) AS total_shortage_amount
         FROM tank_level
-        TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+        WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     """)
     monthly = cur.fetchone()
 
@@ -2128,13 +2128,13 @@ def credit_transport():
     total_transporters = cur.fetchone()["total"]
 
     cur.execute("""
-SELECT SUM(credit_given)
+SELECT COALESCE(SUM(credit_given), 0) AS total_credit
 FROM credit_transporters
 """)
 
     row = cur.fetchone()
 
-    total_credit = row["total_credit"] if row and row["total_credit"] else 0
+    total_credit = row["total_credit"] if row else 0
 
     cur.execute("""
 SELECT hsd_rate
@@ -2475,7 +2475,7 @@ def digital_collection():
             SUM(upi_other) AS total_upi,
             SUM(transport_received) AS total_transport
         FROM daily_closing
-        TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+        WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     """)
     monthly = cur.fetchone()
 
