@@ -2595,7 +2595,7 @@ def reports():
         daily_params.append(to_date)
 
     if search:
-        daily_query += " AND dc.date LIKE %s"
+        daily_query += " AND TO_CHAR(dc.date, 'YYYY-MM-DD') ILIKE %s"
         daily_params.append(f"%{search}%")
 
     daily_query += " ORDER BY dc.date DESC, dc.id DESC"
@@ -2632,8 +2632,8 @@ def reports():
     if search:
         nozzle_query += """
             AND (
-                nozzle_master.nozzle_name LIKE %s
-                OR nozzle_master.machine_no LIKE %s
+                nozzle_master.nozzle_name ILIKE %s
+                OR nozzle_master.machine_no ILIKE %s
             )
         """
         nozzle_params.extend([f"%{search}%", f"%{search}%"])
@@ -2679,7 +2679,7 @@ def reports():
     lube_params = []
 
     if search:
-        lube_query += " AND product_name LIKE %s"
+        lube_query += " AND product_name ILIKE %s"
         lube_params.append(f"%{search}%")
 
     lube_query += " ORDER BY product_name ASC"
@@ -2696,7 +2696,7 @@ def reports():
     transport_params = []
 
     if search:
-        transport_query += " AND party_name LIKE %s"
+        transport_query += " AND party_name ILIKE %s"
         transport_params.append(f"%{search}%")
 
     transport_query += " ORDER BY balance_due DESC, party_name ASC"
@@ -2723,10 +2723,10 @@ def reports():
     if search:
         transport_entry_query += """
             AND (
-                transporter_name LIKE %s
-                OR challan_no LIKE %s
-                OR vehicle_no LIKE %s
-                OR slip_no LIKE %s
+                transporter_name ILIKE %s
+                OR challan_no ILIKE %s
+                OR vehicle_no ILIKE %s
+                OR slip_no ILIKE %s
             )
         """
         transport_entry_params.extend([
