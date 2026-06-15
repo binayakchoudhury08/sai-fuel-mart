@@ -811,9 +811,9 @@ def export_party_transport_pdf():
             r["slip_no"],
             f"{hsd_qty:.2f}",
             f"{rate:.2f}",
-            f"{round(total_hsd_amount):,}",
-            f"{round(total_cash):,}",
-            f"{round(total_final):,}"
+            f"{total_hsd_amount:,}",
+            f"{total_cash:,}",
+            f"{total_final:,}"
         ])
 
     data.append(["", "", "", "", "", "", "", "", "", "", ""])
@@ -822,9 +822,9 @@ def export_party_transport_pdf():
         "", "", "", "", "", "TOTAL",
         f"{total_hsd:.2f}",
         f"{total_rate:.2f}",
-        f"{round(total_hsd_amount):,}",
-        f"{round(total_cash):,}",
-        f"{round(total_final):,}"
+        f"{total_hsd_amount:,}",
+        f"{total_cash:,}",
+        f"{total_final:,}"
     ])
 
     table = Table(
