@@ -673,13 +673,13 @@ def export_party_transport_excel():
     ws.append([])
 
     total_row = [
-        "", "", "", "", "", "TOTAL",
-        total_hsd,
-        total_rate,
-        total_hsd_amount,
-        total_cash,
-        total_final
-    ]
+       "", "", "", "", "", "TOTAL",
+       round(total_hsd, 2),
+       round(total_rate, 2),
+       round(total_hsd_amount),
+       round(total_cash),
+       round(total_final)
+]
 
     ws.append(total_row)
 
@@ -743,29 +743,44 @@ def export_party_transport_pdf():
 
     file = BytesIO()
 
+    def footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.drawRightString(820, 15, f"Page {doc.page}")
+        canvas.drawString(20, 15, "Sai Fuel Mart - Credit Transport Report")
+        canvas.restoreState()
+
     doc = SimpleDocTemplate(
         file,
         pagesize=landscape(A4),
-        rightMargin=10,
-        leftMargin=10,
-        topMargin=10,
-        bottomMargin=10
+        rightMargin=12,
+        leftMargin=12,
+        topMargin=14,
+        bottomMargin=25
     )
 
     styles = getSampleStyleSheet()
     elements = []
 
-    title = f"Credit Transport Report - {party_name}"
-    date_line = f"Date: {from_date} to {to_date}"
+    title_style = styles["Title"]
+    title_style.fontSize = 16
+    title_style.leading = 18
 
-    elements.append(Paragraph(title, styles["Title"]))
-    elements.append(Paragraph(date_line, styles["Normal"]))
-    elements.append(Spacer(1, 12))
+    normal_style = styles["Normal"]
+    normal_style.fontSize = 9
+
+    elements.append(Paragraph("SAI FUEL MART", title_style))
+    elements.append(Paragraph("Credit Transport Entry Report", normal_style))
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(f"<b>Party:</b> {party_name}", normal_style))
+    elements.append(Paragraph(f"<b>Date Range:</b> {from_date} to {to_date}", normal_style))
+    elements.append(Paragraph(f"<b>Generated On:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
+    elements.append(Spacer(1, 10))
 
     data = [[
         "Date", "SL", "Party", "Challan", "Vehicle",
-        "Slip", "HSD", "Rate", "HSD Amt",
-        "Cash", "Final"
+        "Slip", "HSD Qty", "Rate", "HSD Amt",
+        "Cash", "Final Amt"
     ]]
 
     total_hsd = 0
@@ -775,11 +790,17 @@ def export_party_transport_pdf():
     total_final = 0
 
     for r in rows:
-        total_hsd += float(r["hsd_qty"] or 0)
-        total_rate += float(r["rate"] or 0)
-        total_hsd_amount += float(r["hsd_amount"] or 0)
-        total_cash += float(r["cash_taken"] or 0)
-        total_final += float(r["total_amount"] or 0)
+        hsd_qty = float(r["hsd_qty"] or 0)
+        rate = float(r["rate"] or 0)
+        hsd_amount = float(r["hsd_amount"] or 0)
+        cash = float(r["cash_taken"] or 0)
+        final = float(r["total_amount"] or 0)
+
+        total_hsd += hsd_qty
+        total_rate += rate
+        total_hsd_amount += hsd_amount
+        total_cash += cash
+        total_final += final
 
         data.append([
             str(r["entry_date"]),
@@ -788,52 +809,69 @@ def export_party_transport_pdf():
             r["challan_no"],
             r["vehicle_no"],
             r["slip_no"],
-            r["hsd_qty"],
-            r["rate"],
-            r["hsd_amount"],
-            r["cash_taken"],
-            r["total_amount"]
+            f"{hsd_qty:.2f}",
+            f"{rate:.2f}",
+            f"{round(total_hsd_amount):,}",
+            f"{round(total_cash):,}",
+            f"{round(total_final):,}"
         ])
 
     data.append(["", "", "", "", "", "", "", "", "", "", ""])
+
     data.append([
         "", "", "", "", "", "TOTAL",
-        round(total_hsd, 2),
-        round(total_rate, 2),
-        round(total_hsd_amount, 2),
-        round(total_cash, 2),
-        round(total_final, 2)
+        f"{total_hsd:.2f}",
+        f"{total_rate:.2f}",
+        f"{round(total_hsd_amount):,}",
+        f"{round(total_cash):,}",
+        f"{round(total_final):,}"
     ])
 
-    table = Table(data, repeatRows=1)
+    table = Table(
+        data,
+        colWidths=[58, 28, 110, 60, 65, 50, 55, 45, 65, 60, 70],
+        repeatRows=1
+    )
 
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#07120C")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("FONTSIZE", (0,0), (-1,-1), 6),
-        ("LEADING", (0,0), (-1,-1), 7),
+
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#D9EAD3")),
+
+        ("FONTSIZE", (0, 0), (-1, -1), 6.5),
+        ("LEADING", (0, 0), (-1, -1), 7.5),
+
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+        ("ALIGN", (1, 1), (1, -1), "CENTER"),
         ("ALIGN", (6, 1), (-1, -1), "RIGHT"),
+
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#DCFCE7")),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#07120C")),
+
+        ("ROWBACKGROUNDS", (0, 1), (-1, -3), [
+            colors.white,
+            colors.HexColor("#F8FAFC")
+        ]),
     ]))
 
     elements.append(table)
 
-    doc.build(elements)
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
 
     file.seek(0)
 
     safe_party = party_name.replace(" ", "_").replace("/", "_")
-    filename = f"{safe_party}_{from_date}_to_{to_date}_Transport_Report.pdf"
+    filename = f"{safe_party}_{from_date}_to_{to_date}_Credit_Transport_Report.pdf"
 
     return send_file(
         file,
         as_attachment=True,
         download_name=filename
     )
-
 
 @app.route("/save-daily-closing", methods=["POST"])
 def save_daily_closing():
@@ -1345,7 +1383,7 @@ def update_transport_entry(id):
     )
 
     hsd_amount = hsd_qty * rate
-    total_amount = hsd_amount + cash_taken
+    total_amount = round(hsd_amount + cash_taken)
 
     cur.execute("""
         UPDATE transport_entries
@@ -2448,7 +2486,7 @@ def save_transport_entry():
     cash_taken = float(request.form.get("cash_taken") or 0)
 
     hsd_amount = qty * rate
-    total_amount = hsd_amount + cash_taken
+    total_amount = round(hsd_amount + cash_taken)
 
     cur.execute("""
         INSERT INTO transport_entries(
