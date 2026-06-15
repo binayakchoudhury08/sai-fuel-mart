@@ -1105,6 +1105,41 @@ Export Excel
 {% endif %}
 </div>
 
+<div class="export-box">
+
+    <form method="GET">
+
+        <select name="transporter_id" required>
+            <option value="">Select Transport Party</option>
+
+            {% for t in transporter_rows %}
+            <option value="{{ t['id'] }}">
+                {{ t['party_name'] }}
+            </option>
+            {% endfor %}
+
+        </select>
+
+        <input type="date" name="from_date" required>
+
+        <input type="date" name="to_date" required>
+
+        <button
+            formaction="/export-party-transport-excel"
+            class="btn btn-success">
+            Export Excel
+        </button>
+
+        <button
+            formaction="/export-party-transport-pdf"
+            class="btn btn-danger">
+            Export PDF
+        </button>
+
+    </form>
+
+</div>
+
 <div class="table-wrapper">
 
 <div class="summary-strip">

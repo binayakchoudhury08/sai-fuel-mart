@@ -11,6 +11,10 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.chart import BarChart, PieChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
 import tempfile
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 app = Flask(__name__)
@@ -594,6 +598,240 @@ def backup_database():
 
 # app.py
 # DAILY CLOSING ROUTE
+
+@app.route("/export-party-transport-excel")
+def export_party_transport_excel():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.args.get("transporter_id")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT party_name
+        FROM credit_transporters
+        WHERE id=%s
+    """, (transporter_id,))
+    party = cur.fetchone()
+
+    party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("""
+        SELECT *
+        FROM transport_entries
+        WHERE transporter_id=%s
+          AND entry_date >= %s
+          AND entry_date <= %s
+        ORDER BY entry_date ASC, sl_no ASC
+    """, (transporter_id, from_date, to_date))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Transport Entry Report"
+
+    ws.append([
+        "Date", "SL No", "Party Name", "Challan No", "Vehicle No",
+        "Slip No", "HSD Qty", "Rate", "HSD Amount",
+        "Cash Taken", "Final Amount"
+    ])
+
+    total_hsd = 0
+    total_rate = 0
+    total_hsd_amount = 0
+    total_cash = 0
+    total_final = 0
+
+    for r in rows:
+        total_hsd += float(r["hsd_qty"] or 0)
+        total_rate += float(r["rate"] or 0)
+        total_hsd_amount += float(r["hsd_amount"] or 0)
+        total_cash += float(r["cash_taken"] or 0)
+        total_final += float(r["total_amount"] or 0)
+
+        ws.append([
+            r["entry_date"],
+            r["sl_no"],
+            r["transporter_name"],
+            r["challan_no"],
+            r["vehicle_no"],
+            r["slip_no"],
+            r["hsd_qty"],
+            r["rate"],
+            r["hsd_amount"],
+            r["cash_taken"],
+            r["total_amount"]
+        ])
+
+    ws.append([])
+
+    total_row = [
+        "", "", "", "", "", "TOTAL",
+        total_hsd,
+        total_rate,
+        total_hsd_amount,
+        total_cash,
+        total_final
+    ]
+
+    ws.append(total_row)
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="07120C")
+
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="D9EAD3")
+
+    style_excel_sheet(ws)
+
+    file = BytesIO()
+    wb.save(file)
+    file.seek(0)
+
+    safe_party = party_name.replace(" ", "_").replace("/", "_")
+    filename = f"{safe_party}_{from_date}_to_{to_date}_Transport_Report.xlsx"
+
+    return send_file(
+        file,
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route("/export-party-transport-pdf")
+def export_party_transport_pdf():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.args.get("transporter_id")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT party_name
+        FROM credit_transporters
+        WHERE id=%s
+    """, (transporter_id,))
+    party = cur.fetchone()
+
+    party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("""
+        SELECT *
+        FROM transport_entries
+        WHERE transporter_id=%s
+          AND entry_date >= %s
+          AND entry_date <= %s
+        ORDER BY entry_date ASC, sl_no ASC
+    """, (transporter_id, from_date, to_date))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    file = BytesIO()
+
+    doc = SimpleDocTemplate(
+        file,
+        pagesize=landscape(A4),
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=20,
+        bottomMargin=20
+    )
+
+    styles = getSampleStyleSheet()
+    elements = []
+
+    title = f"Credit Transport Report - {party_name}"
+    date_line = f"Date: {from_date} to {to_date}"
+
+    elements.append(Paragraph(title, styles["Title"]))
+    elements.append(Paragraph(date_line, styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    data = [[
+        "Date", "SL", "Party", "Challan", "Vehicle",
+        "Slip", "HSD", "Rate", "HSD Amt",
+        "Cash", "Final"
+    ]]
+
+    total_hsd = 0
+    total_rate = 0
+    total_hsd_amount = 0
+    total_cash = 0
+    total_final = 0
+
+    for r in rows:
+        total_hsd += float(r["hsd_qty"] or 0)
+        total_rate += float(r["rate"] or 0)
+        total_hsd_amount += float(r["hsd_amount"] or 0)
+        total_cash += float(r["cash_taken"] or 0)
+        total_final += float(r["total_amount"] or 0)
+
+        data.append([
+            str(r["entry_date"]),
+            r["sl_no"],
+            r["transporter_name"],
+            r["challan_no"],
+            r["vehicle_no"],
+            r["slip_no"],
+            r["hsd_qty"],
+            r["rate"],
+            r["hsd_amount"],
+            r["cash_taken"],
+            r["total_amount"]
+        ])
+
+    data.append(["", "", "", "", "", "", "", "", "", "", ""])
+    data.append([
+        "", "", "", "", "", "TOTAL",
+        round(total_hsd, 2),
+        round(total_rate, 2),
+        round(total_hsd_amount, 2),
+        round(total_cash, 2),
+        round(total_final, 2)
+    ])
+
+    table = Table(data, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#07120C")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#D9EAD3")),
+        ("ALIGN", (6, 1), (-1, -1), "RIGHT"),
+    ]))
+
+    elements.append(table)
+
+    doc.build(elements)
+
+    file.seek(0)
+
+    safe_party = party_name.replace(" ", "_").replace("/", "_")
+    filename = f"{safe_party}_{from_date}_to_{to_date}_Transport_Report.pdf"
+
+    return send_file(
+        file,
+        as_attachment=True,
+        download_name=filename
+    )
+
 
 @app.route("/save-daily-closing", methods=["POST"])
 def save_daily_closing():

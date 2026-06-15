@@ -9,3 +9,4 @@ itsdangerous
 click
 blinker
 psycopg2-binary
+reportlab
