@@ -396,6 +396,31 @@ body{
     color:#07120C;
     font-size:20px;
 }
+.export-box{
+    margin-bottom:20px;
+    padding:15px;
+    background:#fff;
+    border-radius:12px;
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.export-box form{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.btn-success{
+    background:#198754;
+    color:white;
+}
+
+.btn-danger{
+    background:#dc3545;
+    color:white;
+}
 
 </style>
 
@@ -1128,6 +1153,7 @@ Export Excel
             formaction="/export-party-transport-excel"
             class="btn btn-success">
             Export Excel
+            
         </button>
 
         <button
@@ -1135,6 +1161,8 @@ Export Excel
             class="btn btn-danger">
             Export PDF
         </button>
+
+        
 
     </form>
 
@@ -1145,12 +1173,12 @@ Export Excel
 <div class="summary-strip">
     <div class="summary-mini">
         <span>Total HSD Qty</span>
-        <b id="entryQtyTotal">0</b>
+        <b>{{ "%.2f"|format(transport_total_hsd) }}</b>
     </div>
 
     <div class="summary-mini">
         <span>Total Amount</span>
-        <b id="entryAmountTotal">₹ 0</b>
+        <b>₹ {{ "%.2f"|format(transport_total_amount) }}</b>
     </div>
 </div>
 
@@ -1224,7 +1252,7 @@ function openTab(tabId, btn){
     setTimeout(initAllPagination,100);
 }
 
-function paginateTable(tableId, rowsPerPage = 10){
+function paginateTable(tableId, rowsPerPage = 20){
 
     const table =
     document.getElementById(tableId);

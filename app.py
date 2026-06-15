@@ -746,10 +746,10 @@ def export_party_transport_pdf():
     doc = SimpleDocTemplate(
         file,
         pagesize=landscape(A4),
-        rightMargin=20,
-        leftMargin=20,
-        topMargin=20,
-        bottomMargin=20
+        rightMargin=10,
+        leftMargin=10,
+        topMargin=10,
+        bottomMargin=10
     )
 
     styles = getSampleStyleSheet()
@@ -811,6 +811,8 @@ def export_party_transport_pdf():
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#07120C")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("FONTSIZE", (0,0), (-1,-1), 6),
+        ("LEADING", (0,0), (-1,-1), 7),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#D9EAD3")),
@@ -2979,6 +2981,9 @@ def reports():
     cur.execute(transport_entry_query, transport_entry_params)
     transport_entry_rows = cur.fetchall()
 
+    transport_total_hsd = sum(float(r["hsd_qty"] or 0) for r in transport_entry_rows)
+    transport_total_amount = sum(float(r["total_amount"] or 0) for r in transport_entry_rows)
+
     conn.close()
 
     return render_template(
@@ -2988,7 +2993,9 @@ def reports():
         tank_rows=tank_rows,
         lube_rows=lube_rows,
         transporter_rows=transporter_rows,
-        transport_entry_rows=transport_entry_rows
+        transport_entry_rows=transport_entry_rows,
+        transport_total_hsd=transport_total_hsd,
+        transport_total_amount=transport_total_amount
     )
 
 
