@@ -811,9 +811,9 @@ def export_party_transport_pdf():
             r["slip_no"],
             f"{hsd_qty:.2f}",
             f"{rate:.2f}",
-            f"{total_hsd_amount:,}",
-            f"{total_cash:,}",
-            f"{total_final:,}"
+            f"{total_hsd_amount:.2f}",
+            f"{total_cash:.2f}",
+            f"{total_final:.2f}"
         ])
 
     data.append(["", "", "", "", "", "", "", "", "", "", ""])
@@ -822,16 +822,12 @@ def export_party_transport_pdf():
         "", "", "", "", "", "TOTAL",
         f"{total_hsd:.2f}",
         f"{total_rate:.2f}",
-        f"{total_hsd_amount:,}",
-        f"{total_cash:,}",
-        f"{total_final:,}"
+        f"{total_hsd_amount:.2f}",
+        f"{total_cash:.2f}",
+        f"{total_final:.2f}"
     ])
 
-    table = Table(
-        data,
-        colWidths=[58, 28, 110, 60, 65, 50, 55, 45, 65, 60, 70],
-        repeatRows=1
-    )
+    table = Table(data, repeatRows=1)
 
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#07120C")),
