@@ -5257,7 +5257,7 @@ def delete_proof_register():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    proof_ids = request.form.getlist("proof_ids")
+    proof_ids = [int(x) for x in request.form.getlist("proof_ids")]
 
     if not proof_ids:
         return redirect(url_for("proof_register"))
@@ -5265,6 +5265,32 @@ def delete_proof_register():
     conn = get_pg_conn()
     cur = conn.cursor()
 
+    # get photo urls first
+    cur.execute("""
+        SELECT photo_url
+        FROM proof_register
+        WHERE id = ANY(%s)
+    """, (proof_ids,))
+
+    rows = cur.fetchall()
+
+    supabase = get_supabase_client()
+
+    for row in rows:
+        photo_url = row["photo_url"]
+
+        if photo_url:
+            try:
+                file_path = photo_url.split("/proof-files/")[-1]
+
+                supabase.storage.from_("proof-files").remove([
+                    file_path
+                ])
+
+            except Exception:
+                pass
+
+    # delete database rows
     cur.execute("""
         DELETE FROM proof_register
         WHERE id = ANY(%s)
