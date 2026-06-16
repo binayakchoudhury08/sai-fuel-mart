@@ -5251,6 +5251,30 @@ def get_pg_cursor():
 
     return conn, cur
 
+@app.route("/delete-proof-register", methods=["POST"])
+def delete_proof_register():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    proof_ids = request.form.getlist("proof_ids")
+
+    if not proof_ids:
+        return redirect(url_for("proof_register"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        DELETE FROM proof_register
+        WHERE id = ANY(%s)
+    """, (proof_ids,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("proof_register"))
+
 @app.route("/save-proof-upload", methods=["POST"])
 def save_proof_upload():
 
