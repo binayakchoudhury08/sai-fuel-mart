@@ -5121,6 +5121,161 @@ WHERE TO_CHAR(date, 'YYYY-MM')=%s
         
     )
 
+def get_supabase_client():
+
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_KEY")
+
+    return create_client(url, key)
+
+def upload_proof_file(file, folder):
+    if not file or file.filename == "":
+        return ""
+
+    supabase = get_supabase_client()
+
+    ext = file.filename.rsplit(".", 1)[-1].lower()
+    file_name = f"{folder}/{uuid.uuid4()}.{ext}"
+
+    file_bytes = file.read()
+
+    supabase.storage.from_("proof-files").upload(
+        file_name,
+        file_bytes,
+        {"content-type": file.content_type}
+    )
+
+    return supabase.storage.from_("proof-files").get_public_url(file_name)
+
+@app.route("/save-proof-upload", methods=["POST"])
+def save_proof_upload():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    proof_date = request.form.get("proof_date")
+    proof_time = datetime.now().strftime("%H:%M:%S")
+    proof_type = request.form.get("proof_type")
+
+    latitude = request.form.get("latitude", "")
+    longitude = request.form.get("longitude", "")
+    client_time = request.form.get("client_time", "")
+
+    location_url = ""
+    if latitude and longitude:
+        location_url = f"https://www.google.com/maps?q={latitude},{longitude}"
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    def insert_proof(category, fuel, item, status, photo_url="", remarks=""):
+        cur.execute("""
+            INSERT INTO proof_register (
+                proof_date, proof_time, proof_category,
+                fuel_type, item_name, stock_status,
+                photo_url, video_url, remarks,
+                latitude, longitude, location_url, client_time
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            proof_date,
+            proof_time,
+            category,
+            fuel,
+            item,
+            status,
+            photo_url,
+            "",
+            remarks,
+            latitude,
+            longitude,
+            location_url,
+            client_time
+        ))
+
+    if proof_type == "Nozzle Testing":
+
+        for fuel in ["MS", "HSD"]:
+
+            fuel_status = request.form.get(f"{fuel.lower()}_stock_status")
+            nozzles = ["MS1", "MS2", "MS3"] if fuel == "MS" else ["HSD1", "HSD2", "HSD3"]
+
+            if fuel_status == "No Stock":
+
+                for nozzle in nozzles:
+                    insert_proof(
+                        "Nozzle Testing",
+                        fuel,
+                        nozzle,
+                        "No Stock",
+                        "",
+                        f"{fuel} no stock"
+                    )
+
+            else:
+
+                for nozzle in nozzles:
+                    photo = request.files.get(f"{nozzle}_photo")
+
+                    if not photo:
+                        conn.close()
+                        return f"{nozzle} photo required"
+
+                    photo_url = upload_proof_file(photo, "photos")
+
+                    insert_proof(
+                        "Nozzle Testing",
+                        fuel,
+                        nozzle,
+                        "Available",
+                        photo_url,
+                        ""
+                    )
+
+    elif proof_type == "Dip Check":
+
+        for fuel in ["MS", "HSD"]:
+
+            dip_status = request.form.get(f"{fuel.lower()}_dip_status")
+            sessions = ["Morning Dip", "Evening Dip"]
+
+            if dip_status == "No Stock":
+
+                for session_name in sessions:
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} {session_name}",
+                        "No Stock",
+                        "",
+                        f"{fuel} no stock"
+                    )
+
+            else:
+
+                for session_name in sessions:
+                    field = f"{fuel}_{session_name.replace(' ', '_')}"
+                    photo = request.files.get(f"{field}_photo")
+
+                    if not photo:
+                        conn.close()
+                        return f"{fuel} {session_name} photo required"
+
+                    photo_url = upload_proof_file(photo, "photos")
+
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} {session_name}",
+                        "Available",
+                        photo_url,
+                        ""
+                    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("proof_register"))
 
 @app.route("/proof-upload")
 def proof_upload():
@@ -5144,129 +5299,136 @@ def save_proof_upload():
     proof_time = datetime.now().strftime("%H:%M:%S")
     proof_type = request.form.get("proof_type")
 
+    latitude = request.form.get("latitude", "")
+    longitude = request.form.get("longitude", "")
+    client_time = request.form.get("client_time", "")
+
+    location_url = ""
+    if latitude and longitude:
+        location_url = f"https://www.google.com/maps?q={latitude},{longitude}"
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    if proof_type == "Nozzle Testing":
+    def insert_proof(category, fuel, item, status, photo_url="", remarks=""):
+        cur.execute("""
+            INSERT INTO proof_register (
+                proof_date, proof_time, proof_category,
+                fuel_type, item_name, stock_status,
+                photo_url, video_url, remarks,
+                latitude, longitude, location_url, client_time
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            proof_date,
+            proof_time,
+            category,
+            fuel,
+            item,
+            status,
+            photo_url,
+            "",
+            remarks,
+            latitude,
+            longitude,
+            location_url,
+            client_time
+        ))
 
-        for fuel in ["MS", "HSD"]:
+    try:
 
-            fuel_status = request.form.get(f"{fuel.lower()}_stock_status")
-            nozzles = ["MS1", "MS2", "MS3"] if fuel == "MS" else ["HSD1", "HSD2", "HSD3"]
+        if proof_type == "Nozzle Testing":
 
-            if fuel_status == "No Stock":
+            for fuel in ["MS", "HSD"]:
 
-                for nozzle in nozzles:
-                    cur.execute("""
-                        INSERT INTO proof_register (
-                            proof_date, proof_time, proof_category,
-                            fuel_type, item_name, stock_status, remarks
+                fuel_status = request.form.get(f"{fuel.lower()}_stock_status")
+                nozzles = ["MS1", "MS2", "MS3"] if fuel == "MS" else ["HSD1", "HSD2", "HSD3"]
+
+                if fuel_status == "No Stock":
+
+                    for nozzle in nozzles:
+                        insert_proof(
+                            "Nozzle Testing",
+                            fuel,
+                            nozzle,
+                            "No Stock",
+                            "",
+                            f"{fuel} no stock"
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s)
-                    """, (
-                        proof_date,
-                        proof_time,
-                        "Nozzle Testing",
-                        fuel,
-                        nozzle,
-                        "No Stock",
-                        f"{fuel} no stock"
-                    ))
 
-            else:
+                else:
 
-                for nozzle in nozzles:
+                    for nozzle in nozzles:
+                        photo = request.files.get(f"{nozzle}_photo")
 
-                    photo = request.files.get(f"{nozzle}_photo")
+                        if not photo:
+                            conn.close()
+                            return f"{nozzle} photo required"
 
-                    if not photo:
-                        conn.close()
-                        return f"{nozzle} photo required"
+                        photo_url = upload_proof_file(photo, "photos")
 
-                    photo_url = upload_proof_file(photo, "photos")
-
-                    cur.execute("""
-                        INSERT INTO proof_register (
-                            proof_date, proof_time, proof_category,
-                            fuel_type, item_name, stock_status,
-                            photo_url, video_url
+                        insert_proof(
+                            "Nozzle Testing",
+                            fuel,
+                            nozzle,
+                            "Available",
+                            photo_url,
+                            ""
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                    """, (
-                        proof_date,
-                        proof_time,
-                        "Nozzle Testing",
-                        fuel,
-                        nozzle,
-                        "Available",
-                        photo_url,
-                        ""
-                    ))
 
-    elif proof_type == "Dip Check":
+        elif proof_type == "Dip Check":
 
-        for fuel in ["MS", "HSD"]:
+            for fuel in ["MS", "HSD"]:
 
-            dip_status = request.form.get(f"{fuel.lower()}_dip_status")
-            sessions = ["Morning Dip", "Evening Dip"]
+                dip_status = request.form.get(f"{fuel.lower()}_dip_status")
+                sessions = ["Morning Dip", "Evening Dip"]
 
-            if dip_status == "No Stock":
+                if dip_status == "No Stock":
 
-                for session_name in sessions:
-                    cur.execute("""
-                        INSERT INTO proof_register (
-                            proof_date, proof_time, proof_category,
-                            fuel_type, item_name, stock_status, remarks
+                    for session_name in sessions:
+                        insert_proof(
+                            "Dip Check",
+                            fuel,
+                            f"{fuel} {session_name}",
+                            "No Stock",
+                            "",
+                            f"{fuel} no stock"
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s)
-                    """, (
-                        proof_date,
-                        proof_time,
-                        "Dip Check",
-                        fuel,
-                        f"{fuel} {session_name}",
-                        "No Stock",
-                        f"{fuel} no stock"
-                    ))
 
-            else:
+                else:
 
-                for session_name in sessions:
+                    for session_name in sessions:
+                        field = f"{fuel}_{session_name.replace(' ', '_')}"
+                        photo = request.files.get(f"{field}_photo")
 
-                    field = f"{fuel}_{session_name.replace(' ', '_')}"
+                        if not photo:
+                            conn.close()
+                            return f"{fuel} {session_name} photo required"
 
-                    photo = request.files.get(f"{field}_photo")
-                    video = request.files.get(f"{field}_video")
+                        photo_url = upload_proof_file(photo, "photos")
 
-                    if not photo or not video:
-                        conn.close()
-                        return f"{fuel} {session_name} photo and video required"
-
-                    photo_url = upload_proof_file(photo, "photos")
-                    video_url = upload_proof_file(video, "videos")
-
-                    cur.execute("""
-                        INSERT INTO proof_register (
-                            proof_date, proof_time, proof_category,
-                            fuel_type, item_name, stock_status,
-                            photo_url, video_url
+                        insert_proof(
+                            "Dip Check",
+                            fuel,
+                            f"{fuel} {session_name}",
+                            "Available",
+                            photo_url,
+                            ""
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                    """, (
-                        proof_date,
-                        proof_time,
-                        "Dip Check",
-                        fuel,
-                        f"{fuel} {session_name}",
-                        "Available",
-                        photo_url,
-                        video_url
-                    ))
 
-    conn.commit()
-    conn.close()
+        else:
+            conn.close()
+            return "Please select proof type"
 
-    return redirect(url_for("proof_register"))
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for("proof_register"))
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return f"Proof upload error: {str(e)}"
 
 
 @app.route("/proof-register")
@@ -5288,6 +5450,7 @@ def proof_register():
         FROM proof_register
         WHERE 1=1
     """
+
     params = []
 
     if from_date:
@@ -5306,14 +5469,20 @@ def proof_register():
         query += " AND fuel_type = %s"
         params.append(fuel_type)
 
-    query += " ORDER BY proof_date DESC, proof_time DESC, id DESC"
+    query += """
+        ORDER BY proof_date DESC, proof_time DESC, id DESC
+    """
 
     cur.execute(query, params)
     rows = cur.fetchall()
 
     conn.close()
 
-    return render_template("proof_register.html", rows=rows)
+    return render_template(
+        "proof_register.html",
+        rows=rows
+    )
+
 
 @app.route("/logout")
 def logout():
@@ -5351,31 +5520,136 @@ def get_pg_cursor():
 
     return conn, cur
 
-def get_supabase_client():
-    return create_client(
-        os.environ["SUPABASE_URL"],
-        os.environ["SUPABASE_SERVICE_KEY"]
-    )
+@app.route("/save-proof-upload", methods=["POST"])
+def save_proof_upload():
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
-def upload_proof_file(file, folder):
-    if not file or file.filename == "":
-        return ""
+    proof_date = request.form.get("proof_date")
+    proof_time = datetime.now().strftime("%H:%M:%S")
+    proof_type = request.form.get("proof_type")
 
-    supabase = get_supabase_client()
+    latitude = request.form.get("latitude", "")
+    longitude = request.form.get("longitude", "")
+    client_time = request.form.get("client_time", "")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower()
-    file_name = f"{folder}/{uuid.uuid4()}.{ext}"
+    location_url = ""
+    if latitude and longitude:
+        location_url = f"https://www.google.com/maps?q={latitude},{longitude}"
 
-    file_bytes = file.read()
+    conn = get_pg_conn()
+    cur = conn.cursor()
 
-    supabase.storage.from_("proof-files").upload(
-        file_name,
-        file_bytes,
-        {"content-type": file.content_type}
-    )
+    def insert_proof(category, fuel, item, status, photo_url="", remarks=""):
+        cur.execute("""
+            INSERT INTO proof_register (
+                proof_date, proof_time, proof_category,
+                fuel_type, item_name, stock_status,
+                photo_url, video_url, remarks,
+                latitude, longitude, location_url, client_time
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            proof_date,
+            proof_time,
+            category,
+            fuel,
+            item,
+            status,
+            photo_url,
+            "",
+            remarks,
+            latitude,
+            longitude,
+            location_url,
+            client_time
+        ))
 
-    return supabase.storage.from_("proof-files").get_public_url(file_name)
+    if proof_type == "Nozzle Testing":
+
+        for fuel in ["MS", "HSD"]:
+
+            fuel_status = request.form.get(f"{fuel.lower()}_stock_status")
+            nozzles = ["MS1", "MS2", "MS3"] if fuel == "MS" else ["HSD1", "HSD2", "HSD3"]
+
+            if fuel_status == "No Stock":
+
+                for nozzle in nozzles:
+                    insert_proof(
+                        "Nozzle Testing",
+                        fuel,
+                        nozzle,
+                        "No Stock",
+                        "",
+                        f"{fuel} no stock"
+                    )
+
+            else:
+
+                for nozzle in nozzles:
+                    photo = request.files.get(f"{nozzle}_photo")
+
+                    if not photo:
+                        conn.close()
+                        return f"{nozzle} photo required"
+
+                    photo_url = upload_proof_file(photo, "photos")
+
+                    insert_proof(
+                        "Nozzle Testing",
+                        fuel,
+                        nozzle,
+                        "Available",
+                        photo_url,
+                        ""
+                    )
+
+    elif proof_type == "Dip Check":
+
+        for fuel in ["MS", "HSD"]:
+
+            dip_status = request.form.get(f"{fuel.lower()}_dip_status")
+            sessions = ["Morning Dip", "Evening Dip"]
+
+            if dip_status == "No Stock":
+
+                for session_name in sessions:
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} {session_name}",
+                        "No Stock",
+                        "",
+                        f"{fuel} no stock"
+                    )
+
+            else:
+
+                for session_name in sessions:
+                    field = f"{fuel}_{session_name.replace(' ', '_')}"
+                    photo = request.files.get(f"{field}_photo")
+
+                    if not photo:
+                        conn.close()
+                        return f"{fuel} {session_name} photo required"
+
+                    photo_url = upload_proof_file(photo, "photos")
+
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} {session_name}",
+                        "Available",
+                        photo_url,
+                        ""
+                    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("proof_register"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

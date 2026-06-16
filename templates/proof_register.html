@@ -12,7 +12,7 @@ h1{color:#07120C;}
 input,select,button{padding:11px;border-radius:10px;border:1px solid #d1d5db;width:100%;}
 button{background:#16a34a;color:white;font-weight:bold;border:none;}
 .proof-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;}
-.card img,.card video{width:100%;border-radius:10px;margin-top:10px;}
+.card img{width:100%;border-radius:10px;margin-top:10px;}
 .badge{display:inline-block;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:bold;}
 .ok{background:#dcfce7;color:#166534;}
 .no{background:#fee2e2;color:#991b1b;}
@@ -56,9 +56,17 @@ button{background:#16a34a;color:white;font-weight:bold;border:none;}
 <h3>{{ row["item_name"] }}</h3>
 
 <p><b>Date:</b> {{ row["proof_date"] }}</p>
-<p><b>Time:</b> {{ row["proof_time"] }}</p>
+<p><b>Server Time:</b> {{ row["proof_time"] }}</p>
+<p><b>Mobile Time:</b> {{ row["client_time"] }}</p>
 <p><b>Category:</b> {{ row["proof_category"] }}</p>
 <p><b>Fuel:</b> {{ row["fuel_type"] }}</p>
+
+{% if row["location_url"] %}
+<p>
+<b>Location:</b>
+<a href="{{ row['location_url'] }}" target="_blank">Open GPS Location</a>
+</p>
+{% endif %}
 
 {% if row["stock_status"] == "No Stock" %}
 
@@ -67,18 +75,12 @@ button{background:#16a34a;color:white;font-weight:bold;border:none;}
 
 {% else %}
 
-<span class="badge ok">Uploaded</span>
+<span class="badge ok">Photo Uploaded</span>
 
 {% if row["photo_url"] %}
 <a href="{{ row['photo_url'] }}" target="_blank">
 <img src="{{ row['photo_url'] }}">
 </a>
-{% endif %}
-
-{% if row["video_url"] %}
-<video controls>
-<source src="{{ row['video_url'] }}">
-</video>
 {% endif %}
 
 {% endif %}
