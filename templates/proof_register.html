@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Proof Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{font-family:Arial;background:#f3f4f6;margin:0;padding:20px;}
+h1{color:#07120C;}
+.filter-box,.card{background:white;padding:15px;border-radius:14px;margin-bottom:15px;box-shadow:0 4px 14px rgba(0,0,0,.08);}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+input,select,button{padding:10px;border-radius:8px;border:1px solid #ddd;width:100%;}
+button{background:#16a34a;color:white;font-weight:bold;border:none;}
+.proof-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;}
+.card img,.card video{width:100%;border-radius:10px;margin-top:10px;}
+.badge{display:inline-block;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:bold;}
+.ok{background:#dcfce7;color:#166534;}
+.no{background:#fee2e2;color:#991b1b;}
+@media(max-width:900px){.grid,.proof-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+
+<body>
+
+<h1>Proof Register</h1>
+
+<div class="filter-box">
+<form method="GET" action="/proof-register">
+    <div class="grid">
+        <input type="date" name="from_date">
+        <input type="date" name="to_date">
+
+        <select name="category">
+            <option value="">All Category</option>
+            <option value="Nozzle Testing">Nozzle Testing</option>
+            <option value="Dip Check">Dip Check</option>
+        </select>
+
+        <select name="fuel_type">
+            <option value="">All Fuel</option>
+            <option value="MS">MS</option>
+            <option value="HSD">HSD</option>
+        </select>
+    </div>
+
+    <br>
+    <button>Filter</button>
+</form>
+</div>
+
+<div class="proof-grid">
+
+{% for row in rows %}
+
+<div class="card">
+
+    <h3>{{ row["item_name"] }}</h3>
+
+    <p><b>Date:</b> {{ row["proof_date"] }}</p>
+    <p><b>Time:</b> {{ row["proof_time"] }}</p>
+    <p><b>Category:</b> {{ row["proof_category"] }}</p>
+    <p><b>Fuel:</b> {{ row["fuel_type"] }}</p>
+
+    {% if row["stock_status"] == "No Stock" %}
+        <span class="badge no">No Stock</span>
+        <p>{{ row["remarks"] }}</p>
+    {% else %}
+        <span class="badge ok">Available / Uploaded</span>
+
+        {% if row["photo_url"] %}
+            <a href="{{ row['photo_url'] }}" target="_blank">
+                <img src="{{ row['photo_url'] }}">
+            </a>
+        {% endif %}
+
+        {% if row["video_url"] %}
+            <video controls>
+                <source src="{{ row['video_url'] }}">
+            </video>
+        {% endif %}
+    {% endif %}
+
+</div>
+
+{% endfor %}
+
+</div>
+
+</body>
+</html>

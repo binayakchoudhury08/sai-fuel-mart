@@ -10,3 +10,4 @@ click
 blinker
 psycopg2-binary
 reportlab
+supabase

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Proof Upload</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+
+body{
+    background:#f5f7fb;
+    font-family:Arial;
+    margin:0;
+    padding:15px;
+}
+
+.card{
+    background:white;
+    border-radius:15px;
+    padding:15px;
+    margin-bottom:15px;
+    box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+h2{
+    margin-top:0;
+    color:#07120C;
+}
+
+label{
+    font-weight:600;
+    display:block;
+    margin-top:10px;
+}
+
+input,select{
+    width:100%;
+    padding:10px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    margin-top:5px;
+}
+
+.btn{
+    width:100%;
+    padding:14px;
+    background:#07120C;
+    color:white;
+    border:none;
+    border-radius:10px;
+    margin-top:20px;
+    font-size:16px;
+}
+
+.section-title{
+    font-size:18px;
+    font-weight:700;
+    margin-bottom:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<form method="POST"
+action="/save-proof-upload"
+enctype="multipart/form-data">
+
+<div class="card">
+
+<h2>Proof Upload</h2>
+
+<label>Date</label>
+
+<input type="date"
+name="proof_date"
+value="{{ today }}"
+required>
+
+</div>
+
+<div class="card">
+
+<div class="section-title">
+MS Product Status
+</div>
+
+<select name="ms_stock_status">
+
+<option value="Available">
+Available
+</option>
+
+<option value="No Stock">
+No Stock
+</option>
+
+</select>
+
+<h4>MS1</h4>
+
+<input type="file"
+name="MS1_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="MS1_video"
+accept="video/*"
+capture="environment">
+
+<h4>MS2</h4>
+
+<input type="file"
+name="MS2_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="MS2_video"
+accept="video/*"
+capture="environment">
+
+<h4>MS3</h4>
+
+<input type="file"
+name="MS3_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="MS3_video"
+accept="video/*"
+capture="environment">
+
+</div>
+
+<div class="card">
+
+<div class="section-title">
+HSD Product Status
+</div>
+
+<select name="hsd_stock_status">
+
+<option value="Available">
+Available
+</option>
+
+<option value="No Stock">
+No Stock
+</option>
+
+</select>
+
+<h4>HSD1</h4>
+
+<input type="file"
+name="HSD1_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="HSD1_video"
+accept="video/*"
+capture="environment">
+
+<h4>HSD2</h4>
+
+<input type="file"
+name="HSD2_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="HSD2_video"
+accept="video/*"
+capture="environment">
+
+<h4>HSD3</h4>
+
+<input type="file"
+name="HSD3_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="HSD3_video"
+accept="video/*"
+capture="environment">
+
+</div>
+
+<div class="card">
+
+<h2>MS Dip Check</h2>
+
+<select name="ms_dip_status">
+
+<option value="Available">
+Available
+</option>
+
+<option value="No Stock">
+No Stock
+</option>
+
+</select>
+
+<h4>Morning Dip</h4>
+
+<input type="file"
+name="MS_Morning_Dip_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="MS_Morning_Dip_video"
+accept="video/*"
+capture="environment">
+
+<h4>Evening Dip</h4>
+
+<input type="file"
+name="MS_Evening_Dip_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="MS_Evening_Dip_video"
+accept="video/*"
+capture="environment">
+
+</div>
+
+<div class="card">
+
+<h2>HSD Dip Check</h2>
+
+<select name="hsd_dip_status">
+
+<option value="Available">
+Available
+</option>
+
+<option value="No Stock">
+No Stock
+</option>
+
+</select>
+
+<h4>Morning Dip</h4>
+
+<input type="file"
+name="HSD_Morning_Dip_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="HSD_Morning_Dip_video"
+accept="video/*"
+capture="environment">
+
+<h4>Evening Dip</h4>
+
+<input type="file"
+name="HSD_Evening_Dip_photo"
+accept="image/*"
+capture="environment">
+
+<input type="file"
+name="HSD_Evening_Dip_video"
+accept="video/*"
+capture="environment">
+
+</div>
+
+<button class="btn">
+Upload Proof
+</button>
+
+</form>
+
+</body>
+</html>
