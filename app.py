@@ -5442,6 +5442,118 @@ def save_proof_upload():
         conn.close()
         return f"Proof upload error: {str(e)}"
 
+@app.route("/api/transporters")
+def api_transporters():
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM credit_transporters
+        ORDER BY party_name ASC
+    """)
+
+    rows = cur.fetchall()
+
+    conn.close()
+
+    return jsonify(rows)
+
+@app.route("/api/transport-entry-report")
+def api_transport_entry_report():
+
+    party = request.args.get("party", "")
+    from_date = request.args.get("from_date", "")
+    to_date = request.args.get("to_date", "")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    query = """
+        SELECT *
+        FROM transport_entries
+        WHERE 1=1
+    """
+
+    params = []
+
+    if party:
+        query += " AND transporter_name=%s"
+        params.append(party)
+
+    if from_date:
+        query += " AND entry_date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        query += " AND entry_date <= %s"
+        params.append(to_date)
+
+    query += " ORDER BY entry_date DESC, id DESC"
+
+    cur.execute(query, tuple(params))
+
+    rows = cur.fetchall()
+
+    conn.close()
+
+    return jsonify(rows)
+
+@app.route("/api/save-transport-entry", methods=["POST"])
+def api_save_transport_entry():
+
+    data = request.get_json()
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    qty = float(data.get("qty") or 0)
+    rate = float(data.get("rate") or 0)
+    cash_taken = float(data.get("cash_taken") or 0)
+
+    fuel_amount = qty * rate
+    total_amount = fuel_amount + cash_taken
+
+    cur.execute("""
+        INSERT INTO transport_entries (
+            entry_date,
+            sl_no,
+            transporter_id,
+            transporter_name,
+            challan_no,
+            vehicle_no,
+            slip_no,
+            qty,
+            rate,
+            fuel_amount,
+            cash_taken,
+            total_amount
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        data.get("entry_date"),
+        data.get("sl_no"),
+        data.get("transporter_id"),
+        data.get("transporter_name"),
+        data.get("challan_no"),
+        data.get("vehicle_no"),
+        data.get("slip_no"),
+        qty,
+        rate,
+        fuel_amount,
+        cash_taken,
+        total_amount
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "message": "Transport entry saved"
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
