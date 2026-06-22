@@ -5483,13 +5483,14 @@ def transport_reports():
     data = []
 
     for r in rows:
+
         data.append({
-            "entry_date": str(r[0]),
-            "transporter_name": r[1],
-            "vehicle_no": r[2],
-            "qty": float(r[3] or 0),
-            "rate": float(r[4] or 0),
-            "total_amount": float(r[5] or 0)
+            "entry_date": str(r["entry_date"]),
+            "transporter_name": r["transporter_name"],
+            "vehicle_no": r["vehicle_no"],
+            "qty": float(r["qty"] or 0),
+            "rate": float(r["rate"] or 0),
+            "total_amount": float(r["total_amount"] or 0)
         })
 
     conn.close()
