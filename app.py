@@ -5554,6 +5554,19 @@ def api_save_transport_entry():
         "message": "Transport entry saved"
     })
 
+@app.route("/api/export-transport-excel")
+def api_export_transport_excel():
+
+    return redirect(
+        url_for("export_party_transport_excel")
+    )
+
+@app.route("/api/export-transport-pdf")
+def api_export_transport_pdf():
+
+    return redirect(
+        url_for("export_party_transport_pdf")
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)
