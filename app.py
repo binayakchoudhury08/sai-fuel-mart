@@ -5460,45 +5460,88 @@ def api_transporters():
 
     return jsonify(rows)
 
-@app.route("/api/transport-entry-report")
-def api_transport_entry_report():
-
-    party = request.args.get("party", "")
-    from_date = request.args.get("from_date", "")
-    to_date = request.args.get("to_date", "")
+@app.route("/api/transport-reports")
+def transport_reports():
 
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    query = """
-        SELECT *
+    cur.execute("""
+        SELECT
+            entry_date,
+            transporter_name,
+            vehicle_no,
+            qty,
+            rate,
+            total_amount
         FROM transport_entries
-        WHERE 1=1
-    """
-
-    params = []
-
-    if party:
-        query += " AND transporter_name=%s"
-        params.append(party)
-
-    if from_date:
-        query += " AND entry_date >= %s"
-        params.append(from_date)
-
-    if to_date:
-        query += " AND entry_date <= %s"
-        params.append(to_date)
-
-    query += " ORDER BY entry_date DESC, id DESC"
-
-    cur.execute(query, tuple(params))
+        ORDER BY entry_date DESC
+    """)
 
     rows = cur.fetchall()
 
+    data = []
+
+    for r in rows:
+        data.append({
+            "entry_date": str(r[0]),
+            "transporter_name": r[1],
+            "vehicle_no": r[2],
+            "qty": float(r[3] or 0),
+            "rate": float(r[4] or 0),
+            "total_amount": float(r[5] or 0)
+        })
+
     conn.close()
 
-    return jsonify(rows)
+    return jsonify(data)
+
+@app.route("/api/transport-entry-report", methods=["GET"])
+def api_transport_entry_report():
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            entry_date,
+            sl_no,
+            transporter_name,
+            challan_no,
+            vehicle_no,
+            slip_no,
+            qty,
+            rate,
+            fuel_amount,
+            cash_taken,
+            total_amount
+        FROM transport_entries
+        ORDER BY id DESC
+    """)
+
+    rows = cur.fetchall()
+
+    data = []
+
+    for row in rows:
+
+        data.append({
+            "entry_date": row[0],
+            "sl_no": row[1],
+            "transporter_name": row[2],
+            "challan_no": row[3],
+            "vehicle_no": row[4],
+            "slip_no": row[5],
+            "qty": row[6],
+            "rate": row[7],
+            "fuel_amount": row[8],
+            "cash_taken": row[9],
+            "total_amount": row[10]
+        })
+
+    conn.close()
+
+    return jsonify(data)
 
 @app.route("/api/save-transport-entry", methods=["POST"])
 def api_save_transport_entry():
