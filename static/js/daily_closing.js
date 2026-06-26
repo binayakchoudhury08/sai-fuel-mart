@@ -461,8 +461,7 @@ function setupSaveClosing(){
 
         const cashInHand =
             totalFuelSale +
-            lubeTotals.cashLubeSale +
-            transportReceived -
+            lubeTotals.cashLubeSale -
             digitalCollection -
             netCreditDue -
             totalExpense;
