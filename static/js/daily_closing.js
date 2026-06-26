@@ -196,8 +196,7 @@ function updateAllTotals(){
 
     const cashInHand =
         totalFuelSale +
-        cashLubeSale +
-        transportReceived -
+        cashLubeSale -
         digitalCollection -
         netCreditDue -
         totalExpense;
