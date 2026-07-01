@@ -196,9 +196,10 @@ function updateAllTotals(){
 
     const cashInHand =
         totalFuelSale +
-        cashLubeSale -
+        lubeTotals.cashLubeSale +
+        transportReceived -
         digitalCollection -
-        netCreditDue -
+        creditGiven -
         totalExpense;
 
     setText("ms-sale-card", money(msAmount));
@@ -460,9 +461,10 @@ function setupSaveClosing(){
 
         const cashInHand =
             totalFuelSale +
-            lubeTotals.cashLubeSale -
+            lubeTotals.cashLubeSale +
+            transportReceived -
             digitalCollection -
-            netCreditDue -
+            creditGiven -
             totalExpense;
 
         const data = {
