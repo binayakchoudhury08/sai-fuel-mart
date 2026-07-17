@@ -17,6 +17,9 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from supabase import create_client
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 app = Flask(__name__)
@@ -545,7 +548,7 @@ def receive_transport_payment(id):
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    amount = float(request.form.get("amount", 0))
+    amount = round(float(request.form.get("amount", 0) or 0), 2)
 
     if amount <= 0:
         return redirect(url_for("credit_transport"))
@@ -553,30 +556,47 @@ def receive_transport_payment(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
+    try:
+        cur.execute("""
+            UPDATE credit_transporters
+            SET
+                payment_received = COALESCE(payment_received,0) + %s,
+                balance_due = COALESCE(balance_due,0) - %s
+            WHERE id=%s
+            RETURNING *
+        """, (
+            amount,
+            amount,
+            id
+        ))
 
-        UPDATE credit_transporters
+        party = cur.fetchone()
 
-        SET
+        if party:
+            cur.execute("""
+                INSERT INTO transporter_ledger(
+                    date, transporter_id, transporter_name, entry_type,
+                    fuel_credit, lube_credit, received_amount, balance_after, remarks
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                datetime.now().strftime("%Y-%m-%d"),
+                id,
+                party["party_name"],
+                "Payment Received",
+                0, 0,
+                amount,
+                party["balance_due"],
+                "Payment Received"
+            ))
 
-            amount_received =
-            COALESCE(amount_received,0) + %s,
+        conn.commit()
 
-            balance_due =
-            balance_due - %s
-
-        WHERE id=%s
-
-    """, (
-
-        amount,
-        amount,
-        id
-
-    ))
-
-    conn.commit()
-    conn.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
@@ -1369,58 +1389,165 @@ def edit_transport_entry(id):
 )
 def update_transport_entry(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    hsd_qty = float(
-        request.form.get("hsd_qty") or 0
-    )
+    try:
+        cur.execute(
+            "SELECT * FROM transport_entries WHERE id=%s",
+            (id,)
+        )
+        old_entry = cur.fetchone()
 
-    rate = float(
-        request.form.get("rate") or 0
-    )
+        if not old_entry:
+            return redirect(url_for("credit_transport"))
 
-    cash_taken = float(
-        request.form.get("cash_taken") or 0
-    )
+        new_entry_date = request.form["entry_date"]
+        new_transporter_id = request.form["transporter_id"]
 
-    hsd_amount = hsd_qty * rate
-    total_amount = round(hsd_amount + cash_taken)
+        hsd_qty = float(request.form.get("hsd_qty") or 0)
+        rate = float(request.form.get("rate") or 0)
+        cash_taken = float(request.form.get("cash_taken") or 0)
 
-    cur.execute("""
-        UPDATE transport_entries
-        SET
-            entry_date=%s,
-            transporter_id=%s,
-            challan_no=%s,
-            vehicle_no=%s,
-            slip_no=%s,
-            hsd_qty=%s,
-            rate=%s,
-            hsd_amount=%s,
-            cash_taken=%s,
-            total_amount=%s
-        WHERE id=%s
-    """, (
+        hsd_amount = round(hsd_qty * rate, 2)
+        total_amount = round(hsd_amount + cash_taken, 2)
 
-        request.form["entry_date"],
-        request.form["transporter_id"],
-        request.form.get("challan_no",""),
-        request.form.get("vehicle_no",""),
-        request.form.get("slip_no",""),
+        challan_no = request.form.get("challan_no","")
+        vehicle_no = request.form.get("vehicle_no","")
+        slip_no = request.form.get("slip_no","")
 
-        hsd_qty,
-        rate,
-        hsd_amount,
-        cash_taken,
-        total_amount,
+        old_transporter_id = old_entry["transporter_id"]
+        old_total_amount = round(float(old_entry["total_amount"] or 0), 2)
+        old_entry_date = old_entry["entry_date"]
 
-        id
+        cur.execute(
+            "SELECT party_name FROM credit_transporters WHERE id=%s",
+            (new_transporter_id,)
+        )
+        new_transporter_row = cur.fetchone()
+        new_transporter_name = new_transporter_row["party_name"] if new_transporter_row else ""
 
-    ))
+        cur.execute("""
+            UPDATE transport_entries
+            SET
+                entry_date=%s,
+                transporter_id=%s,
+                transporter_name=%s,
+                challan_no=%s,
+                vehicle_no=%s,
+                slip_no=%s,
+                hsd_qty=%s,
+                rate=%s,
+                hsd_amount=%s,
+                cash_taken=%s,
+                total_amount=%s
+            WHERE id=%s
+        """, (
+            new_entry_date,
+            new_transporter_id,
+            new_transporter_name,
+            challan_no,
+            vehicle_no,
+            slip_no,
+            hsd_qty,
+            rate,
+            hsd_amount,
+            cash_taken,
+            total_amount,
+            id
+        ))
 
-    conn.commit()
-    conn.close()
+        if not old_transporter_id:
+            # legacy entry that predates transporter linking — nothing was
+            # ever credited for it, so just apply the full new amount now
+            party = apply_transporter_credit_delta(
+                cur, new_transporter_id, fuel_delta=total_amount
+            )
+            if party:
+                cur.execute("""
+                    INSERT INTO transporter_ledger(
+                        date, transporter_id, transporter_name, entry_type,
+                        fuel_credit, lube_credit, received_amount, balance_after, remarks
+                    )
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,(
+                    new_entry_date, new_transporter_id, new_transporter_name,
+                    "Entry Updated",
+                    total_amount, 0, 0, party["balance_due"],
+                    f"Entry #{id} linked to a transporter for the first time"
+                ))
+        elif str(old_transporter_id) != str(new_transporter_id):
+            # entry moved to a different transporter: fully reverse the old
+            # party's credit and apply the full new amount to the new party
+            old_party = apply_transporter_credit_delta(
+                cur, old_transporter_id, fuel_delta=-old_total_amount
+            )
+            if old_party:
+                cur.execute("""
+                    INSERT INTO transporter_ledger(
+                        date, transporter_id, transporter_name, entry_type,
+                        fuel_credit, lube_credit, received_amount, balance_after, remarks
+                    )
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,(
+                    new_entry_date, old_transporter_id, old_party["party_name"],
+                    "Entry Reassigned",
+                    -old_total_amount, 0, 0, old_party["balance_due"],
+                    f"Entry #{id} moved to another transporter"
+                ))
+
+            new_party = apply_transporter_credit_delta(
+                cur, new_transporter_id, fuel_delta=total_amount
+            )
+            if new_party:
+                cur.execute("""
+                    INSERT INTO transporter_ledger(
+                        date, transporter_id, transporter_name, entry_type,
+                        fuel_credit, lube_credit, received_amount, balance_after, remarks
+                    )
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,(
+                    new_entry_date, new_transporter_id, new_transporter_name,
+                    "Entry Reassigned",
+                    total_amount, 0, 0, new_party["balance_due"],
+                    f"Entry #{id} moved from another transporter"
+                ))
+        else:
+            delta = round(total_amount - old_total_amount, 2)
+            if delta:
+                party = apply_transporter_credit_delta(
+                    cur, new_transporter_id, fuel_delta=delta
+                )
+                if party:
+                    cur.execute("""
+                        INSERT INTO transporter_ledger(
+                            date, transporter_id, transporter_name, entry_type,
+                            fuel_credit, lube_credit, received_amount, balance_after, remarks
+                        )
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,(
+                        new_entry_date, new_transporter_id, new_transporter_name,
+                        "Entry Updated",
+                        delta, 0, 0, party["balance_due"],
+                        f"Entry #{id} amount changed from Rs.{old_total_amount} to Rs.{total_amount}"
+                    ))
+
+        # keep SL No gap-free in both the old and new date groups
+        if old_entry_date != new_entry_date:
+            renumber_transport_entries(cur, old_entry_date)
+
+        renumber_transport_entries(cur, new_entry_date)
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(
         url_for("credit_transport")
@@ -2378,6 +2505,58 @@ def delete_tank_level(id):
     return redirect(url_for("tank_level"))
 
 
+def renumber_transport_entries(cur, entry_date):
+    """
+    Re-sequence SL No for every transport entry on a given date so that
+    after an insert/move/delete the numbers stay 1..N with no gaps.
+    """
+    cur.execute("""
+        SELECT id
+        FROM transport_entries
+        WHERE entry_date=%s
+        ORDER BY id ASC
+    """, (entry_date,))
+
+    rows = cur.fetchall()
+
+    for idx, row in enumerate(rows, start=1):
+        cur.execute(
+            "UPDATE transport_entries SET sl_no=%s WHERE id=%s",
+            (idx, row["id"])
+        )
+
+
+def apply_transporter_credit_delta(cur, transporter_id, fuel_delta=0, lube_delta=0):
+    """
+    Adjust a transporter's fuel_credit / lube_credit / credit_given / balance_due
+    by the given deltas (can be negative to reverse an entry) and return the
+    updated transporter row. This is the single place that keeps the
+    Transporter Credit Summary in sync with every entry that touches it.
+    """
+    fuel_delta = round(fuel_delta or 0, 2)
+    lube_delta = round(lube_delta or 0, 2)
+    total_delta = round(fuel_delta + lube_delta, 2)
+
+    cur.execute("""
+        UPDATE credit_transporters
+        SET
+            fuel_credit = COALESCE(fuel_credit,0) + %s,
+            lube_credit = COALESCE(lube_credit,0) + %s,
+            credit_given = COALESCE(credit_given,0) + %s,
+            balance_due = COALESCE(balance_due,0) + %s
+        WHERE id=%s
+        RETURNING *
+    """, (
+        fuel_delta,
+        lube_delta,
+        total_delta,
+        total_delta,
+        transporter_id
+    ))
+
+    return cur.fetchone()
+
+
 @app.route("/credit-transport")
 def credit_transport():
 
@@ -2408,6 +2587,13 @@ def credit_transport():
     total_transporters = cur.fetchone()["total"]
 
     cur.execute("""
+        SELECT COUNT(*) as total
+        FROM transport_entries
+        WHERE entry_date = CURRENT_DATE
+    """)
+    today_entries = cur.fetchone()["total"]
+
+    cur.execute("""
 SELECT COALESCE(SUM(credit_given), 0) AS total_credit
 FROM credit_transporters
 """)
@@ -2433,6 +2619,7 @@ LIMIT 1
         transporters=transporters,
         entries=entries,
         total_transporters=total_transporters,
+        today_entries=today_entries,
         hsd_rate=hsd_rate,
         total_credit=total_credit
     )
@@ -2440,58 +2627,126 @@ LIMIT 1
 @app.route("/add-transporter", methods=["POST"])
 def add_transporter():
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    party_name = request.form.get("party_name","").strip()
+
+    if not party_name:
+        flash("Party name is required.")
+        return redirect(url_for("credit_transport"))
+
+    opening_balance = round(float(request.form.get("opening_balance",0) or 0), 2)
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO credit_transporters(
+    try:
+        cur.execute("""
+            INSERT INTO credit_transporters(
+                party_name,
+                mobile,
+                vehicle_no,
+                opening_balance,
+                balance_due,
+                status
+            )
+            VALUES(%s,%s,%s,%s,%s,%s)
+            RETURNING id, party_name
+        """,(
             party_name,
-            mobile,
-            vehicle_no,
+            request.form.get("mobile","").strip(),
+            request.form.get("vehicle_no","").strip(),
             opening_balance,
-            balance_due,
-            status
-        )
-        VALUES(%s,%s,%s,%s,%s,%s)
-    """,(
-        request.form.get("party_name",""),
-request.form.get("mobile",""),
-request.form.get("vehicle_no",""),
-float(request.form.get("opening_balance",0)),
-float(request.form.get("opening_balance",0)),
-request.form.get("status","Active")
-    ))
+            opening_balance,
+            request.form.get("status","Active")
+        ))
 
-    conn.commit()
-    conn.close()
+        new_transporter = cur.fetchone()
+
+        if opening_balance:
+            cur.execute("""
+                INSERT INTO transporter_ledger(
+                    date, transporter_id, transporter_name, entry_type,
+                    fuel_credit, lube_credit, received_amount, balance_after, remarks
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,(
+                datetime.now().strftime("%Y-%m-%d"),
+                new_transporter["id"],
+                new_transporter["party_name"],
+                "Opening Balance",
+                0, 0, 0,
+                opening_balance,
+                "Opening balance set when transporter was added"
+            ))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
 @app.route("/save-transport-entry", methods=["POST"])
 def save_transport_entry():
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.form.get("transporter_id")
+
+    if not transporter_id:
+        flash("Please select a transporter.")
+        return redirect(url_for("credit_transport"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    entry_date = request.form["entry_date"]
+    try:
+        entry_date = request.form["entry_date"]
 
-    cur.execute("""
-        SELECT COUNT(*) as total
-        FROM transport_entries
-        WHERE entry_date=%s
-    """,(entry_date,))
+        cur.execute("""
+            SELECT COUNT(*) as total
+            FROM transport_entries
+            WHERE entry_date=%s
+        """,(entry_date,))
 
-    sl_no = cur.fetchone()["total"] + 1
+        sl_no = cur.fetchone()["total"] + 1
 
-    qty = float(request.form.get("hsd_qty") or 0)
-    rate = float(request.form.get("rate") or 0)
-    cash_taken = float(request.form.get("cash_taken") or 0)
+        qty = float(request.form.get("hsd_qty") or 0)
+        rate = float(request.form.get("rate") or 0)
+        cash_taken = float(request.form.get("cash_taken") or 0)
 
-    hsd_amount = qty * rate
-    total_amount = round(hsd_amount + cash_taken)
+        hsd_amount = round(qty * rate, 2)
+        total_amount = round(hsd_amount + cash_taken, 2)
 
-    cur.execute("""
-        INSERT INTO transport_entries(
+        transporter_name = request.form.get("transporter_name","")
+        challan_no = request.form.get("challan_no","")
+        vehicle_no = request.form.get("vehicle_no","")
+        slip_no = request.form.get("slip_no","")
+
+        cur.execute("""
+            INSERT INTO transport_entries(
+                entry_date,
+                sl_no,
+                transporter_id,
+                transporter_name,
+                challan_no,
+                vehicle_no,
+                slip_no,
+                hsd_qty,
+                rate,
+                hsd_amount,
+                cash_taken,
+                total_amount
+            )
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """,(
             entry_date,
             sl_no,
             transporter_id,
@@ -2499,99 +2754,128 @@ def save_transport_entry():
             challan_no,
             vehicle_no,
             slip_no,
-            hsd_qty,
+            qty,
             rate,
             hsd_amount,
             cash_taken,
             total_amount
-        )
-        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-    """,(
-        entry_date,
-        sl_no,
-        request.form["transporter_id"],
-        request.form["transporter_name"],
-        request.form["challan_no"],
-        request.form["vehicle_no"],
-        request.form["slip_no"],
-        qty,
-        rate,
-        hsd_amount,
-        cash_taken,
-        total_amount
-    ))
+        ))
 
-    conn.commit()
-    conn.close()
+        new_entry_id = cur.fetchone()["id"]
+
+        # keep the Transporter Credit Summary (fuel_credit / credit_given /
+        # balance_due) perfectly in sync with this HSD credit entry
+        party = apply_transporter_credit_delta(
+            cur, transporter_id, fuel_delta=total_amount
+        )
+
+        cur.execute("""
+            INSERT INTO transporter_ledger(
+                date, transporter_id, transporter_name, entry_type,
+                fuel_credit, lube_credit, received_amount, balance_after, remarks
+            )
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """,(
+            entry_date,
+            transporter_id,
+            party["party_name"] if party else transporter_name,
+            "Transport Entry",
+            total_amount, 0, 0,
+            party["balance_due"] if party else total_amount,
+            f"Entry #{new_entry_id} | Challan {challan_no} | Slip {slip_no} | {qty} L @ Rs.{rate}"
+        ))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
 @app.route("/save-transport-payment", methods=["POST"])
 def save_transport_payment():
 
-    transporter_id = request.form["transporter_id"]
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
-    amount = float(
-        request.form["payment_amount"]
-    )
+    transporter_id = request.form.get("transporter_id")
+
+    if not transporter_id:
+        flash("Please select a transporter.")
+        return redirect(url_for("credit_transport"))
+
+    amount = round(float(request.form.get("payment_amount") or 0), 2)
 
     date = request.form["date"]
 
-    payment_type = request.form["payment_type"]
+    payment_type = request.form.get("payment_type","Fuel")
+
+    if amount <= 0:
+        flash("Enter a valid amount received.")
+        return redirect(url_for("credit_transport"))
 
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        UPDATE credit_transporters
-        SET
-        payment_received=
-        COALESCE(payment_received,0)+%s,
-        balance_due=
-        balance_due-%s
-        WHERE id=%s
-    """,(
-        amount,
-        amount,
-        transporter_id
-    ))
+    try:
+        cur.execute("""
+            UPDATE credit_transporters
+            SET
+                payment_received = COALESCE(payment_received,0) + %s,
+                balance_due = COALESCE(balance_due,0) - %s
+            WHERE id=%s
+            RETURNING *
+        """,(
+            amount,
+            amount,
+            transporter_id
+        ))
 
-    cur.execute("""
-        SELECT *
-        FROM credit_transporters
-        WHERE id=%s
-    """,(transporter_id,))
+        party = cur.fetchone()
 
-    party = cur.fetchone()
+        if party:
+            cur.execute("""
+                INSERT INTO transporter_ledger(
+                    date,
+                    transporter_id,
+                    transporter_name,
+                    entry_type,
+                    fuel_credit,
+                    lube_credit,
+                    received_amount,
+                    balance_after,
+                    remarks
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """,(
+                date,
+                transporter_id,
+                party["party_name"],
+                f"{payment_type} Payment Received",
+                0, 0,
+                amount,
+                party["balance_due"],
+                "Payment Received"
+            ))
 
-    cur.execute("""
-        INSERT INTO transporter_ledger(
-            date,
-            transporter_id,
-            transporter_name,
-            entry_type,
-            received_amount,
-            balance_after,
-            remarks
-        )
-        VALUES(%s,%s,%s,%s,%s,%s,%s)
-    """,(
-        date,
-        transporter_id,
-        party["party_name"],
-        payment_type,
-        amount,
-        party["balance_due"],
-        "Payment Received"
-    ))
+        conn.commit()
 
-    conn.commit()
-    conn.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
 @app.route("/transporter-history/<int:id>")
 def transporter_history(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
     conn = get_pg_conn()
     cur = conn.cursor()
@@ -2621,6 +2905,155 @@ def transporter_history(id):
         history=history
     )
 
+@app.route("/edit-transporter-payment/<int:id>")
+def edit_transporter_payment(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT * FROM transporter_ledger WHERE id=%s",
+        (id,)
+    )
+    payment = cur.fetchone()
+
+    conn.close()
+
+    if not payment or not payment["received_amount"]:
+        flash("Only 'Amount Received' entries can be edited here.")
+        return redirect(url_for("credit_transport"))
+
+    return render_template(
+        "edit_transporter_payment.html",
+        payment=payment
+    )
+
+@app.route("/update-transporter-payment/<int:id>", methods=["POST"])
+def update_transporter_payment(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    transporter_id = None
+
+    try:
+        cur.execute(
+            "SELECT * FROM transporter_ledger WHERE id=%s",
+            (id,)
+        )
+        old_payment = cur.fetchone()
+
+        if not old_payment or not old_payment["received_amount"]:
+            flash("Only 'Amount Received' entries can be edited here.")
+            return redirect(url_for("credit_transport"))
+
+        transporter_id = old_payment["transporter_id"]
+        old_amount = round(float(old_payment["received_amount"] or 0), 2)
+
+        new_amount = round(float(request.form.get("received_amount") or 0), 2)
+        new_date = request.form.get("date") or old_payment["date"]
+        payment_type = request.form.get("payment_type", "Fuel")
+
+        if new_amount <= 0:
+            flash("Enter a valid amount received.")
+            return redirect(url_for("transporter_history", id=transporter_id))
+
+        # only the difference needs to move the balance
+        delta = round(new_amount - old_amount, 2)
+
+        cur.execute("""
+            UPDATE credit_transporters
+            SET
+                payment_received = COALESCE(payment_received,0) + %s,
+                balance_due = COALESCE(balance_due,0) - %s
+            WHERE id=%s
+            RETURNING balance_due
+        """, (delta, delta, transporter_id))
+
+        party = cur.fetchone()
+
+        cur.execute("""
+            UPDATE transporter_ledger
+            SET
+                date=%s,
+                entry_type=%s,
+                received_amount=%s,
+                balance_after=%s,
+                remarks=%s
+            WHERE id=%s
+        """, (
+            new_date,
+            f"{payment_type} Payment Received",
+            new_amount,
+            party["balance_due"] if party else old_payment["balance_after"],
+            "Payment Received (edited)",
+            id
+        ))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("transporter_history", id=transporter_id))
+
+@app.route("/delete-transporter-payment/<int:id>")
+def delete_transporter_payment(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    transporter_id = None
+
+    try:
+        cur.execute(
+            "SELECT * FROM transporter_ledger WHERE id=%s",
+            (id,)
+        )
+        payment = cur.fetchone()
+
+        if not payment or not payment["received_amount"]:
+            flash("Only 'Amount Received' entries can be deleted here.")
+            return redirect(url_for("credit_transport"))
+
+        transporter_id = payment["transporter_id"]
+        amount = round(float(payment["received_amount"] or 0), 2)
+
+        # reverse the payment so the balance goes right back to
+        # what it was before this receipt was ever recorded
+        cur.execute("""
+            UPDATE credit_transporters
+            SET
+                payment_received = COALESCE(payment_received,0) - %s,
+                balance_due = COALESCE(balance_due,0) + %s
+            WHERE id=%s
+        """, (amount, amount, transporter_id))
+
+        cur.execute(
+            "DELETE FROM transporter_ledger WHERE id=%s",
+            (id,)
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("transporter_history", id=transporter_id))
+
 @app.route("/edit-transporter/<int:id>")
 def edit_transporter(id):
 
@@ -2645,27 +3078,55 @@ def edit_transporter(id):
 @app.route("/update-transporter/<int:id>",methods=["POST"])
 def update_transporter(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    party_name = request.form.get("party_name","").strip()
+
+    if not party_name:
+        flash("Party name is required.")
+        return redirect(url_for("credit_transport"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        UPDATE credit_transporters
-        SET
-        party_name=%s,
-        mobile=%s,
-        vehicle_no=%s,
-        status=%s
-        WHERE id=%s
-    """,(
-        request.form.get("party_name",""),
-request.form.get("mobile",""),
-request.form.get("vehicle_no",""),
-request.form.get("status","Active"),
-id
-    ))
+    try:
+        cur.execute("""
+            UPDATE credit_transporters
+            SET
+            party_name=%s,
+            mobile=%s,
+            vehicle_no=%s,
+            status=%s
+            WHERE id=%s
+        """,(
+            party_name,
+            request.form.get("mobile","").strip(),
+            request.form.get("vehicle_no","").strip(),
+            request.form.get("status","Active"),
+            id
+        ))
 
-    conn.commit()
-    conn.close()
+        # keep transport_entries / ledger display names in sync with a rename
+        cur.execute("""
+            UPDATE transport_entries
+            SET transporter_name=%s
+            WHERE transporter_id=%s
+        """, (party_name, id))
+
+        cur.execute("""
+            UPDATE transporter_ledger
+            SET transporter_name=%s
+            WHERE transporter_id=%s
+        """, (party_name, id))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
@@ -2707,32 +3168,97 @@ def delete_daily_closing(id):
 @app.route("/delete-transporter/<int:id>")
 def delete_transporter(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        DELETE FROM credit_transporters
-        WHERE id=%s
-    """,(id,))
+    try:
+        # find every date group that will lose a row so SL No can be
+        # re-sequenced after the cascading delete below
+        cur.execute("""
+            SELECT DISTINCT entry_date
+            FROM transport_entries
+            WHERE transporter_id=%s
+        """, (id,))
+        affected_dates = [row["entry_date"] for row in cur.fetchall()]
 
-    conn.commit()
-    conn.close()
+        cur.execute("DELETE FROM transport_entries WHERE transporter_id=%s", (id,))
+        cur.execute("DELETE FROM transporter_ledger WHERE transporter_id=%s", (id,))
+        cur.execute("DELETE FROM credit_transporters WHERE id=%s", (id,))
+
+        for entry_date in affected_dates:
+            renumber_transport_entries(cur, entry_date)
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 
 @app.route("/delete-transport-entry/<int:id>")
 def delete_transport_entry(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        DELETE FROM transport_entries
-        WHERE id=%s
-    """,(id,))
+    try:
+        cur.execute(
+            "SELECT * FROM transport_entries WHERE id=%s",
+            (id,)
+        )
+        entry = cur.fetchone()
 
-    conn.commit()
-    conn.close()
+        if entry:
+            cur.execute(
+                "DELETE FROM transport_entries WHERE id=%s",
+                (id,)
+            )
+
+            total_amount = round(float(entry["total_amount"] or 0), 2)
+            transporter_id = entry["transporter_id"]
+
+            # reverse the credit this entry had added, so the balance
+            # never drifts out of sync after a delete
+            if transporter_id and total_amount:
+                party = apply_transporter_credit_delta(
+                    cur, transporter_id, fuel_delta=-total_amount
+                )
+                if party:
+                    cur.execute("""
+                        INSERT INTO transporter_ledger(
+                            date, transporter_id, transporter_name, entry_type,
+                            fuel_credit, lube_credit, received_amount, balance_after, remarks
+                        )
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,(
+                        datetime.now().strftime("%Y-%m-%d"),
+                        transporter_id,
+                        party["party_name"],
+                        "Entry Deleted",
+                        -total_amount, 0, 0,
+                        party["balance_due"],
+                        f"Deleted entry #{id} dated {entry['entry_date']}"
+                    ))
+
+            # close the gap this delete left in the SL No sequence
+            renumber_transport_entries(cur, entry["entry_date"])
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("credit_transport"))
 

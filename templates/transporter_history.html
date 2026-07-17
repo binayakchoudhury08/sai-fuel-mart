@@ -107,6 +107,27 @@ body{
     font-weight:700;
 }
 
+.ledger-edit-btn,
+.ledger-delete-btn{
+    text-decoration:none;
+    padding:8px 12px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:800;
+    display:inline-block;
+    margin-right:6px;
+}
+
+.ledger-edit-btn{
+    background:#dbeafe;
+    color:#1d4ed8;
+}
+
+.ledger-delete-btn{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
 </style>
 
 </head>
@@ -185,6 +206,7 @@ Back
 <th>Received</th>
 <th>Balance</th>
 <th>Remarks</th>
+<th>Action</th>
 
 </tr>
 
@@ -222,6 +244,24 @@ Back
 
 <td>
 {{ h["remarks"] }}
+</td>
+
+<td>
+{% if h["received_amount"] and h["received_amount"] > 0 %}
+
+<a href="/edit-transporter-payment/{{ h['id'] }}" class="ledger-edit-btn">
+Edit
+</a>
+
+<a href="/delete-transporter-payment/{{ h['id'] }}"
+class="ledger-delete-btn"
+onclick="return confirm('Delete this payment? The balance will be restored to what it was before this payment.')">
+Delete
+</a>
+
+{% else %}
+<span style="color:#94a3b8;">—</span>
+{% endif %}
 </td>
 
 </tr>

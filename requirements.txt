@@ -11,3 +11,4 @@ blinker
 psycopg2-binary
 reportlab
 supabase
+python-dotenv

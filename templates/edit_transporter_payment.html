@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Edit Payment</title>
+
+<style>
+
+body{
+    background:#f3f4f6;
+    font-family:Segoe UI;
+    padding:40px;
+}
+
+.card{
+    max-width:600px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:25px;
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+}
+
+h1{
+    margin-bottom:25px;
+    color:#07120C;
+}
+
+.form-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:15px;
+}
+
+.group{
+    display:flex;
+    flex-direction:column;
+}
+
+label{
+    font-size:13px;
+    font-weight:700;
+    margin-bottom:6px;
+}
+
+input,
+select{
+    height:45px;
+    border:1px solid #dbe2ea;
+    border-radius:10px;
+    padding:0 12px;
+}
+
+.save-btn{
+    width:100%;
+    margin-top:20px;
+    height:50px;
+    border:none;
+    border-radius:14px;
+    background:#16a34a;
+    color:white;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.back-btn{
+    display:inline-block;
+    margin-bottom:20px;
+    text-decoration:none;
+    background:#07120C;
+    color:white;
+    padding:10px 15px;
+    border-radius:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<a
+href="/transporter-history/{{ payment['transporter_id'] }}"
+class="back-btn">
+
+← Back
+
+</a>
+
+<h1>Edit Amount Received</h1>
+
+<form
+method="POST"
+action="/update-transporter-payment/{{ payment['id'] }}">
+
+<div class="form-grid">
+
+<div class="group">
+<label>Date</label>
+<input
+type="date"
+name="date"
+value="{{ payment['date'] }}"
+required>
+</div>
+
+<div class="group">
+<label>Type</label>
+
+<select name="payment_type">
+
+<option value="Fuel"
+{% if 'Lube' not in (payment['entry_type'] or '') %}
+selected
+{% endif %}
+>
+Fuel
+</option>
+
+<option value="Lube"
+{% if 'Lube' in (payment['entry_type'] or '') %}
+selected
+{% endif %}
+>
+Lube
+</option>
+
+</select>
+
+</div>
+
+<div class="group">
+<label>Amount Received</label>
+<input
+type="number"
+step="0.01"
+name="received_amount"
+value="{{ payment['received_amount'] or 0 }}"
+required>
+</div>
+
+</div>
+
+<button
+type="submit"
+class="save-btn">
+
+Update Payment
+
+</button>
+
+</form>
+
+</div>
+
+</body>
+</html>
