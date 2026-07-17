@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Activity Log - Sai Fuel Mart</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+body{background:#eef3f8;color:#0f172a}
+.container{display:flex;min-height:100vh}
+
+.sidebar{width:270px;background:#07120C;color:white;padding:26px 18px;position:fixed;top:0;left:0;bottom:0;overflow-y:auto}
+.logo{margin-bottom:35px}
+.logo h2{font-size:24px;font-weight:900}
+.logo p{color:#94a3b8;font-size:12px;margin-top:6px}
+.sidebar nav{display:flex;flex-direction:column;gap:8px}
+.sidebar nav a{color:#d1d5db;text-decoration:none;padding:14px 16px;border-radius:14px;display:flex;gap:12px;align-items:center;font-weight:700}
+.sidebar nav a.active,.sidebar nav a:hover{background:#16a34a;color:white}
+
+.main{margin-left:270px;width:calc(100% - 270px);padding:26px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:14px}
+.topbar h1{font-size:34px;font-weight:900}
+.topbar p{color:#64748b;margin-top:5px}
+
+.filters{background:white;padding:22px;border-radius:24px;margin-bottom:22px;box-shadow:0 12px 35px rgba(0,0,0,.05)}
+.filters form{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:14px;align-items:end}
+.input-group{display:flex;flex-direction:column}
+.input-group label{font-size:13px;font-weight:700;color:#374151;margin-bottom:8px}
+.input-group input,.input-group select{padding:13px;border:1px solid #d1d5db;border-radius:14px;font-size:14px}
+.filter-btn{background:#16a34a;color:white;border:none;padding:14px 22px;border-radius:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+
+.table-wrap{background:white;border-radius:24px;padding:18px;box-shadow:0 12px 35px rgba(0,0,0,.05);overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th{background:#f8fafc;color:#475569;padding:14px;text-align:left;font-size:13px}
+td{padding:14px;border-top:1px solid #e5e7eb;font-size:14px;vertical-align:top}
+
+.module-badge{padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;display:inline-block}
+.action-badge{padding:5px 12px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;display:inline-block}
+
+.action-created{background:#dcfce7;color:#15803d}
+.action-updated{background:#dbeafe;color:#1d4ed8}
+.action-deleted{background:#fee2e2;color:#dc2626}
+.action-other{background:#f1f5f9;color:#475569}
+
+.mod-badge{background:#ede9fe;color:#6d28d9}
+
+.user-chip{font-weight:800;color:#07120C}
+.role-tag{font-size:11px;color:#94a3b8;text-transform:uppercase;margin-left:6px}
+
+.empty-row{text-align:center;color:#94a3b8;padding:40px}
+
+@media(max-width:1100px){
+.sidebar{position:relative;width:100%;height:auto}
+.container{flex-direction:column}
+.main{margin-left:0;width:100%}
+.filters form{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<aside class="sidebar">
+<div class="logo">
+<h2>SAI FUEL MART</h2>
+<p>FUELING YOUR TRUST</p>
+</div>
+
+<nav>
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+
+<a class="active" href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+</nav>
+
+</aside>
+
+<main class="main">
+
+<div class="topbar">
+<div>
+<h1>Activity Log</h1>
+<p>Who changed what, and when — across every part of the app</p>
+</div>
+</div>
+
+<div class="filters">
+<form method="GET">
+
+<div class="input-group">
+<label>Module</label>
+<select name="module">
+<option value="">All Modules</option>
+{% for m in modules %}
+<option value="{{ m }}" {% if module_filter == m %}selected{% endif %}>{{ m }}</option>
+{% endfor %}
+</select>
+</div>
+
+<div class="input-group">
+<label>User</label>
+<select name="username">
+<option value="">All Users</option>
+{% for u in usernames %}
+<option value="{{ u }}" {% if user_filter == u %}selected{% endif %}>{{ u }}</option>
+{% endfor %}
+</select>
+</div>
+
+<div class="input-group">
+<label>From Date</label>
+<input type="date" name="from_date" value="{{ from_date }}">
+</div>
+
+<div class="input-group">
+<label>To Date</label>
+<input type="date" name="to_date" value="{{ to_date }}">
+</div>
+
+<button type="submit" class="filter-btn">
+<i class="fa-solid fa-filter"></i> Filter
+</button>
+
+</form>
+</div>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>When</th>
+<th>User</th>
+<th>Module</th>
+<th>Action</th>
+<th>Details</th>
+</tr>
+</thead>
+
+<tbody>
+{% for log in logs %}
+<tr>
+<td>{{ log["logged_at"] }}</td>
+<td>
+<span class="user-chip">{{ log["username"] }}</span>
+<span class="role-tag">{{ log["role"] }}</span>
+</td>
+<td>
+<span class="module-badge mod-badge">{{ log["module"] }}</span>
+</td>
+<td>
+{% if log["action"] == "Created" %}
+<span class="action-badge action-created">Created</span>
+{% elif log["action"] == "Updated" %}
+<span class="action-badge action-updated">Updated</span>
+{% elif log["action"] == "Deleted" %}
+<span class="action-badge action-deleted">Deleted</span>
+{% else %}
+<span class="action-badge action-other">{{ log["action"] }}</span>
+{% endif %}
+</td>
+<td>{{ log["description"] }}</td>
+</tr>
+{% else %}
+<tr>
+<td colspan="5" class="empty-row">No activity recorded yet for this filter.</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<p style="color:#94a3b8;font-size:12px;margin-top:14px;">Showing the most recent 500 matching entries.</p>
+
+</main>
+</div>
+
+</body>
+</html>

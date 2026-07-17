@@ -757,6 +757,11 @@ Reports
 Attendance
 </a>
 
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
 <a href="/backup-database">
 <i class="fa-solid fa-database"></i>
 Backup
@@ -979,7 +984,7 @@ data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['departmen
 
 <div class="mini-actions">
 <a href="/edit-staff/{{ staff['id'] }}" class="edit">Edit</a>
-<a href="/delete-staff/{{ staff['id'] }}" class="delete" onclick="return confirm('Delete employee?')">Delete</a>
+<a href="/delete-staff/{{ staff['id'] }}" class="delete" onclick="return confirm('Delete this employee? Their attendance and salary payment history will be deleted too. This cannot be undone.')">Delete</a>
 </div>
 
 {% endif %}
@@ -1081,21 +1086,21 @@ Attendance Calendar
 
 <div class="calendar">
 
-{% for r in staff_attendance[staff["staff_name"]]["records"][:31] %}
+{% for r in staff_attendance[staff["staff_name"]]["records"][:31]|reverse %}
 
 {% if r["attendance_status"] == "Present" %}
-<div class="day present">
-{{ r["date"] }}
+<div class="day present" title="{{ r['date'] }} - Present">
+{{ r["date"][-2:] }}
 <small>P</small>
 </div>
 {% elif r["attendance_status"] == "Absent" %}
-<div class="day absent">
-{{ r["date"] }}
+<div class="day absent" title="{{ r['date'] }} - Absent">
+{{ r["date"][-2:] }}
 <small>A</small>
 </div>
 {% else %}
-<div class="day leave">
-{{ r["date"] }}
+<div class="day leave" title="{{ r['date'] }} - Leave">
+{{ r["date"][-2:] }}
 <small>L</small>
 </div>
 {% endif %}

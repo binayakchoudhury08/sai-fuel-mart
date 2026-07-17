@@ -29,7 +29,7 @@ body{background:#eef3f8;color:#0f172a}
 .search input{border:none;outline:none;width:100%;font-size:14px}
 .add-product-btn{border:none;background:#2563eb;color:white;padding:13px 18px;border-radius:16px;font-weight:900;cursor:pointer;text-decoration:none}
 
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:22px}
 .kpi{background:white;border-radius:24px;padding:20px;box-shadow:0 12px 30px rgba(0,0,0,.05)}
 .kpi span{font-size:13px;color:#64748b;font-weight:800}
 .kpi h2{font-size:32px;margin-top:8px}
@@ -142,6 +142,11 @@ Lube Stock
 
 
 
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
 <a href="/backup-database">
 <i class="fa-solid fa-database"></i>
 Backup
@@ -249,6 +254,13 @@ Logout
 {% endfor %}
 {{ low_count.value }}
 </h2></div>
+
+{% set stock_value = namespace(total=0) %}
+{% for item in lube_items %}
+{% set stock_value.total = stock_value.total + ((item["closing_stock"] or 0) * (item["selling_rate"] or 0)) %}
+{% endfor %}
+<div class="kpi"><span>Stock Value</span><h2 style="color:#2563eb">₹ {{ stock_value.total|round|int }}</h2></div>
+
 </div>
 
 <div class="layout">
@@ -310,7 +322,7 @@ Sell
 
 <div class="mini-actions">
 <a href="/edit-lube/{{ item['id'] }}" class="edit">Edit</a>
-<a href="/delete-lube/{{ item['id'] }}" class="delete" onclick="return confirm('Delete product?')">Delete</a>
+<a href="/delete-lube/{{ item['id'] }}" class="delete" onclick="return confirm('Delete this product? Its past purchase/sale transactions will stay in the records but will no longer be linked to a live product. This cannot be undone.')">Delete</a>
 </div>
 {% endif %}
 </div>

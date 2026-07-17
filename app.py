@@ -894,6 +894,69 @@ def export_party_transport_pdf():
         download_name=filename
     )
 
+def reverse_daily_closing_for_date(cur, report_date):
+    """
+    Fully undo everything a Daily Closing save created for a given date:
+    lube stock movements, transporter fuel/lube credit, and the matching
+    ledger rows. Call this before re-saving an existing date (so nothing
+    doubles up) and before deleting a closing (so no balance gets stuck).
+    """
+
+    # reverse lube stock and remove the lube-sale transactions this
+    # closing created (both cash and credit sales)
+    cur.execute("""
+        SELECT id, product_id, qty
+        FROM lube_transactions
+        WHERE date=%s
+          AND remarks IN ('Cash Lube Sale', 'Credit Lube Sale')
+    """, (report_date,))
+
+    for tx in cur.fetchall():
+        qty = float(tx["qty"] or 0)
+        if tx["product_id"] and qty:
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = COALESCE(sale_qty,0) - %s,
+                    closing_stock = COALESCE(closing_stock,0) + %s
+                WHERE id=%s
+            """, (qty, qty, tx["product_id"]))
+
+    cur.execute("""
+        DELETE FROM lube_transactions
+        WHERE date=%s
+          AND remarks IN ('Cash Lube Sale', 'Credit Lube Sale')
+    """, (report_date,))
+
+    # reverse whatever fuel/lube credit this closing gave transporters
+    cur.execute("""
+        SELECT id, transporter_id, fuel_credit, lube_credit
+        FROM transporter_ledger
+        WHERE date=%s
+          AND entry_type IN ('Fuel Credit', 'Lube Credit')
+    """, (report_date,))
+
+    for row in cur.fetchall():
+        fuel_amt = round(float(row["fuel_credit"] or 0), 2)
+        lube_amt = round(float(row["lube_credit"] or 0), 2)
+        total_amt = round(fuel_amt + lube_amt, 2)
+
+        if row["transporter_id"] and total_amt:
+            cur.execute("""
+                UPDATE credit_transporters
+                SET fuel_credit = COALESCE(fuel_credit,0) - %s,
+                    lube_credit = COALESCE(lube_credit,0) - %s,
+                    credit_given = COALESCE(credit_given,0) - %s,
+                    balance_due = COALESCE(balance_due,0) - %s
+                WHERE id=%s
+            """, (fuel_amt, lube_amt, total_amt, total_amt, row["transporter_id"]))
+
+    cur.execute("""
+        DELETE FROM transporter_ledger
+        WHERE date=%s
+          AND entry_type IN ('Fuel Credit', 'Lube Credit')
+    """, (report_date,))
+
+
 @app.route("/save-daily-closing", methods=["POST"])
 def save_daily_closing():
 
@@ -915,6 +978,7 @@ def save_daily_closing():
         existing = cur.fetchone()
 
         if existing:
+            reverse_daily_closing_for_date(cur, data["date"])
             cur.execute("DELETE FROM daily_closing WHERE id=%s", (existing["id"],))
             cur.execute("DELETE FROM nozzle_entries WHERE entry_date=%s", (data["date"],))
 
@@ -1109,6 +1173,12 @@ def save_daily_closing():
                 "Fuel Credit from Daily Closing"
             ))
 
+        log_activity(
+            cur, "Daily Closing",
+            "Updated" if existing else "Created",
+            f"Daily closing for {data['date']} saved (Fuel: {data.get('total_fuel_sale',0)}, Lube: {data.get('lube_sale',0)})"
+        )
+
         conn.commit()
 
         return jsonify({
@@ -1172,6 +1242,11 @@ def save_lube_product():
         closing_stock
 
     ))
+
+    log_activity(
+        cur, "Lube Stock", "Created",
+        f"Added product '{product_name}' (rate ₹{selling_rate}, opening stock {opening_stock})"
+    )
 
     conn.commit()
     conn.close()
@@ -1540,6 +1615,11 @@ def update_transport_entry(id):
 
         renumber_transport_entries(cur, new_entry_date)
 
+        log_activity(
+            cur, "Credit Transport", "Updated",
+            f"Edited transport entry #{id} — ₹{old_total_amount} → ₹{total_amount}"
+        )
+
         conn.commit()
 
     except Exception:
@@ -1606,6 +1686,9 @@ def get_daily_closing(date):
 @app.route("/save-salary-payment", methods=["POST"])
 def save_salary_payment():
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
@@ -1631,6 +1714,11 @@ def save_salary_payment():
         request.form["month_name"],
         request.form.get("remarks","")
     ))
+
+    log_activity(
+        cur, "Attendance", "Created",
+        f"Salary payment of ₹{request.form['amount']} to {request.form['employee_name']} for {request.form['month_name']}"
+    )
 
     conn.commit()
     conn.close()
@@ -1691,6 +1779,11 @@ def update_attendance(id):
         id
     ))
 
+    log_activity(
+        cur, "Attendance", "Updated",
+        f"Attendance for {request.form['staff_name']} on {request.form['date']} set to {request.form['attendance_status']}"
+    )
+
     conn.commit()
     conn.close()
 
@@ -1705,10 +1798,19 @@ def delete_attendance(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
+    cur.execute("SELECT staff_name, date FROM attendance WHERE id=%s", (id,))
+    att = cur.fetchone()
+
     cur.execute("""
         DELETE FROM attendance
         WHERE id=%s
     """, (id,))
+
+    if att:
+        log_activity(
+            cur, "Attendance", "Deleted",
+            f"Deleted attendance for {att['staff_name']} on {att['date']}"
+        )
 
     conn.commit()
     conn.close()
@@ -1793,6 +1895,24 @@ def update_staff(id):
         old_name
     ))
 
+    # UPDATE SALARY PAYMENT HISTORY TOO, so a rename doesn't
+    # orphan their past payments under the old name/emp id
+    cur.execute("""
+        UPDATE salary_payments
+        SET employee_name=%s,
+            emp_id=%s
+        WHERE employee_name=%s
+    """, (
+        request.form.get("staff_name"),
+        request.form.get("emp_id"),
+        old_name
+    ))
+
+    log_activity(
+        cur, "Attendance", "Updated",
+        f"Updated staff '{old_name}' → '{request.form.get('staff_name')}'"
+    )
+
     conn.commit()
     conn.close()
 
@@ -1807,30 +1927,46 @@ def delete_staff(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT staff_name
-        FROM staff_master
-        WHERE id=%s
-    """, (id,))
-
-    staff = cur.fetchone()
-
-    if staff:
-
-        staff_name = staff["staff_name"]
-
+    try:
         cur.execute("""
-            DELETE FROM attendance
-            WHERE staff_name=%s
-        """, (staff_name,))
-
-        cur.execute("""
-            DELETE FROM staff_master
+            SELECT staff_name
+            FROM staff_master
             WHERE id=%s
         """, (id,))
 
-    conn.commit()
-    conn.close()
+        staff = cur.fetchone()
+
+        if staff:
+
+            staff_name = staff["staff_name"]
+
+            cur.execute("""
+                DELETE FROM attendance
+                WHERE staff_name=%s
+            """, (staff_name,))
+
+            cur.execute("""
+                DELETE FROM salary_payments
+                WHERE employee_name=%s
+            """, (staff_name,))
+
+            cur.execute("""
+                DELETE FROM staff_master
+                WHERE id=%s
+            """, (id,))
+
+            log_activity(
+                cur, "Attendance", "Deleted",
+                f"Deleted staff '{staff_name}' and their attendance/salary history"
+            )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("attendance"))
 
@@ -1922,6 +2058,11 @@ def update_daily_closing(id):
 
     ))
 
+    log_activity(
+        cur, "Daily Closing", "Updated",
+        f"Edited daily closing for {request.form['date']} (fuel sale ₹{request.form['total_fuel_sale']})"
+    )
+
     conn.commit()
     conn.close()
 
@@ -1997,6 +2138,11 @@ def save_nozzle_master():
         status
     ))
 
+    log_activity(
+        cur, "Nozzle Management", "Created",
+        f"Added nozzle '{nozzle_name}' ({fuel_type}, machine {machine_no})"
+    )
+
     conn.commit()
     conn.close()
 
@@ -2056,6 +2202,11 @@ def update_nozzle_master(id):
         id
     ))
 
+    log_activity(
+        cur, "Nozzle Management", "Updated",
+        f"Updated nozzle '{nozzle_name}' ({fuel_type}, machine {machine_no})"
+    )
+
     conn.commit()
     conn.close()
 
@@ -2071,6 +2222,9 @@ def delete_nozzle_master(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
+    cur.execute("SELECT nozzle_name FROM nozzle_master WHERE id=%s", (id,))
+    nz = cur.fetchone()
+
     cur.execute("""
         DELETE FROM nozzle_entries
         WHERE nozzle_id = %s
@@ -2080,6 +2234,11 @@ def delete_nozzle_master(id):
         DELETE FROM nozzle_master
         WHERE id = %s
     """, (id,))
+
+    log_activity(
+        cur, "Nozzle Management", "Deleted",
+        f"Deleted nozzle '{nz['nozzle_name'] if nz else id}' and its readings"
+    )
 
     conn.commit()
     conn.close()
@@ -2133,6 +2292,11 @@ def save_nozzle_entry():
         total_sale,
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
+
+    log_activity(
+        cur, "Nozzle Management", "Created",
+        f"Nozzle reading entry for {entry_date} (nozzle #{nozzle_id}, sale {total_sale} L)"
+    )
 
     conn.commit()
     conn.close()
@@ -2217,6 +2381,11 @@ def update_nozzle_entry(id):
         id
     ))
 
+    log_activity(
+        cur, "Nozzle Management", "Updated",
+        f"Edited nozzle reading entry for {entry_date} (nozzle #{nozzle_id}, sale {total_sale} L)"
+    )
+
     conn.commit()
     conn.close()
 
@@ -2236,6 +2405,11 @@ def delete_nozzle_entry(id):
         DELETE FROM nozzle_entries
         WHERE id = %s
     """, (id,))
+
+    log_activity(
+        cur, "Nozzle Management", "Deleted",
+        f"Deleted nozzle reading entry #{id}"
+    )
 
     conn.commit()
     conn.close()
@@ -2411,6 +2585,11 @@ def save_tank_level():
         datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     ))
 
+    log_activity(
+        cur, "Tank Level", "Created",
+        f"Tank level entry for {fuel_type} on {request.form['date']} (dip {actual_dip} L, diff {difference} L)"
+    )
+
     conn.commit()
     conn.close()
 
@@ -2482,6 +2661,11 @@ def update_tank_level(id):
         id
     ))
 
+    log_activity(
+        cur, "Tank Level", "Updated",
+        f"Edited tank level entry #{id} for {request.form['fuel_type']} on {request.form['date']}"
+    )
+
     conn.commit()
     conn.close()
 
@@ -2497,6 +2681,11 @@ def delete_tank_level(id):
     cur = conn.cursor()
 
     cur.execute("DELETE FROM tank_level WHERE id = %s", (id,))
+
+    log_activity(
+        cur, "Tank Level", "Deleted",
+        f"Deleted tank level entry #{id}"
+    )
 
     conn.commit()
     conn.close()
@@ -2695,6 +2884,11 @@ def add_transporter():
                 "Opening balance set when transporter was added"
             ))
 
+        log_activity(
+            cur, "Credit Transport", "Created",
+            f"Added transporter '{party_name}' (opening balance ₹{opening_balance})"
+        )
+
         conn.commit()
 
     except Exception:
@@ -2799,6 +2993,11 @@ def save_transport_entry():
             f"Entry #{new_entry_id} | Challan {challan_no} | Slip {slip_no} | {qty} L @ Rs.{rate}"
         ))
 
+        log_activity(
+            cur, "Credit Transport", "Created",
+            f"Transport entry #{new_entry_id} for {transporter_name} — ₹{total_amount} on {entry_date}"
+        )
+
         conn.commit()
 
     except Exception:
@@ -2874,6 +3073,11 @@ def save_transport_payment():
                 party["balance_due"],
                 "Payment Received"
             ))
+
+            log_activity(
+                cur, "Credit Transport", "Created",
+                f"Received ₹{amount} ({payment_type}) from {party['party_name']} on {date}"
+            )
 
         conn.commit()
 
@@ -3009,6 +3213,11 @@ def update_transporter_payment(id):
             id
         ))
 
+        log_activity(
+            cur, "Credit Transport", "Updated",
+            f"Edited payment #{id}: ₹{old_amount} → ₹{new_amount}"
+        )
+
         conn.commit()
 
     except Exception:
@@ -3056,6 +3265,11 @@ def delete_transporter_payment(id):
         cur.execute(
             "DELETE FROM transporter_ledger WHERE id=%s",
             (id,)
+        )
+
+        log_activity(
+            cur, "Credit Transport", "Deleted",
+            f"Deleted payment #{id} of ₹{amount} for {payment['transporter_name']}"
         )
 
         conn.commit()
@@ -3134,6 +3348,11 @@ def update_transporter(id):
             WHERE transporter_id=%s
         """, (party_name, id))
 
+        log_activity(
+            cur, "Credit Transport", "Updated",
+            f"Updated transporter details for '{party_name}'"
+        )
+
         conn.commit()
 
     except Exception:
@@ -3153,29 +3372,44 @@ def delete_daily_closing(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute(
-        "SELECT date FROM daily_closing WHERE id=%s",
-        (id,)
-    )
-
-    row = cur.fetchone()
-
-    if row:
-
-        report_date = row["date"]
-
+    try:
         cur.execute(
-            "DELETE FROM daily_closing WHERE id=%s",
+            "SELECT date FROM daily_closing WHERE id=%s",
             (id,)
         )
 
-        cur.execute(
-            "DELETE FROM nozzle_entries WHERE entry_date=%s",
-            (report_date,)
-        )
+        row = cur.fetchone()
 
-    conn.commit()
-    conn.close()
+        if row:
+
+            report_date = row["date"]
+
+            # undo the stock/credit/ledger effects before removing the
+            # closing itself, so nothing is left stuck on a transporter
+            reverse_daily_closing_for_date(cur, report_date)
+
+            cur.execute(
+                "DELETE FROM daily_closing WHERE id=%s",
+                (id,)
+            )
+
+            cur.execute(
+                "DELETE FROM nozzle_entries WHERE entry_date=%s",
+                (report_date,)
+            )
+
+            log_activity(
+                cur, "Daily Closing", "Deleted",
+                f"Deleted daily closing for {report_date} (credit/stock reversed)"
+            )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("reports"))
 
@@ -3189,6 +3423,9 @@ def delete_transporter(id):
     cur = conn.cursor()
 
     try:
+        cur.execute("SELECT party_name FROM credit_transporters WHERE id=%s", (id,))
+        tp = cur.fetchone()
+
         # find every date group that will lose a row so SL No can be
         # re-sequenced after the cascading delete below
         cur.execute("""
@@ -3204,6 +3441,11 @@ def delete_transporter(id):
 
         for entry_date in affected_dates:
             renumber_transport_entries(cur, entry_date)
+
+        log_activity(
+            cur, "Credit Transport", "Deleted",
+            f"Deleted transporter '{tp['party_name'] if tp else id}' and all their entries/ledger"
+        )
 
         conn.commit()
 
@@ -3265,6 +3507,11 @@ def delete_transport_entry(id):
 
             # close the gap this delete left in the SL No sequence
             renumber_transport_entries(cur, entry["entry_date"])
+
+            log_activity(
+                cur, "Credit Transport", "Deleted",
+                f"Deleted transport entry #{id} — ₹{total_amount} for {entry['transporter_name']}"
+            )
 
         conn.commit()
 
@@ -3956,7 +4203,23 @@ def delete_report(id):
 
     conn = get_pg_conn()
     cur = conn.cursor()
+
+    cur.execute("SELECT date FROM daily_closing WHERE id=%s", (id,))
+    row = cur.fetchone()
+
+    if row:
+        # this route duplicates /delete-daily-closing — reverse the same
+        # way so it can't leave stuck transporter balances either
+        reverse_daily_closing_for_date(cur, row["date"])
+
     cur.execute("DELETE FROM daily_closing WHERE id = %s", (id,))
+
+    if row:
+        log_activity(
+            cur, "Daily Closing", "Deleted",
+            f"Deleted daily closing for {row['date']} (via legacy route, credit/stock reversed)"
+        )
+
     conn.commit()
     conn.close()
 
@@ -4002,6 +4265,11 @@ def update_report(id):
         request.form["net_credit_due"], request.form["total_expense"],
         request.form["cash_in_hand"], id
     ))
+
+    log_activity(
+        cur, "Daily Closing", "Updated",
+        f"Edited daily closing for {request.form['date']} (via legacy route)"
+    )
 
     conn.commit()
     conn.close()
@@ -4099,6 +4367,11 @@ def save_settings():
 
         ))
 
+    log_activity(
+        cur, "Settings", "Updated",
+        f"Rates updated — MS ₹{ms_rate}, HSD ₹{hsd_rate}, CNG ₹{cng_rate}"
+    )
+
     conn.commit()
     conn.close()
 
@@ -4187,48 +4460,58 @@ def save_lube_transaction():
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT product_name
-        FROM lube_stock
-        WHERE id=%s
-    """, (product_id,))
-    product = cur.fetchone()
+    try:
+        cur.execute("""
+            SELECT product_name
+            FROM lube_stock
+            WHERE id=%s
+        """, (product_id,))
+        product = cur.fetchone()
 
-    if not product:
-        conn.close()
-        return redirect(url_for("lube_stock"))
+        if not product:
+            return redirect(url_for("lube_stock"))
 
-    product_name = product["product_name"]
+        product_name = product["product_name"]
 
-    cur.execute("""
-        INSERT INTO lube_transactions (
+        cur.execute("""
+            INSERT INTO lube_transactions (
+                date, product_id, product_name, transaction_type,
+                qty, rate, amount, remarks
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
             date, product_id, product_name, transaction_type,
             qty, rate, amount, remarks
+        ))
+
+        if transaction_type == "Purchase":
+            cur.execute("""
+                UPDATE lube_stock
+                SET purchase_qty = purchase_qty + %s,
+                    closing_stock = closing_stock + %s
+                WHERE id=%s
+            """, (qty, qty, product_id))
+
+        elif transaction_type == "Sale":
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = sale_qty + %s,
+                    closing_stock = closing_stock - %s
+                WHERE id=%s
+            """, (qty, qty, product_id))
+
+        log_activity(
+            cur, "Lube Stock", "Created",
+            f"{transaction_type} of {qty} {product_name} @ ₹{rate} on {date}"
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (
-        date, product_id, product_name, transaction_type,
-        qty, rate, amount, remarks
-    ))
 
-    if transaction_type == "Purchase":
-        cur.execute("""
-            UPDATE lube_stock
-            SET purchase_qty = purchase_qty + %s,
-                closing_stock = closing_stock + %s
-            WHERE id=%s
-        """, (qty, qty, product_id))
+        conn.commit()
 
-    elif transaction_type == "Sale":
-        cur.execute("""
-            UPDATE lube_stock
-            SET sale_qty = sale_qty + %s,
-                closing_stock = closing_stock - %s
-            WHERE id=%s
-        """, (qty, qty, product_id))
-
-    conn.commit()
-    conn.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("lube_stock"))
 
@@ -4241,40 +4524,51 @@ def delete_lube_transaction(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM lube_transactions
-        WHERE id=%s
-    """, (id,))
-    tx = cur.fetchone()
-
-    if tx:
-        product_id = tx["product_id"]
-        qty = float(tx["qty"] or 0)
-
-        if tx["transaction_type"] == "Purchase":
-            cur.execute("""
-                UPDATE lube_stock
-                SET purchase_qty = purchase_qty - %s,
-                    closing_stock = closing_stock - %s
-                WHERE id=%s
-            """, (qty, qty, product_id))
-
-        elif tx["transaction_type"] == "Sale":
-            cur.execute("""
-                UPDATE lube_stock
-                SET sale_qty = sale_qty - %s,
-                    closing_stock = closing_stock + %s
-                WHERE id=%s
-            """, (qty, qty, product_id))
-
+    try:
         cur.execute("""
-            DELETE FROM lube_transactions
+            SELECT *
+            FROM lube_transactions
             WHERE id=%s
         """, (id,))
+        tx = cur.fetchone()
 
-    conn.commit()
-    conn.close()
+        if tx:
+            product_id = tx["product_id"]
+            qty = float(tx["qty"] or 0)
+
+            if tx["transaction_type"] == "Purchase":
+                cur.execute("""
+                    UPDATE lube_stock
+                    SET purchase_qty = purchase_qty - %s,
+                        closing_stock = closing_stock - %s
+                    WHERE id=%s
+                """, (qty, qty, product_id))
+
+            elif tx["transaction_type"] == "Sale":
+                cur.execute("""
+                    UPDATE lube_stock
+                    SET sale_qty = sale_qty - %s,
+                        closing_stock = closing_stock + %s
+                    WHERE id=%s
+                """, (qty, qty, product_id))
+
+            cur.execute("""
+                DELETE FROM lube_transactions
+                WHERE id=%s
+            """, (id,))
+
+            log_activity(
+                cur, "Lube Stock", "Deleted",
+                f"Deleted {tx['transaction_type']} of {qty} {tx['product_name']} on {tx['date']}"
+            )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("lube_stock"))
 
@@ -4311,83 +4605,93 @@ def update_lube_transaction(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM lube_transactions
-        WHERE id=%s
-    """, (id,))
-    old = cur.fetchone()
+    try:
+        cur.execute("""
+            SELECT *
+            FROM lube_transactions
+            WHERE id=%s
+        """, (id,))
+        old = cur.fetchone()
 
-    if not old:
+        if not old:
+            return redirect(url_for("lube_stock"))
+
+        old_qty = float(old["qty"] or 0)
+        old_type = old["transaction_type"]
+        product_id = old["product_id"]
+
+        # reverse old stock effect
+        if old_type == "Purchase":
+            cur.execute("""
+                UPDATE lube_stock
+                SET purchase_qty = purchase_qty - %s,
+                    closing_stock = closing_stock - %s
+                WHERE id=%s
+            """, (old_qty, old_qty, product_id))
+
+        elif old_type == "Sale":
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = sale_qty - %s,
+                    closing_stock = closing_stock + %s
+                WHERE id=%s
+            """, (old_qty, old_qty, product_id))
+
+        new_date = request.form.get("date")
+        new_type = request.form.get("transaction_type")
+        new_qty = float(request.form.get("qty") or 0)
+        new_rate = float(request.form.get("rate") or 0)
+        new_amount = round(new_qty * new_rate, 2)
+        remarks = request.form.get("remarks", "")
+
+        # apply new stock effect
+        if new_type == "Purchase":
+            cur.execute("""
+                UPDATE lube_stock
+                SET purchase_qty = purchase_qty + %s,
+                    closing_stock = closing_stock + %s
+                WHERE id=%s
+            """, (new_qty, new_qty, product_id))
+
+        elif new_type == "Sale":
+            cur.execute("""
+                UPDATE lube_stock
+                SET sale_qty = sale_qty + %s,
+                    closing_stock = closing_stock - %s
+                WHERE id=%s
+            """, (new_qty, new_qty, product_id))
+
+        cur.execute("""
+            UPDATE lube_transactions
+            SET date=%s,
+                transaction_type=%s,
+                qty=%s,
+                rate=%s,
+                amount=%s,
+                remarks=%s
+            WHERE id=%s
+        """, (
+            new_date,
+            new_type,
+            new_qty,
+            new_rate,
+            new_amount,
+            remarks,
+            id
+        ))
+
+        log_activity(
+            cur, "Lube Stock", "Updated",
+            f"Edited transaction #{id} ({old['product_name']}) — qty {old_qty}→{new_qty}, type {old_type}→{new_type}"
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
         conn.close()
-        return redirect(url_for("lube_stock"))
-
-    old_qty = float(old["qty"] or 0)
-    old_type = old["transaction_type"]
-    product_id = old["product_id"]
-
-    # reverse old stock effect
-    if old_type == "Purchase":
-        cur.execute("""
-            UPDATE lube_stock
-            SET purchase_qty = purchase_qty - %s,
-                closing_stock = closing_stock - %s
-            WHERE id=%s
-        """, (old_qty, old_qty, product_id))
-
-    elif old_type == "Sale":
-        cur.execute("""
-            UPDATE lube_stock
-            SET sale_qty = sale_qty - %s,
-                closing_stock = closing_stock + %s
-            WHERE id=%s
-        """, (old_qty, old_qty, product_id))
-
-    new_date = request.form.get("date")
-    new_type = request.form.get("transaction_type")
-    new_qty = float(request.form.get("qty") or 0)
-    new_rate = float(request.form.get("rate") or 0)
-    new_amount = round(new_qty * new_rate, 2)
-    remarks = request.form.get("remarks", "")
-
-    # apply new stock effect
-    if new_type == "Purchase":
-        cur.execute("""
-            UPDATE lube_stock
-            SET purchase_qty = purchase_qty + %s,
-                closing_stock = closing_stock + %s
-            WHERE id=%s
-        """, (new_qty, new_qty, product_id))
-
-    elif new_type == "Sale":
-        cur.execute("""
-            UPDATE lube_stock
-            SET sale_qty = sale_qty + %s,
-                closing_stock = closing_stock - %s
-            WHERE id=%s
-        """, (new_qty, new_qty, product_id))
-
-    cur.execute("""
-        UPDATE lube_transactions
-        SET date=%s,
-            transaction_type=%s,
-            qty=%s,
-            rate=%s,
-            amount=%s,
-            remarks=%s
-        WHERE id=%s
-    """, (
-        new_date,
-        new_type,
-        new_qty,
-        new_rate,
-        new_amount,
-        remarks,
-        id
-    ))
-
-    conn.commit()
-    conn.close()
 
     return redirect(url_for("lube_stock"))
 
@@ -4400,29 +4704,51 @@ def update_lube(id):
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-        UPDATE lube_stock
-        SET
-            product_name=%s,
-            selling_rate=%s,
-            opening_stock=%s,
-            purchase_qty=%s,
-            sale_qty=%s,
-            closing_stock=%s
-        WHERE id=%s
-    """, (
+    try:
+        cur.execute("""
+            UPDATE lube_stock
+            SET
+                product_name=%s,
+                selling_rate=%s,
+                opening_stock=%s,
+                purchase_qty=%s,
+                sale_qty=%s,
+                closing_stock=%s
+            WHERE id=%s
+        """, (
 
-        request.form.get("product_name"),
-        request.form.get("selling_rate"),
-        request.form.get("opening_stock"),
-        request.form.get("purchase_qty"),
-        request.form.get("sale_qty"),
-        request.form.get("closing_stock"),
-        id
-    ))
+            request.form.get("product_name"),
+            request.form.get("selling_rate"),
+            request.form.get("opening_stock"),
+            request.form.get("purchase_qty"),
+            request.form.get("sale_qty"),
+            request.form.get("closing_stock"),
+            id
+        ))
 
-    conn.commit()
-    conn.close()
+        # keep past transactions showing the current product name
+        # after a rename, instead of freezing on the old one
+        cur.execute("""
+            UPDATE lube_transactions
+            SET product_name=%s
+            WHERE product_id=%s
+        """, (
+            request.form.get("product_name"),
+            id
+        ))
+
+        log_activity(
+            cur, "Lube Stock", "Updated",
+            f"Edited product #{id} ('{request.form.get('product_name')}')"
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("lube_stock"))
 # =========================================
@@ -4567,6 +4893,9 @@ def attendance():
 @app.route("/update-salary/<int:id>", methods=["POST"])
 def update_salary(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
@@ -4594,6 +4923,11 @@ def update_salary(id):
 
     ))
 
+    log_activity(
+        cur, "Attendance", "Updated",
+        f"Edited salary payment #{id} for {request.form['employee_name']} — ₹{request.form['amount']}"
+    )
+
     conn.commit()
     conn.close()
 
@@ -4601,6 +4935,9 @@ def update_salary(id):
 
 @app.route("/edit-salary/<int:id>")
 def edit_salary(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
     conn = get_pg_conn()
     cur = conn.cursor()
@@ -4622,13 +4959,25 @@ def edit_salary(id):
 @app.route("/delete-salary/<int:id>")
 def delete_salary(id):
 
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     conn = get_pg_conn()
     cur = conn.cursor()
+
+    cur.execute("SELECT employee_name, amount FROM salary_payments WHERE id=%s", (id,))
+    sal = cur.fetchone()
 
     cur.execute(
         "DELETE FROM salary_payments WHERE id=%s",
         (id,)
     )
+
+    if sal:
+        log_activity(
+            cur, "Attendance", "Deleted",
+            f"Deleted salary payment of ₹{sal['amount']} for {sal['employee_name']}"
+        )
 
     conn.commit()
     conn.close()
@@ -4950,6 +5299,11 @@ def save_staff():
 
         ))
 
+        log_activity(
+            cur, "Attendance", "Created",
+            f"Added staff '{staff_name}' ({request.form.get('role','')})"
+        )
+
     conn.commit()
 
     conn.close()
@@ -5045,6 +5399,12 @@ def save_attendance():
             attendance_status
         ))
 
+    log_activity(
+        cur, "Attendance",
+        "Updated" if existing else "Created",
+        f"Marked {staff_name} as {attendance_status} on {attendance_date}"
+    )
+
     conn.commit()
     conn.close()
 
@@ -5059,7 +5419,18 @@ def delete_lube(id):
 
     conn = get_pg_conn()
     cur = conn.cursor()
+
+    cur.execute("SELECT product_name FROM lube_stock WHERE id=%s", (id,))
+    prod = cur.fetchone()
+
     cur.execute("DELETE FROM lube_stock WHERE id = %s", (id,))
+
+    if prod:
+        log_activity(
+            cur, "Lube Stock", "Deleted",
+            f"Deleted product '{prod['product_name']}'"
+        )
+
     conn.commit()
     conn.close()
 
@@ -5791,6 +6162,117 @@ def get_pg_cursor():
 
     return conn, cur
 
+
+def ensure_activity_log_table():
+    """
+    Make sure the audit-log table exists. Runs once at startup — safe to
+    call repeatedly since it's IF NOT EXISTS, and won't crash the app if
+    the database isn't reachable yet at import time.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id SERIAL PRIMARY KEY,
+                logged_at TIMESTAMP DEFAULT NOW(),
+                username TEXT,
+                role TEXT,
+                module TEXT,
+                action TEXT,
+                description TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[activity_log] could not ensure table exists: {e}")
+
+
+ensure_activity_log_table()
+
+
+def log_activity(cur, module, action, description):
+    """
+    Record who did what, when, across every part of the app. Call this
+    on the SAME cursor/transaction as the write it's logging, right
+    before conn.commit() — so the log entry and the change it describes
+    always land together, or not at all.
+    """
+    try:
+        cur.execute("""
+            INSERT INTO activity_log (
+                username, role, module, action, description
+            )
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            session.get("username", "system"),
+            session.get("role", "-"),
+            module,
+            action,
+            description
+        ))
+    except Exception:
+        # logging should never be able to break the actual operation
+        pass
+
+@app.route("/activity-log")
+def activity_log():
+
+    if not session.get("logged_in") or session.get("role") != "admin":
+        return redirect(url_for("login"))
+
+    module_filter = request.args.get("module", "")
+    user_filter = request.args.get("username", "")
+    from_date = request.args.get("from_date", "")
+    to_date = request.args.get("to_date", "")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    query = "SELECT * FROM activity_log WHERE 1=1"
+    params = []
+
+    if module_filter:
+        query += " AND module=%s"
+        params.append(module_filter)
+
+    if user_filter:
+        query += " AND username=%s"
+        params.append(user_filter)
+
+    if from_date:
+        query += " AND logged_at::date >= %s"
+        params.append(from_date)
+
+    if to_date:
+        query += " AND logged_at::date <= %s"
+        params.append(to_date)
+
+    query += " ORDER BY id DESC LIMIT 500"
+
+    cur.execute(query, tuple(params))
+    logs = cur.fetchall()
+
+    cur.execute("SELECT DISTINCT module FROM activity_log ORDER BY module ASC")
+    modules = [r["module"] for r in cur.fetchall()]
+
+    cur.execute("SELECT DISTINCT username FROM activity_log ORDER BY username ASC")
+    usernames = [r["username"] for r in cur.fetchall()]
+
+    conn.close()
+
+    return render_template(
+        "activity_log.html",
+        logs=logs,
+        modules=modules,
+        usernames=usernames,
+        module_filter=module_filter,
+        user_filter=user_filter,
+        from_date=from_date,
+        to_date=to_date
+    )
+
 @app.route("/delete-proof-register", methods=["POST"])
 def delete_proof_register():
 
@@ -5835,6 +6317,11 @@ def delete_proof_register():
         DELETE FROM proof_register
         WHERE id = ANY(%s)
     """, (proof_ids,))
+
+    log_activity(
+        cur, "Proof Register", "Deleted",
+        f"Deleted {len(proof_ids)} proof register entr{'y' if len(proof_ids)==1 else 'ies'}"
+    )
 
     conn.commit()
     conn.close()
@@ -5971,6 +6458,11 @@ def save_proof_upload():
         else:
             conn.close()
             return "Please select proof type"
+
+        log_activity(
+            cur, "Proof Register", "Created",
+            f"Uploaded {proof_type} proof for {proof_date}"
+        )
 
         conn.commit()
         conn.close()
