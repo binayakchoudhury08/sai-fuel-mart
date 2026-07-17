@@ -5,6 +5,7 @@ import os
 import psycopg2
 import psycopg2.extras
 import json
+import re
 from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -719,8 +720,7 @@ def export_party_transport_excel():
     wb.save(file)
     file.seek(0)
 
-    safe_party = party_name.replace(" ", "_").replace("/", "_")
-    filename = f"{safe_party}_{from_date}_to_{to_date}_Transport_Report.xlsx"
+    filename = bill_filename(party_name, from_date, "xlsx")
 
     return send_file(
         file,
@@ -886,8 +886,7 @@ def export_party_transport_pdf():
 
     file.seek(0)
 
-    safe_party = party_name.replace(" ", "_").replace("/", "_")
-    filename = f"{safe_party}_{from_date}_to_{to_date}_Credit_Transport_Report.pdf"
+    filename = bill_filename(party_name, from_date, "pdf")
 
     return send_file(
         file,
@@ -2503,6 +2502,21 @@ def delete_tank_level(id):
     conn.close()
 
     return redirect(url_for("tank_level"))
+
+
+def bill_filename(party_name, from_date, extension):
+    """
+    Build a short filename like 'SVT Bill 110626.xlsx' from a party
+    name and the report's start date, instead of a long descriptive one.
+    """
+    try:
+        date_code = datetime.strptime(str(from_date), "%Y-%m-%d").strftime("%d%m%y")
+    except Exception:
+        date_code = re.sub(r"[^0-9]", "", str(from_date))
+
+    safe_party = re.sub(r'[\\/:*?"<>|]', "", party_name or "Transporter").strip()
+
+    return f"{safe_party} Bill {date_code}.{extension}"
 
 
 def renumber_transport_entries(cur, entry_date):

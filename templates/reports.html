@@ -397,29 +397,66 @@ body{
     font-size:20px;
 }
 .export-box{
+    background:white;
+    padding:24px;
+    border-radius:24px;
     margin-bottom:20px;
-    padding:15px;
-    background:#fff;
-    border-radius:12px;
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
+    box-shadow:0 12px 35px rgba(0,0,0,.05);
+}
+
+.export-box h3{
+    font-size:16px;
+    color:#07120C;
+    margin-bottom:18px;
 }
 
 .export-box form{
+    display:grid;
+    grid-template-columns:2fr 1fr 1fr auto auto;
+    gap:16px;
+    align-items:end;
+}
+
+.export-box .input-group input,
+.export-box .input-group select{
+    width:100%;
+}
+
+.export-btn-excel,
+.export-btn-pdf{
+    border:none;
+    padding:14px 22px;
+    border-radius:14px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:14px;
+    white-space:nowrap;
     display:flex;
-    gap:10px;
-    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    transition:transform .12s ease, box-shadow .12s ease;
 }
 
-.btn-success{
-    background:#198754;
+.export-btn-excel{
+    background:#16a34a;
     color:white;
 }
 
-.btn-danger{
-    background:#dc3545;
+.export-btn-pdf{
+    background:#dc2626;
     color:white;
+}
+
+.export-btn-excel:hover,
+.export-btn-pdf:hover{
+    transform:translateY(-1px);
+    box-shadow:0 8px 18px rgba(0,0,0,.15);
+}
+
+@media(max-width:900px){
+    .export-box form{
+        grid-template-columns:1fr 1fr;
+    }
 }
 
 </style>
@@ -1132,37 +1169,45 @@ Export Excel
 
 <div class="export-box">
 
+    <h3>Export Transporter Bill</h3>
+
     <form method="GET">
 
-        <select name="transporter_id" required>
-            <option value="">Select Transport Party</option>
+        <div class="input-group">
+            <label>Transport Party</label>
+            <select name="transporter_id" required>
+                <option value="">Select Transport Party</option>
 
-            {% for t in transporter_rows %}
-            <option value="{{ t['id'] }}">
-                {{ t['party_name'] }}
-            </option>
-            {% endfor %}
+                {% for t in transporter_rows %}
+                <option value="{{ t['id'] }}">
+                    {{ t['party_name'] }}
+                </option>
+                {% endfor %}
 
-        </select>
+            </select>
+        </div>
 
-        <input type="date" name="from_date" required>
+        <div class="input-group">
+            <label>From Date</label>
+            <input type="date" name="from_date" required>
+        </div>
 
-        <input type="date" name="to_date" required>
+        <div class="input-group">
+            <label>To Date</label>
+            <input type="date" name="to_date" required>
+        </div>
 
         <button
             formaction="/export-party-transport-excel"
-            class="btn btn-success">
-            Export Excel
-            
+            class="export-btn-excel">
+            📊 Excel
         </button>
 
         <button
             formaction="/export-party-transport-pdf"
-            class="btn btn-danger">
-            Export PDF
+            class="export-btn-pdf">
+            📄 PDF
         </button>
-
-        
 
     </form>
 
