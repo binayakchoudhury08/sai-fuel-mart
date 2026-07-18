@@ -13,7 +13,8 @@ from openpyxl.chart import BarChart, PieChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
 import tempfile
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+import requests
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from supabase import create_client
@@ -945,7 +946,7 @@ def export_party_transport_pdf():
     data = [[
         "Date", "SL", "Challan", "Vehicle",
         "Slip", "HSD Qty (L)", "Rate", "HSD Amt",
-        "Cash Taken", "Final Amt"
+        "Diesel", "Final Amt"
     ]]
 
     total_hsd = 0
@@ -6312,6 +6313,170 @@ def upload_proof_file(file, folder):
     return supabase.storage.from_("proof-files").get_public_url(file_name)
 
 
+@app.route("/proof-pdf")
+def proof_pdf():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    proof_date = request.args.get("date")
+    category = request.args.get("category")
+
+    if not proof_date or not category:
+        flash("Date and category are required to generate a proof report.")
+        return redirect(url_for("proof_register"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM proof_register
+        WHERE proof_date=%s AND proof_category=%s
+        ORDER BY fuel_type ASC, item_name ASC
+    """, (proof_date, category))
+    rows = cur.fetchall()
+
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    biz = cur.fetchone()
+
+    conn.close()
+
+    station_name = (biz["station_name"] if biz and biz["station_name"] else "") or "SAI FUEL MART"
+    station_address = biz["station_address"] if biz and biz["station_address"] else ""
+
+    file = BytesIO()
+
+    def footer(canvas, doc):
+        canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#e5e7eb"))
+        canvas.line(30, 30, 565, 30)
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#667085"))
+        canvas.drawRightString(565, 18, f"Page {doc.page}")
+        canvas.drawString(30, 18, f"{station_name} — {category} Proof Report — {proof_date}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        file,
+        pagesize=A4,
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=30,
+        bottomMargin=40
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "ProofTitle", parent=styles["Title"],
+        fontSize=18, leading=20, textColor=colors.HexColor("#07120C"), alignment=0
+    )
+    sub_style = ParagraphStyle(
+        "ProofSub", parent=styles["Normal"],
+        fontSize=9.5, leading=13, textColor=colors.HexColor("#475467")
+    )
+    band_style = ParagraphStyle(
+        "Band", parent=styles["Normal"],
+        fontSize=12, leading=14, textColor=colors.white, fontName="Helvetica-Bold"
+    )
+    meta_style = ParagraphStyle(
+        "Meta", parent=styles["Normal"],
+        fontSize=9.5, leading=14, textColor=colors.HexColor("#07120C")
+    )
+    link_style = ParagraphStyle(
+        "Link", parent=meta_style,
+        textColor=colors.HexColor("#2563eb")
+    )
+    empty_style = ParagraphStyle(
+        "Empty", parent=styles["Normal"],
+        fontSize=11, textColor=colors.HexColor("#94a3b8"), alignment=1
+    )
+
+    elements = []
+
+    elements.append(Paragraph(station_name.upper(), title_style))
+    if station_address:
+        elements.append(Paragraph(station_address, sub_style))
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(f"<b>{category} — Proof Report</b>", sub_style))
+    elements.append(Paragraph(f"Date: {proof_date} &nbsp;|&nbsp; Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}", sub_style))
+    elements.append(Spacer(1, 6))
+
+    accent = Table([[""]], colWidths=[535], rowHeights=[3])
+    accent.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#16a34a"))]))
+    elements.append(accent)
+    elements.append(Spacer(1, 14))
+
+    if not rows:
+        elements.append(Spacer(1, 40))
+        elements.append(Paragraph("No proof entries were uploaded for this date and category.", empty_style))
+
+    current_fuel = None
+
+    for r in rows:
+
+        if r["fuel_type"] != current_fuel:
+            current_fuel = r["fuel_type"]
+            band = Table([[Paragraph(current_fuel or "General", band_style)]], colWidths=[535])
+            band.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#07120C")),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ]))
+            elements.append(Spacer(1, 6))
+            elements.append(band)
+            elements.append(Spacer(1, 8))
+
+        meta_line = f"<b>{r['item_name']}</b> &nbsp;|&nbsp; Status: {r['stock_status']} &nbsp;|&nbsp; Time: {r['proof_time']}"
+        if r["latitude"] and r["longitude"]:
+            try:
+                meta_line += f" &nbsp;|&nbsp; GPS: {float(r['latitude']):.5f}, {float(r['longitude']):.5f}"
+            except (TypeError, ValueError):
+                pass
+
+        elements.append(Paragraph(meta_line, meta_style))
+        elements.append(Spacer(1, 4))
+
+        if r["stock_status"] == "No Stock":
+            elements.append(Paragraph(f"<i>{r['remarks'] or 'No stock reported'}</i>", meta_style))
+
+        elif r["photo_url"]:
+            try:
+                resp = requests.get(r["photo_url"], timeout=15)
+                img_stream = BytesIO(resp.content)
+                img = Image(img_stream, width=210, height=157)
+                elements.append(img)
+            except Exception:
+                elements.append(Paragraph("(photo could not be loaded for this report)", meta_style))
+
+        elif r["video_url"]:
+            elements.append(Paragraph(
+                f'<link href="{r["video_url"]}">&#9654; Watch recorded video</link>',
+                link_style
+            ))
+
+        elements.append(Spacer(1, 16))
+
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+
+    file.seek(0)
+
+    safe_date = str(proof_date).replace("-", "")
+    safe_category = category.replace(" ", "_")
+    filename = f"{safe_category}_{safe_date}.pdf"
+
+    as_attachment = request.args.get("download") == "1"
+
+    return send_file(
+        file,
+        as_attachment=as_attachment,
+        download_name=filename,
+        mimetype="application/pdf"
+    )
+
+
 @app.route("/proof-upload")
 def proof_upload():
 
@@ -6371,11 +6536,22 @@ def proof_register():
     cur.execute(query, params)
     rows = cur.fetchall()
 
+    # distinct (date, category) groups present in this filtered view,
+    # so the register can offer one "View/Download PDF" per group
+    seen = set()
+    groups = []
+    for r in rows:
+        key = (r["proof_date"], r["proof_category"])
+        if key not in seen:
+            seen.add(key)
+            groups.append({"date": r["proof_date"], "category": r["proof_category"]})
+
     conn.close()
 
     return render_template(
         "proof_register.html",
-        rows=rows
+        rows=rows,
+        groups=groups
     )
 
 

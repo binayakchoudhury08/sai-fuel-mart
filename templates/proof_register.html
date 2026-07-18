@@ -66,6 +66,32 @@ onclick="return confirm('Delete selected proofs?')">
 Delete Selected
 </button>
 
+{% if groups %}
+<div class="card" style="margin-bottom:18px;">
+<h3 style="margin-top:0;">📄 Proof Reports (PDF)</h3>
+<p style="color:#667085;font-size:13px;margin-top:-6px;">One PDF per date + category, with every photo embedded.</p>
+
+<div class="grid" style="grid-template-columns:1fr 1fr 1fr;">
+{% for g in groups %}
+<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#f8fafc;">
+<div style="font-weight:800;font-size:13px;margin-bottom:2px;">{{ g["category"] }}</div>
+<div style="color:#64748b;font-size:12px;margin-bottom:10px;">{{ g["date"] }}</div>
+<div style="display:flex;gap:8px;">
+<a href="/proof-pdf?date={{ g['date'] }}&category={{ g['category']|urlencode }}" target="_blank"
+style="flex:1;text-align:center;background:#07120C;color:white;text-decoration:none;padding:9px 6px;border-radius:8px;font-size:12px;font-weight:700;">
+View
+</a>
+<a href="/proof-pdf?date={{ g['date'] }}&category={{ g['category']|urlencode }}&download=1"
+style="flex:1;text-align:center;background:#16a34a;color:white;text-decoration:none;padding:9px 6px;border-radius:8px;font-size:12px;font-weight:700;">
+Download
+</a>
+</div>
+</div>
+{% endfor %}
+</div>
+</div>
+{% endif %}
+
 <div class="proof-grid">
 
 {% for row in rows %}
