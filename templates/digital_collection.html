@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Digital Collection - Sai Fuel Mart</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -44,6 +45,11 @@
         .red{border-left:5px solid #dc2626;}
         .cyan{border-left:5px solid #0891b2;}
 
+        .table-scroll{
+            width:100%;
+            overflow-x:auto;
+        }
+
         @media(max-width:1200px){
             .kpi-grid{
                 grid-template-columns:repeat(2,1fr);
@@ -69,20 +75,131 @@
         </div>
 
         <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/nozzle-management">
+
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
+<a href="/analytics">
+<i class="fa-solid fa-chart-pie"></i>
+Analytics
+</a>
+
+<a href="/full-system-export">
+<i class="fa-solid fa-file-export"></i>
+Full Data Excel
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
 <i class="fa-solid fa-gas-pump"></i>
 Nozzle Management
 </a>
-            <a href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
-            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a class="active" href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a class="active" href="/digital-collection">
+<i class="fa-solid fa-credit-card"></i>
+Digital Collection
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-upload">
+<i class="fa-solid fa-camera"></i>
+Proof Upload
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+</nav>
     </aside>
 
     <main class="main-content">
@@ -90,14 +207,42 @@ Nozzle Management
         <div class="topbar">
             <div>
                 <h1>Digital Collection</h1>
-                <p>Month-wise payment collection summary</p>
+                <p>Payment collection summary — {{ range_label }}</p>
             </div>
+        </div>
+
+        <div class="box" style="margin-bottom:22px;">
+            <form method="GET" class="form-grid" style="align-items:end;">
+
+                <div class="input-group">
+                    <label>From Date</label>
+                    <input type="date" name="from_date" value="{{ from_date }}">
+                </div>
+
+                <div class="input-group">
+                    <label>To Date</label>
+                    <input type="date" name="to_date" value="{{ to_date }}">
+                </div>
+
+                <div class="input-group">
+                    <button type="submit" class="save-btn-top" style="justify-content:center;">
+                        <i class="fa-solid fa-filter"></i> Filter
+                    </button>
+                </div>
+
+                <div class="input-group">
+                    <a href="/digital-collection" class="add-btn" style="text-align:center;">
+                        Clear (This Month)
+                    </a>
+                </div>
+
+            </form>
         </div>
 
         <div class="kpi-grid">
 
             <div class="kpi-card green">
-                <h4>Total Digital This Month</h4>
+                <h4>Total Digital ({{ range_label }})</h4>
                 <h2>₹ {{ monthly["total_digital"] if monthly and monthly["total_digital"] else 0 }}</h2>
             </div>
 
@@ -138,7 +283,11 @@ Nozzle Management
                 <i class="fa-solid fa-credit-card"></i> Digital Collection Register
             </div>
 
-            <table class="entry-table">
+            <input type="text" id="dcSearch" placeholder="Search by date..."
+                style="width:260px;padding:10px 14px;border:1px solid #d1d5db;border-radius:12px;margin-bottom:16px;">
+
+            <div class="table-scroll">
+            <table class="entry-table" id="dcTable">
                 <tr>
                     <th>Date</th>
                     <th>PhonePe</th>
@@ -161,13 +310,30 @@ Nozzle Management
                     <td><b>₹ {{ row["digital_collection"] }}</b></td>
                     <td>₹ {{ row["transport_received"] }}</td>
                 </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">
+                        No digital collection entries for this range.
+                    </td>
+                </tr>
                 {% endfor %}
             </table>
+            </div>
         </div>
 
     </main>
 
 </div>
+
+<script>
+document.getElementById("dcSearch").addEventListener("input", function(){
+    const value = this.value.toLowerCase();
+    document.querySelectorAll("#dcTable tr").forEach(function(row, index){
+        if(index === 0) return;
+        row.style.display = row.innerText.toLowerCase().includes(value) ? "table-row" : "none";
+    });
+});
+</script>
 
 </body>
 </html>

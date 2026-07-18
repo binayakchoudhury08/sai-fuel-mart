@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Edit Lube Transaction</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
@@ -76,6 +77,20 @@ body{
     justify-content:center;
     border-radius:16px;
     font-weight:900;
+}
+
+@media(max-width:600px){
+.form-grid{
+    grid-template-columns:1fr;
+}
+.card{
+    max-width:100%;
+    margin:0;
+    border-radius:18px;
+}
+body{
+    padding:16px;
+}
 }
 </style>
 </head>

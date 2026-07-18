@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duplicate Nozzle Entries - Sai Fuel Mart</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:30px;color:#0f172a;}
+.container{max-width:900px;margin:auto;}
+.card{background:white;border-radius:26px;padding:28px;box-shadow:0 10px 35px rgba(0,0,0,.06);}
+h1{font-size:26px;margin-bottom:8px;}
+p.sub{color:#64748b;margin-bottom:22px;}
+.back-btn{display:inline-block;margin-bottom:18px;text-decoration:none;background:#07120C;color:white;padding:10px 16px;border-radius:12px;font-weight:700;font-size:13px;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}
+th{background:#07120C;color:white;padding:12px;text-align:left;font-size:13px;}
+td{padding:12px;border-bottom:1px solid #e5e7eb;font-size:14px;}
+.count-badge{background:#fee2e2;color:#dc2626;font-weight:800;padding:4px 10px;border-radius:999px;font-size:12px;}
+.empty-state{text-align:center;padding:50px 20px;color:#16a34a;}
+.empty-state i{font-size:40px;margin-bottom:14px;}
+.clean-btn{width:100%;margin-top:22px;padding:16px;background:#dc2626;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;}
+.note{font-size:12px;color:#94a3b8;margin-top:10px;text-align:center;}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<a href="/settings" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Settings</a>
+
+<div class="card">
+<h1>Duplicate Nozzle Entries</h1>
+<p class="sub">Same nozzle, same date, saved more than once — these inflate MS/HSD/CNG totals on Reports and the printed Daily Report.</p>
+
+{% if duplicate_groups %}
+
+<table>
+<tr>
+<th>Date</th>
+<th>Nozzle</th>
+<th>Machine</th>
+<th>Rows Found</th>
+</tr>
+{% for g in duplicate_groups %}
+<tr>
+<td>{{ g["entry_date"] }}</td>
+<td>{{ g["nozzle_name"] or "-" }}</td>
+<td>{{ g["machine_no"] or "-" }}</td>
+<td><span class="count-badge">{{ g["row_count"] }} rows</span></td>
+</tr>
+{% endfor %}
+</table>
+
+<form method="POST" action="/cleanup-duplicate-nozzle-entries"
+onclick="return confirm('This will permanently delete the extra duplicate rows, keeping only the most recently saved reading for each date+nozzle. Continue?')">
+<button type="submit" class="clean-btn" onclick="return confirm('This will permanently delete the extra duplicate rows, keeping only the most recently saved reading for each date+nozzle. Continue?')">
+<i class="fa-solid fa-broom"></i> Clean Up {{ duplicate_groups|length }} Duplicate Group(s) Now
+</button>
+</form>
+
+<p class="note">This keeps the most recently saved reading for each date+nozzle and removes the older duplicate(s). This cannot be undone.</p>
+
+{% else %}
+
+<div class="empty-state">
+<i class="fa-solid fa-circle-check"></i>
+<h3>No duplicates found</h3>
+<p>Every nozzle reading is unique per date.</p>
+</div>
+
+{% endif %}
+
+</div>
+</div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <title>Credit Transport - Sai Fuel Mart</title>
 
@@ -414,6 +415,62 @@ body{
 
 <nav>
 
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
+<a href="/analytics">
+<i class="fa-solid fa-chart-pie"></i>
+Analytics
+</a>
+
+<a href="/full-system-export">
+<i class="fa-solid fa-file-export"></i>
+Full Data Excel
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+
 <a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
@@ -454,6 +511,16 @@ Lube Stock
 Attendance
 </a>
 
+<a href="/proof-upload">
+<i class="fa-solid fa-camera"></i>
+Proof Upload
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
 <a href="/reports">
 <i class="fa-solid fa-chart-line"></i>
 Reports
@@ -468,6 +535,8 @@ Settings
 <i class="fa-solid fa-right-from-bracket"></i>
 Logout
 </a>
+
+{% endif %}
 
 </nav>
 

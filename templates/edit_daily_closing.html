@@ -170,40 +170,128 @@ body{
 
 <nav>
 
-<a href="/dashboard">Dashboard</a>
+{% if session.get("role") == "admin" %}
 
-<a href="/daily-closing">
-Daily Closing
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
 </a>
 
-<a href="/nozzle-management">
-Nozzle Management
-</a>
-
-<a href="/tank-level">
-Tank Level
-</a>
-
-<a href="/credit-transport">
-Credit Transport
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
 </a>
 
 <a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
 Lube Stock
 </a>
 
 <a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
 Attendance
 </a>
 
-<a class="active"
-href="/reports">
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
+<a href="/analytics">
+<i class="fa-solid fa-chart-pie"></i>
+Analytics
+</a>
+
+<a href="/full-system-export">
+<i class="fa-solid fa-file-export"></i>
+Full Data Excel
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a class="active" href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
+<i class="fa-solid fa-gas-pump"></i>
+Nozzle Management
+</a>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/digital-collection">
+<i class="fa-solid fa-credit-card"></i>
+Digital Collection
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-upload">
+<i class="fa-solid fa-camera"></i>
+Proof Upload
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
 Reports
 </a>
 
 <a href="/settings">
+<i class="fa-solid fa-gear"></i>
 Settings
 </a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
 
 </nav>
 

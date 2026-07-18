@@ -15,7 +15,7 @@ import tempfile
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from supabase import create_client
 import uuid
 from dotenv import load_dotenv
@@ -601,6 +601,83 @@ def receive_transport_payment(id):
 
     return redirect(url_for("credit_transport"))
 
+@app.route("/preview-duplicate-nozzle-entries")
+def preview_duplicate_nozzle_entries():
+
+    if not session.get("logged_in") or not is_admin():
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT
+            ne.entry_date,
+            nm.nozzle_name,
+            nm.machine_no,
+            COUNT(*) AS row_count
+        FROM nozzle_entries ne
+        LEFT JOIN nozzle_master nm ON ne.nozzle_id = nm.id
+        GROUP BY ne.entry_date, ne.nozzle_id, nm.nozzle_name, nm.machine_no
+        HAVING COUNT(*) > 1
+        ORDER BY ne.entry_date DESC
+    """)
+    duplicate_groups = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "duplicate_nozzle_entries.html",
+        duplicate_groups=duplicate_groups
+    )
+
+@app.route("/cleanup-duplicate-nozzle-entries", methods=["POST"])
+def cleanup_duplicate_nozzle_entries():
+
+    if not session.get("logged_in") or not is_admin():
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        # for every (date, nozzle) that has more than one reading saved,
+        # keep only the most recently saved row and delete the rest —
+        # this is what was causing MS/HSD/CNG totals to show doubled
+        cur.execute("""
+            DELETE FROM nozzle_entries
+            WHERE id IN (
+                SELECT id FROM (
+                    SELECT id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY entry_date, nozzle_id
+                            ORDER BY id DESC
+                        ) AS rn
+                    FROM nozzle_entries
+                ) ranked
+                WHERE rn > 1
+            )
+            RETURNING id
+        """)
+        removed = cur.fetchall()
+
+        log_activity(
+            cur, "Nozzle Management", "Deleted",
+            f"Cleaned up {len(removed)} duplicate nozzle reading rows (same date + nozzle saved more than once)"
+        )
+
+        conn.commit()
+
+        flash(f"Removed {len(removed)} duplicate nozzle entries.")
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("settings"))
+
 @app.route("/backup-database")
 def backup_database():
 
@@ -610,14 +687,10 @@ def backup_database():
     if not is_admin():
         return redirect(url_for("dashboard"))
 
-    # your backup code below
-    backup_name = f"sai_fuel_mart_backup_{datetime.now().strftime('%d_%m_%Y_%H_%M')}.db"
-
-    return send_file(
-        DB_PATH,
-        as_attachment=True,
-        download_name=backup_name
-    )
+    # the app only ever writes to Postgres (via DATABASE_URL) — the old
+    # local sqlite file was never populated in production and Render's
+    # filesystem is ephemeral anyway, so route this to the real export
+    return redirect(url_for("full_system_export"))
 
 # app.py
 # DAILY CLOSING ROUTE
@@ -743,13 +816,16 @@ def export_party_transport_pdf():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT party_name
+        SELECT *
         FROM credit_transporters
         WHERE id=%s
     """, (transporter_id,))
     party = cur.fetchone()
 
     party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    biz = cur.fetchone()
 
     cur.execute("""
         SELECT *
@@ -761,52 +837,118 @@ def export_party_transport_pdf():
     """, (transporter_id, from_date, to_date))
 
     rows = cur.fetchall()
+
     conn.close()
+
+    station_name = (biz["station_name"] if biz and biz["station_name"] else "") or "SAI FUEL MART"
+    station_address = biz["station_address"] if biz and biz["station_address"] else ""
+    gstin = biz["gstin"] if biz and biz["gstin"] else ""
+    phone_number = biz["phone_number"] if biz and biz["phone_number"] else ""
 
     file = BytesIO()
 
     def footer(canvas, doc):
         canvas.saveState()
+        canvas.setStrokeColor(colors.HexColor("#e5e7eb"))
+        canvas.line(20, 32, 822, 32)
         canvas.setFont("Helvetica", 8)
-        canvas.drawRightString(820, 15, f"Page {doc.page}")
-        canvas.drawString(20, 15, "Sai Fuel Mart - Credit Transport Report")
+        canvas.setFillColor(colors.HexColor("#667085"))
+        canvas.drawRightString(822, 18, f"Page {doc.page}")
+        canvas.drawString(20, 18, f"{station_name} — Credit Transport Bill — Computer generated, no signature required")
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
         file,
         pagesize=landscape(A4),
-        rightMargin=12,
-        leftMargin=12,
-        topMargin=14,
-        bottomMargin=25
+        rightMargin=20,
+        leftMargin=20,
+        topMargin=20,
+        bottomMargin=36
     )
 
     styles = getSampleStyleSheet()
     elements = []
 
-    title_style = styles["Title"]
-    title_style.fontSize = 16
-    title_style.leading = 18
+    station_title_style = ParagraphStyle(
+        "StationTitle", parent=styles["Title"],
+        fontSize=20, leading=22, textColor=colors.HexColor("#07120C"),
+        alignment=0, spaceAfter=0
+    )
+    station_sub_style = ParagraphStyle(
+        "StationSub", parent=styles["Normal"],
+        fontSize=8.5, leading=12, textColor=colors.HexColor("#475467")
+    )
+    bill_title_style = ParagraphStyle(
+        "BillTitle", parent=styles["Normal"],
+        fontSize=13, leading=16, textColor=colors.white,
+        alignment=2, fontName="Helvetica-Bold"
+    )
+    bill_meta_style = ParagraphStyle(
+        "BillMeta", parent=styles["Normal"],
+        fontSize=8.5, leading=13, textColor=colors.white, alignment=2
+    )
+    label_style = ParagraphStyle(
+        "Label", parent=styles["Normal"],
+        fontSize=9, leading=13, textColor=colors.HexColor("#07120C")
+    )
 
-    normal_style = styles["Normal"]
-    normal_style.fontSize = 9
+    # letterhead: station info on the left, bill meta panel on the right
+    station_block = [
+        Paragraph(station_name.upper(), station_title_style)
+    ]
+    if station_address:
+        station_block.append(Paragraph(station_address, station_sub_style))
+    meta_bits = []
+    if gstin:
+        meta_bits.append(f"GSTIN: {gstin}")
+    if phone_number:
+        meta_bits.append(f"Ph: {phone_number}")
+    if meta_bits:
+        station_block.append(Paragraph(" | ".join(meta_bits), station_sub_style))
 
-    elements.append(Paragraph("SAI FUEL MART", title_style))
-    elements.append(Paragraph("Credit Transport Entry Report", normal_style))
-    elements.append(Spacer(1, 6))
-    elements.append(Paragraph(f"<b>Party:</b> {party_name}", normal_style))
-    elements.append(Paragraph(f"<b>Date Range:</b> {from_date} to {to_date}", normal_style))
-    elements.append(Paragraph(f"<b>Generated On:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
-    elements.append(Spacer(1, 10))
+    bill_block = [
+        Paragraph("CREDIT TRANSPORT BILL", bill_title_style),
+        Paragraph(f"Bill No: {bill_filename(party_name, from_date, '').rstrip('.').replace(' ', '-')}", bill_meta_style),
+        Paragraph(f"Period: {from_date} to {to_date}", bill_meta_style),
+        Paragraph(f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}", bill_meta_style),
+    ]
+
+    letterhead = Table(
+        [[station_block, bill_block]],
+        colWidths=[520, 262]
+    )
+    letterhead.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (1, 0), (1, 0), colors.HexColor("#07120C")),
+        ("LEFTPADDING", (1, 0), (1, 0), 16),
+        ("RIGHTPADDING", (1, 0), (1, 0), 16),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+    ]))
+    elements.append(letterhead)
+    elements.append(Spacer(1, 4))
+
+    # a thin green accent rule under the letterhead
+    accent = Table([[""]], colWidths=[782], rowHeights=[4])
+    accent.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#16a34a"))]))
+    elements.append(accent)
+    elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph(f"<b>Bill To:</b> {party_name}", label_style))
+    if party and party["vehicle_no"]:
+        elements.append(Paragraph(f"<b>Vehicle No:</b> {party['vehicle_no']}", label_style))
+    if party and party["mobile"]:
+        elements.append(Paragraph(f"<b>Contact:</b> {party['mobile']}", label_style))
+    elements.append(Spacer(1, 12))
 
     data = [[
-        "Date", "SL", "Party", "Challan", "Vehicle",
-        "Slip", "HSD Qty", "Rate", "HSD Amt",
-        "Diesel", "Final Amt"
+        "Date", "SL", "Challan", "Vehicle",
+        "Slip", "HSD Qty (L)", "Rate", "HSD Amt",
+        "Cash Taken", "Final Amt"
     ]]
 
     total_hsd = 0
-    total_rate = 0
     total_hsd_amount = 0
     total_cash = 0
     total_final = 0
@@ -819,18 +961,16 @@ def export_party_transport_pdf():
         final = float(r["total_amount"] or 0)
 
         total_hsd += hsd_qty
-        total_rate += rate
         total_hsd_amount += hsd_amount
         total_cash += cash
         total_final += final
 
         data.append([
             str(r["entry_date"]),
-            r["sl_no"],
-            r["transporter_name"],
-            r["challan_no"],
-            r["vehicle_no"],
-            r["slip_no"],
+            str(r["sl_no"]),
+            r["challan_no"] or "-",
+            r["vehicle_no"] or "-",
+            r["slip_no"] or "-",
             f"{hsd_qty:.2f}",
             f"{rate:.2f}",
             f"{hsd_amount:.2f}",
@@ -838,12 +978,13 @@ def export_party_transport_pdf():
             f"{final:.2f}"
         ])
 
-    data.append(["", "", "", "", "", "", "", "", "", "", ""])
+    if not rows:
+        data.append(["No entries in this date range", "", "", "", "", "", "", "", "", ""])
 
     data.append([
-        "", "", "", "", "", "TOTAL",
+        "", "", "", "", "TOTAL",
         f"{total_hsd:.2f}",
-        f"{total_rate:.2f}",
+        "-",
         f"{total_hsd_amount:.2f}",
         f"{total_cash:.2f}",
         f"{total_final:.2f}"
@@ -851,7 +992,7 @@ def export_party_transport_pdf():
 
     table = Table(
         data,
-        colWidths=[58, 28, 110, 60, 65, 50, 55, 45, 65, 60, 70],
+        colWidths=[62, 26, 75, 80, 60, 68, 55, 75, 75, 80],
         repeatRows=1
     )
 
@@ -862,14 +1003,16 @@ def export_party_transport_pdf():
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
 
-        ("FONTSIZE", (0, 0), (-1, -1), 6.5),
-        ("LEADING", (0, 0), (-1, -1), 7.5),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("LEADING", (0, 0), (-1, -1), 9),
 
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d1d5db")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
 
         ("ALIGN", (1, 1), (1, -1), "CENTER"),
-        ("ALIGN", (6, 1), (-1, -1), "RIGHT"),
+        ("ALIGN", (5, 1), (-1, -1), "RIGHT"),
 
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#DCFCE7")),
         ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#07120C")),
@@ -881,6 +1024,20 @@ def export_party_transport_pdf():
     ]))
 
     elements.append(table)
+    elements.append(Spacer(1, 30))
+
+    sig_data = [["", ""], ["Prepared By", "Authorized Signatory"]]
+    sig = Table(sig_data, colWidths=[391, 391])
+    sig.setStyle(TableStyle([
+        ("LINEABOVE", (0, 1), (0, 1), 0.6, colors.HexColor("#94a3b8")),
+        ("LINEABOVE", (1, 1), (1, 1), 0.6, colors.HexColor("#94a3b8")),
+        ("TOPPADDING", (0, 1), (-1, 1), 4),
+        ("FONTSIZE", (0, 1), (-1, 1), 8.5),
+        ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#667085")),
+        ("ALIGN", (0, 1), (0, 1), "LEFT"),
+        ("ALIGN", (1, 1), (1, 1), "RIGHT"),
+    ]))
+    elements.append(sig)
 
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
 
@@ -1430,6 +1587,9 @@ def print_daily_report(date):
 
 @app.route("/edit-transport-entry/<int:id>")
 def edit_transport_entry(id):
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
 
     conn = get_pg_conn()
     cur = conn.cursor()
@@ -2272,31 +2432,68 @@ def save_nozzle_entry():
     conn = get_pg_conn()
     cur = conn.cursor()
 
+    # a nozzle can only have ONE reading per day — check for an existing
+    # entry first so re-saving corrects it instead of duplicating it
+    # (duplicates were silently doubling every fuel-sale total downstream)
     cur.execute("""
-        INSERT INTO nozzle_entries (
+        SELECT id
+        FROM nozzle_entries
+        WHERE entry_date=%s AND nozzle_id=%s
+    """, (entry_date, nozzle_id))
+
+    existing = cur.fetchone()
+
+    if existing:
+
+        cur.execute("""
+            UPDATE nozzle_entries
+            SET opening_reading=%s,
+                closing_reading=%s,
+                testing_qty=%s,
+                total_sale=%s,
+                created_at=%s
+            WHERE id=%s
+        """, (
+            opening_reading,
+            closing_reading,
+            testing_qty,
+            total_sale,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            existing["id"]
+        ))
+
+        log_activity(
+            cur, "Nozzle Management", "Updated",
+            f"Nozzle reading entry for {entry_date} (nozzle #{nozzle_id}, sale {total_sale} L) — corrected re-save"
+        )
+
+    else:
+
+        cur.execute("""
+            INSERT INTO nozzle_entries (
+                entry_date,
+                nozzle_id,
+                opening_reading,
+                closing_reading,
+                testing_qty,
+                total_sale,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
             entry_date,
             nozzle_id,
             opening_reading,
             closing_reading,
             testing_qty,
             total_sale,
-            created_at
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (
-        entry_date,
-        nozzle_id,
-        opening_reading,
-        closing_reading,
-        testing_qty,
-        total_sale,
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ))
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ))
 
-    log_activity(
-        cur, "Nozzle Management", "Created",
-        f"Nozzle reading entry for {entry_date} (nozzle #{nozzle_id}, sale {total_sale} L)"
-    )
+        log_activity(
+            cur, "Nozzle Management", "Created",
+            f"Nozzle reading entry for {entry_date} (nozzle #{nozzle_id}, sale {total_sale} L)"
+        )
 
     conn.commit()
     conn.close()
@@ -3319,21 +3516,37 @@ def update_transporter(id):
     cur = conn.cursor()
 
     try:
+        cur.execute(
+            "SELECT opening_balance FROM credit_transporters WHERE id=%s",
+            (id,)
+        )
+        existing = cur.fetchone()
+        old_opening_balance = round(float(existing["opening_balance"] or 0), 2) if existing else 0
+
+        new_opening_balance = round(float(request.form.get("opening_balance", 0) or 0), 2)
+        opening_delta = round(new_opening_balance - old_opening_balance, 2)
+
         cur.execute("""
             UPDATE credit_transporters
             SET
             party_name=%s,
             mobile=%s,
             vehicle_no=%s,
-            status=%s
+            status=%s,
+            opening_balance=%s,
+            balance_due = COALESCE(balance_due,0) + %s
             WHERE id=%s
+            RETURNING balance_due
         """,(
             party_name,
             request.form.get("mobile","").strip(),
             request.form.get("vehicle_no","").strip(),
             request.form.get("status","Active"),
+            new_opening_balance,
+            opening_delta,
             id
         ))
+        updated = cur.fetchone()
 
         # keep transport_entries / ledger display names in sync with a rename
         cur.execute("""
@@ -3348,9 +3561,25 @@ def update_transporter(id):
             WHERE transporter_id=%s
         """, (party_name, id))
 
+        if opening_delta:
+            cur.execute("""
+                INSERT INTO transporter_ledger(
+                    date, transporter_id, transporter_name, entry_type,
+                    fuel_credit, lube_credit, received_amount, balance_after, remarks
+                )
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                datetime.now().strftime("%Y-%m-%d"),
+                id, party_name, "Opening Balance Adjusted",
+                0, 0, 0,
+                updated["balance_due"] if updated else None,
+                f"Opening balance changed from Rs.{old_opening_balance} to Rs.{new_opening_balance}"
+            ))
+
         log_activity(
             cur, "Credit Transport", "Updated",
             f"Updated transporter details for '{party_name}'"
+            + (f" — opening balance Rs.{old_opening_balance} to Rs.{new_opening_balance}" if opening_delta else "")
         )
 
         conn.commit()
@@ -3529,10 +3758,23 @@ def digital_collection():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
+    from_date = request.args.get("from_date", "")
+    to_date = request.args.get("to_date", "")
+
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    cur.execute("""
+    if from_date and to_date:
+        date_filter_sql = "WHERE date >= %s AND date <= %s"
+        date_params = (from_date, to_date)
+        range_label = f"{from_date} to {to_date}"
+    else:
+        # default view: current month, same as before
+        date_filter_sql = "WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')"
+        date_params = ()
+        range_label = "This Month"
+
+    cur.execute(f"""
         SELECT
             SUM(digital_collection) AS total_digital,
             SUM(phonepe) AS total_phonepe,
@@ -3542,22 +3784,30 @@ def digital_collection():
             SUM(upi_other) AS total_upi,
             SUM(transport_received) AS total_transport
         FROM daily_closing
-        WHERE TO_CHAR(date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
-    """)
+        {date_filter_sql}
+    """, date_params)
     monthly = cur.fetchone()
 
-    cur.execute("""
+    cur.execute(f"""
         SELECT date, digital_collection, phonepe, card_swipe,
                hp_pay, hpcl_otp, upi_other, transport_received
         FROM daily_closing
-        ORDER BY id DESC
-        LIMIT 50
-    """)
+        {date_filter_sql}
+        ORDER BY date DESC
+        LIMIT 500
+    """, date_params)
     rows = cur.fetchall()
 
     conn.close()
 
-    return render_template("digital_collection.html", rows=rows, monthly=monthly)
+    return render_template(
+        "digital_collection.html",
+        rows=rows,
+        monthly=monthly,
+        from_date=from_date,
+        to_date=to_date,
+        range_label=range_label
+    )
 
 
 @app.route("/reports")
@@ -4300,80 +4550,83 @@ def save_settings():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    ms_rate = float(request.form.get("ms_rate", 0))
-    hsd_rate = float(request.form.get("hsd_rate", 0))
-    cng_rate = float(request.form.get("cng_rate", 0))
+    ms_rate = float(request.form.get("ms_rate", 0) or 0)
+    hsd_rate = float(request.form.get("hsd_rate", 0) or 0)
+    cng_rate = float(request.form.get("cng_rate", 0) or 0)
+
+    station_name = request.form.get("station_name", "").strip()
+    station_address = request.form.get("station_address", "").strip()
+    gstin = request.form.get("gstin", "").strip()
+    phone_number = request.form.get("phone_number", "").strip()
 
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    # CHECK EXISTING SETTINGS
-
-    cur.execute("""
-        SELECT id
-        FROM settings
-        LIMIT 1
-    """)
-
-    existing = cur.fetchone()
-
-    # UPDATE
-
-    if existing:
+    try:
+        # CHECK EXISTING SETTINGS
 
         cur.execute("""
+            SELECT id
+            FROM settings
+            LIMIT 1
+        """)
 
-            UPDATE settings
+        existing = cur.fetchone()
 
-            SET
+        if existing:
 
-                ms_rate=%s,
-                hsd_rate=%s,
-                cng_rate=%s
-
-            WHERE id=%s
-
-        """, (
-
-            ms_rate,
-            hsd_rate,
-            cng_rate,
-
-            existing["id"]
-
-        ))
-
-    # INSERT
-
-    else:
-
-        cur.execute("""
-
-            INSERT INTO settings (
-
+            cur.execute("""
+                UPDATE settings
+                SET
+                    ms_rate=%s,
+                    hsd_rate=%s,
+                    cng_rate=%s,
+                    station_name=%s,
+                    station_address=%s,
+                    gstin=%s,
+                    phone_number=%s
+                WHERE id=%s
+            """, (
                 ms_rate,
                 hsd_rate,
-                cng_rate
+                cng_rate,
+                station_name,
+                station_address,
+                gstin,
+                phone_number,
+                existing["id"]
+            ))
 
-            )
+        else:
 
-            VALUES (%s, %s, %s)
+            cur.execute("""
+                INSERT INTO settings (
+                    ms_rate, hsd_rate, cng_rate,
+                    station_name, station_address, gstin, phone_number
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                ms_rate,
+                hsd_rate,
+                cng_rate,
+                station_name,
+                station_address,
+                gstin,
+                phone_number
+            ))
 
-        """, (
+        log_activity(
+            cur, "Settings", "Updated",
+            f"Rates: MS ₹{ms_rate}, HSD ₹{hsd_rate}, CNG ₹{cng_rate} — Business info updated"
+        )
 
-            ms_rate,
-            hsd_rate,
-            cng_rate
+        conn.commit()
 
-        ))
-
-    log_activity(
-        cur, "Settings", "Updated",
-        f"Rates updated — MS ₹{ms_rate}, HSD ₹{hsd_rate}, CNG ₹{cng_rate}"
-    )
-
-    conn.commit()
-    conn.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
     return redirect(url_for("settings"))
 
@@ -6140,11 +6393,12 @@ def download_db():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
 
-    return send_file(
-        "sai_fuel_mart.db",
-        as_attachment=True,
-        download_name="SaiFuelMart_Backup.db"
-    )
+    if not is_admin():
+        return redirect(url_for("dashboard"))
+
+    # same fix as /backup-database — the real data lives in Postgres,
+    # never in this local file
+    return redirect(url_for("full_system_export"))
 
 def get_pg_conn():
 
@@ -6190,6 +6444,29 @@ def ensure_activity_log_table():
 
 
 ensure_activity_log_table()
+
+
+def ensure_settings_columns():
+    """
+    Make sure the settings table has the Business Info columns used by
+    the redesigned Settings page and the transporter bill PDF letterhead.
+    Runs once at startup, safe to call repeatedly, won't crash the app
+    if the database isn't reachable yet at import time.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        for col in ["station_name", "station_address", "gstin", "phone_number"]:
+            cur.execute(f"""
+                ALTER TABLE settings ADD COLUMN IF NOT EXISTS {col} TEXT
+            """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[settings] could not ensure business-info columns exist: {e}")
+
+
+ensure_settings_columns()
 
 
 def log_activity(cur, module, action, description):
@@ -6349,7 +6626,7 @@ def save_proof_upload():
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    def insert_proof(category, fuel, item, status, photo_url="", remarks=""):
+    def insert_proof(category, fuel, item, status, photo_url="", remarks="", video_url=""):
         cur.execute("""
             INSERT INTO proof_register (
                 proof_date, proof_time, proof_category,
@@ -6366,7 +6643,7 @@ def save_proof_upload():
             item,
             status,
             photo_url,
-            "",
+            video_url,
             remarks,
             latitude,
             longitude,
@@ -6400,7 +6677,7 @@ def save_proof_upload():
                     for nozzle in nozzles:
                         photo = request.files.get(f"{nozzle}_photo")
 
-                        if not photo:
+                        if not photo or not photo.filename:
                             conn.close()
                             return f"{nozzle} photo required"
 
@@ -6415,45 +6692,60 @@ def save_proof_upload():
                             ""
                         )
 
+                    # one live video per fuel type, covering all 3 machines
+                    video = request.files.get(f"{fuel}_video")
+
+                    if not video or not video.filename:
+                        conn.close()
+                        return f"{fuel} video required"
+
+                    video_url = upload_proof_file(video, "videos")
+
+                    insert_proof(
+                        "Nozzle Testing",
+                        fuel,
+                        f"{fuel} Video",
+                        "Available",
+                        "",
+                        "",
+                        video_url
+                    )
+
         elif proof_type == "Dip Check":
 
             for fuel in ["MS", "HSD"]:
 
                 dip_status = request.form.get(f"{fuel.lower()}_dip_status")
-                sessions = ["Morning Dip", "Evening Dip"]
 
                 if dip_status == "No Stock":
 
-                    for session_name in sessions:
-                        insert_proof(
-                            "Dip Check",
-                            fuel,
-                            f"{fuel} {session_name}",
-                            "No Stock",
-                            "",
-                            f"{fuel} no stock"
-                        )
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} Dip",
+                        "No Stock",
+                        "",
+                        f"{fuel} no stock"
+                    )
 
                 else:
 
-                    for session_name in sessions:
-                        field = f"{fuel}_{session_name.replace(' ', '_')}"
-                        photo = request.files.get(f"{field}_photo")
+                    photo = request.files.get(f"{fuel}_dip_photo")
 
-                        if not photo:
-                            conn.close()
-                            return f"{fuel} {session_name} photo required"
+                    if not photo or not photo.filename:
+                        conn.close()
+                        return f"{fuel} dip photo required"
 
-                        photo_url = upload_proof_file(photo, "photos")
+                    photo_url = upload_proof_file(photo, "photos")
 
-                        insert_proof(
-                            "Dip Check",
-                            fuel,
-                            f"{fuel} {session_name}",
-                            "Available",
-                            photo_url,
-                            ""
-                        )
+                    insert_proof(
+                        "Dip Check",
+                        fuel,
+                        f"{fuel} Dip",
+                        "Available",
+                        photo_url,
+                        ""
+                    )
 
         else:
             conn.close()

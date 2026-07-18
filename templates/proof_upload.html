@@ -1,34 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>Proof Upload - Sai Fuel Mart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body{font-family:Arial;background:#f3f4f6;margin:0;padding:15px;}
-.card{background:white;border-radius:16px;padding:16px;margin-bottom:15px;box-shadow:0 4px 14px rgba(0,0,0,.08);}
-h2,h3{margin-top:0;color:#07120C;}
-label{font-weight:700;margin-top:12px;display:block;}
-input,select{width:100%;padding:12px;margin-top:6px;border:1px solid #d1d5db;border-radius:10px;}
-button{width:100%;padding:15px;background:#16a34a;color:white;border:0;border-radius:12px;font-size:17px;font-weight:700;}
-.hidden{display:none;}
-.gps-box{background:#ecfdf3;color:#166534;padding:10px;border-radius:10px;margin-top:10px;font-weight:bold;}
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;margin:0;padding:14px;color:#0f172a;}
+.card{background:white;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 16px rgba(0,0,0,.06);}
+h2{margin:0 0 4px;color:#07120C;font-size:22px;}
+h2 small{display:block;font-size:12px;font-weight:400;color:#64748b;margin-top:4px;}
+h3{margin:0 0 12px;color:#07120C;font-size:16px;display:flex;align-items:center;gap:8px;}
+label{font-weight:700;margin-top:12px;display:block;font-size:13px;color:#334155;}
+input[type=date],select{width:100%;padding:12px;margin-top:6px;border:1px solid #d1d5db;border-radius:12px;font-size:14px;background:white;}
+.hidden{display:none !important;}
+
+.status-row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
+.status-chip{flex:1;min-width:140px;padding:10px 12px;border-radius:12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.gps-ok{background:#ecfdf3;color:#166534;}
+.gps-wait{background:#fef9c3;color:#854d0e;}
+.gps-bad{background:#fee2e2;color:#991b1b;}
+.clock-chip{background:#eef2ff;color:#3730a3;}
+
+.fuel-block{border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:14px;}
+.fuel-block-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.fuel-tag{font-weight:900;font-size:15px;}
+.fuel-tag.ms{color:#2563eb;}
+.fuel-tag.hsd{color:#7c3aed;}
+
+.slots-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px;}
+@media(min-width:640px){
+    .slots-grid{grid-template-columns:1fr 1fr;}
+}
+@media(min-width:1000px){
+    .slots-grid.three{grid-template-columns:1fr 1fr 1fr;}
+}
+
+.capture-slot{border:1px solid #e5e7eb;border-radius:14px;padding:10px;background:#f8fafc;}
+.capture-slot.done{border-color:#16a34a;background:#f0fdf4;}
+.slot-label{font-size:13px;font-weight:800;margin-bottom:8px;color:#07120C;}
+
+.cam-frame{position:relative;width:100%;aspect-ratio:4/3;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.cam-frame video,.cam-frame img{width:100%;height:100%;object-fit:cover;display:none;}
+.cam-placeholder{color:#94a3b8;font-size:12px;text-align:center;padding:10px;}
+.rec-badge{position:absolute;top:8px;left:8px;background:#dc2626;color:white;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;display:none;align-items:center;gap:5px;}
+.rec-badge::before{content:"";width:7px;height:7px;background:white;border-radius:50%;animation:blink 1s infinite;}
+@keyframes blink{50%{opacity:.3;}}
+.live-badge{position:absolute;top:8px;right:8px;background:rgba(22,163,74,.9);color:white;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;}
+
+.cam-buttons{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.cam-buttons button{flex:1;min-width:0;padding:11px 8px;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;}
+.btn-open{background:#07120C;color:white;}
+.btn-capture{background:#16a34a;color:white;}
+.btn-record{background:#dc2626;color:white;}
+.btn-stop{background:#374151;color:white;}
+.btn-retake{background:#e2e8f0;color:#0f172a;}
+
+.cam-status{margin-top:8px;font-size:11px;font-weight:700;color:#64748b;}
+.capture-slot.done .cam-status{color:#15803d;}
+
+button.submit-btn{width:100%;padding:16px;background:#16a34a;color:white;border:0;border-radius:14px;font-size:16px;font-weight:800;margin-top:6px;}
+button.submit-btn:disabled{background:#94a3b8;}
+
+.security-note{font-size:11px;color:#64748b;background:#f8fafc;border-radius:10px;padding:10px 12px;margin-top:10px;display:flex;gap:8px;align-items:flex-start;}
 </style>
 </head>
 
 <body>
 
-<form method="POST" action="/save-proof-upload" enctype="multipart/form-data">
+<form method="POST" action="/save-proof-upload" enctype="multipart/form-data" id="proofForm">
 
 <input type="hidden" name="latitude" id="latitude">
 <input type="hidden" name="longitude" id="longitude">
 <input type="hidden" name="client_time" id="client_time">
 
 <div class="card">
-<h2>Proof Upload</h2>
+<h2>Proof Upload
+<small>Live camera capture with GPS &amp; timestamp — no gallery uploads allowed</small>
+</h2>
+
+<a href="/dashboard" style="display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:#07120C;text-decoration:none;">← Back to Dashboard</a>
 
 <label>Date</label>
-<input type="date" name="proof_date" value="{{ today }}" required>
+<input type="date" name="proof_date" id="proof_date" required>
 
 <label>Proof Type</label>
 <select name="proof_type" id="proof_type" required onchange="showSection()">
@@ -37,124 +92,537 @@ button{width:100%;padding:15px;background:#16a34a;color:white;border:0;border-ra
 <option value="Dip Check">Dip Check</option>
 </select>
 
-<div class="gps-box" id="gpsStatus">Getting GPS location...</div>
+<div class="status-row">
+<div class="status-chip gps-wait" id="gpsStatus">📍 Getting GPS location...</div>
+<div class="status-chip clock-chip" id="clockChip">🕒 --:--:--</div>
+</div>
+
+<div class="security-note">
+🔒 Every photo/video is captured live from this device's camera right now — the timestamp and GPS coordinates are stamped onto the image itself, and there is no option to pick a file from your gallery.
+</div>
+
 </div>
 
 <div id="nozzle_section" class="hidden">
 
-<div class="card">
-<h3>MS Nozzle Testing</h3>
-
-<label>MS Stock Status</label>
-<select name="ms_stock_status">
-<option value="Available">Available</option>
-<option value="No Stock">No Stock</option>
-</select>
-
-<label>MS1 Photo</label>
-<input type="file" name="MS1_photo" accept="image/*" capture="environment">
-
-<label>MS2 Photo</label>
-<input type="file" name="MS2_photo" accept="image/*" capture="environment">
-
-<label>MS3 Photo</label>
-<input type="file" name="MS3_photo" accept="image/*" capture="environment">
+<div class="card fuel-block">
+<div class="fuel-block-head">
+<h3 class="fuel-tag ms">⛽ MS Nozzle Testing</h3>
 </div>
 
-<div class="card">
-<h3>HSD Nozzle Testing</h3>
-
-<label>HSD Stock Status</label>
-<select name="hsd_stock_status">
+<label>MS Stock Status</label>
+<select name="ms_stock_status" onchange="toggleFuelSlots('ms')" id="ms_stock_status">
 <option value="Available">Available</option>
 <option value="No Stock">No Stock</option>
 </select>
 
-<label>HSD1 Photo</label>
-<input type="file" name="HSD1_photo" accept="image/*" capture="environment">
+<div id="ms_slots">
+<div class="slots-grid three">
 
-<label>HSD2 Photo</label>
-<input type="file" name="HSD2_photo" accept="image/*" capture="environment">
+<div class="capture-slot" data-slot="MS1_photo" data-kind="photo" data-required="1">
+<div class="slot-label">MS1 Photo (Machine 1)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="MS1_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
 
-<label>HSD3 Photo</label>
-<input type="file" name="HSD3_photo" accept="image/*" capture="environment">
+<div class="capture-slot" data-slot="MS2_photo" data-kind="photo" data-required="1">
+<div class="slot-label">MS2 Photo (Machine 2)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="MS2_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+
+<div class="capture-slot" data-slot="MS3_photo" data-kind="photo" data-required="1">
+<div class="slot-label">MS3 Photo (Machine 3)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="MS3_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+
+</div>
+
+<div class="capture-slot" data-slot="MS_video" data-kind="video" data-required="1" style="margin-top:14px;">
+<div class="slot-label">🎥 MS Nozzle Video (all 3 machines, live)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<video class="captured-video" controls playsinline></video>
+<div class="rec-badge">REC <span class="rec-timer">0s</span></div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-record hidden">⏺ Start Recording</button>
+<button type="button" class="btn-stop hidden">⏹ Stop</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="MS_video" class="hidden">
+<div class="cam-status">Not recorded (max 15s)</div>
+</div>
+
+</div>
+</div>
+
+<div class="card fuel-block">
+<div class="fuel-block-head">
+<h3 class="fuel-tag hsd">⛽ HSD Nozzle Testing</h3>
+</div>
+
+<label>HSD Stock Status</label>
+<select name="hsd_stock_status" onchange="toggleFuelSlots('hsd')" id="hsd_stock_status">
+<option value="Available">Available</option>
+<option value="No Stock">No Stock</option>
+</select>
+
+<div id="hsd_slots">
+<div class="slots-grid three">
+
+<div class="capture-slot" data-slot="HSD1_photo" data-kind="photo" data-required="1">
+<div class="slot-label">HSD1 Photo (Machine 1)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="HSD1_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+
+<div class="capture-slot" data-slot="HSD2_photo" data-kind="photo" data-required="1">
+<div class="slot-label">HSD2 Photo (Machine 2)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="HSD2_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+
+<div class="capture-slot" data-slot="HSD3_photo" data-kind="photo" data-required="1">
+<div class="slot-label">HSD3 Photo (Machine 3)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="HSD3_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+
+</div>
+
+<div class="capture-slot" data-slot="HSD_video" data-kind="video" data-required="1" style="margin-top:14px;">
+<div class="slot-label">🎥 HSD Nozzle Video (all 3 machines, live)</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<video class="captured-video" controls playsinline></video>
+<div class="rec-badge">REC <span class="rec-timer">0s</span></div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-record hidden">⏺ Start Recording</button>
+<button type="button" class="btn-stop hidden">⏹ Stop</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="HSD_video" class="hidden">
+<div class="cam-status">Not recorded (max 15s)</div>
+</div>
+
+</div>
 </div>
 
 </div>
 
 <div id="dip_section" class="hidden">
 
-<div class="card">
-<h3>MS Dip Check</h3>
+<div class="card fuel-block">
+<div class="fuel-block-head">
+<h3 class="fuel-tag ms">⛽ MS Dip Check</h3>
+</div>
 
 <label>MS Stock Status</label>
-<select name="ms_dip_status">
+<select name="ms_dip_status" onchange="toggleFuelSlots('ms_dip')" id="ms_dip_status">
 <option value="Available">Available</option>
 <option value="No Stock">No Stock</option>
 </select>
 
-<label>MS Morning Dip Photo</label>
-<input type="file" name="MS_Morning_Dip_photo" accept="image/*" capture="environment">
-
-<label>MS Evening Dip Photo</label>
-<input type="file" name="MS_Evening_Dip_photo" accept="image/*" capture="environment">
+<div id="ms_dip_slots">
+<div class="capture-slot" data-slot="MS_dip_photo" data-kind="photo" data-required="1" style="margin-top:12px;">
+<div class="slot-label">MS Dip Photo</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="MS_dip_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+</div>
 </div>
 
-<div class="card">
-<h3>HSD Dip Check</h3>
+<div class="card fuel-block">
+<div class="fuel-block-head">
+<h3 class="fuel-tag hsd">⛽ HSD Dip Check</h3>
+</div>
 
 <label>HSD Stock Status</label>
-<select name="hsd_dip_status">
+<select name="hsd_dip_status" onchange="toggleFuelSlots('hsd_dip')" id="hsd_dip_status">
 <option value="Available">Available</option>
 <option value="No Stock">No Stock</option>
 </select>
 
-<label>HSD Morning Dip Photo</label>
-<input type="file" name="HSD_Morning_Dip_photo" accept="image/*" capture="environment">
-
-<label>HSD Evening Dip Photo</label>
-<input type="file" name="HSD_Evening_Dip_photo" accept="image/*" capture="environment">
+<div id="hsd_dip_slots">
+<div class="capture-slot" data-slot="HSD_dip_photo" data-kind="photo" data-required="1" style="margin-top:12px;">
+<div class="slot-label">HSD Dip Photo</div>
+<div class="cam-frame">
+<div class="cam-placeholder">Camera off</div>
+<video autoplay playsinline muted></video>
+<img class="captured-img">
+<div class="live-badge">LIVE</div>
+</div>
+<div class="cam-buttons">
+<button type="button" class="btn-open">📷 Open Camera</button>
+<button type="button" class="btn-capture hidden">Capture</button>
+<button type="button" class="btn-retake hidden">Retake</button>
+</div>
+<input type="file" name="HSD_dip_photo" class="hidden">
+<div class="cam-status">Not captured</div>
+</div>
+</div>
 </div>
 
 </div>
 
-<button type="submit">Upload Proof</button>
+<button type="submit" class="submit-btn" id="submitBtn">Upload Proof</button>
 
 </form>
 
 <script>
+
+document.getElementById("proof_date").value = new Date().toISOString().split("T")[0];
+
+let currentLat = null, currentLng = null;
+
 function showSection(){
     let type = document.getElementById("proof_type").value;
-    document.getElementById("nozzle_section").style.display = "none";
-    document.getElementById("dip_section").style.display = "none";
+    document.getElementById("nozzle_section").classList.add("hidden");
+    document.getElementById("dip_section").classList.add("hidden");
 
     if(type === "Nozzle Testing"){
-        document.getElementById("nozzle_section").style.display = "block";
+        document.getElementById("nozzle_section").classList.remove("hidden");
     }
-
     if(type === "Dip Check"){
-        document.getElementById("dip_section").style.display = "block";
+        document.getElementById("dip_section").classList.remove("hidden");
+    }
+}
+
+function toggleFuelSlots(key){
+    const statusEl = document.getElementById(key + "_status");
+    const slotsEl = document.getElementById(key + "_slots");
+    if(statusEl.value === "No Stock"){
+        slotsEl.classList.add("hidden");
+    }else{
+        slotsEl.classList.remove("hidden");
     }
 }
 
 document.getElementById("client_time").value = new Date().toLocaleString();
 
+function tickClock(){
+    document.getElementById("clockChip").textContent = "🕒 " + new Date().toLocaleTimeString();
+}
+setInterval(tickClock, 1000);
+tickClock();
+
 if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(
+    navigator.geolocation.watchPosition(
         function(position){
-            document.getElementById("latitude").value = position.coords.latitude;
-            document.getElementById("longitude").value = position.coords.longitude;
-            document.getElementById("gpsStatus").innerText =
-            "GPS Captured: " + position.coords.latitude.toFixed(5) + ", " + position.coords.longitude.toFixed(5);
+            currentLat = position.coords.latitude;
+            currentLng = position.coords.longitude;
+            document.getElementById("latitude").value = currentLat;
+            document.getElementById("longitude").value = currentLng;
+            const el = document.getElementById("gpsStatus");
+            el.className = "status-chip gps-ok";
+            el.textContent = "📍 " + currentLat.toFixed(5) + ", " + currentLng.toFixed(5);
         },
         function(){
-            document.getElementById("gpsStatus").innerText =
-            "GPS not allowed. Please allow location permission.";
-        }
+            const el = document.getElementById("gpsStatus");
+            el.className = "status-chip gps-bad";
+            el.textContent = "📍 GPS denied — allow location permission";
+        },
+        { enableHighAccuracy:true, maximumAge:5000 }
     );
 }else{
-    document.getElementById("gpsStatus").innerText = "GPS not supported.";
+    const el = document.getElementById("gpsStatus");
+    el.className = "status-chip gps-bad";
+    el.textContent = "📍 GPS not supported on this device";
 }
+
+function stampCanvas(ctx, canvas){
+    const stamp = new Date().toLocaleString() +
+        (currentLat !== null ? " | " + currentLat.toFixed(5) + ", " + currentLng.toFixed(5) : " | GPS pending");
+
+    const fontSize = Math.max(13, Math.round(canvas.width * 0.032));
+    ctx.font = fontSize + "px Arial";
+    const paddingX = 10, paddingY = 8;
+    const textWidth = ctx.measureText(stamp).width;
+
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, canvas.height - fontSize - paddingY*2, textWidth + paddingX*2, fontSize + paddingY*2);
+
+    ctx.fillStyle = "#22ff88";
+    ctx.fillText(stamp, paddingX, canvas.height - paddingY - 5);
+}
+
+function initPhotoSlot(slot){
+    const liveVideo = slot.querySelector("video");
+    const img = slot.querySelector(".captured-img");
+    const placeholder = slot.querySelector(".cam-placeholder");
+    const input = slot.querySelector("input[type=file]");
+    const status = slot.querySelector(".cam-status");
+    const openBtn = slot.querySelector(".btn-open");
+    const captureBtn = slot.querySelector(".btn-capture");
+    const retakeBtn = slot.querySelector(".btn-retake");
+    let stream = null;
+    const canvas = document.createElement("canvas");
+
+    openBtn.onclick = async function(){
+        try{
+            stream = await navigator.mediaDevices.getUserMedia({
+                video:{ facingMode:{ ideal:"environment" } },
+                audio:false
+            });
+            liveVideo.srcObject = stream;
+            liveVideo.style.display = "block";
+            placeholder.style.display = "none";
+            openBtn.classList.add("hidden");
+            captureBtn.classList.remove("hidden");
+            status.textContent = "Camera live — position and capture";
+        }catch(e){
+            status.textContent = "Camera permission denied or unavailable";
+        }
+    };
+
+    captureBtn.onclick = function(){
+        canvas.width = liveVideo.videoWidth || 640;
+        canvas.height = liveVideo.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(liveVideo, 0, 0, canvas.width, canvas.height);
+        stampCanvas(ctx, canvas);
+
+        canvas.toBlob(function(blob){
+            const file = new File([blob], slot.dataset.slot + ".jpg", { type:"image/jpeg" });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+
+            img.src = URL.createObjectURL(blob);
+            img.style.display = "block";
+            liveVideo.style.display = "none";
+            captureBtn.classList.add("hidden");
+            retakeBtn.classList.remove("hidden");
+            status.textContent = "Captured just now ✓";
+            slot.classList.add("done");
+
+            if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); }
+        }, "image/jpeg", 0.88);
+    };
+
+    retakeBtn.onclick = function(){
+        img.style.display = "none";
+        placeholder.style.display = "flex";
+        retakeBtn.classList.add("hidden");
+        openBtn.classList.remove("hidden");
+        input.value = "";
+        status.textContent = "Not captured";
+        slot.classList.remove("done");
+    };
+}
+
+function initVideoSlot(slot, maxSeconds){
+    maxSeconds = maxSeconds || 15;
+    const liveVideo = slot.querySelector("video:not(.captured-video)");
+    const playback = slot.querySelector(".captured-video");
+    const placeholder = slot.querySelector(".cam-placeholder");
+    const input = slot.querySelector("input[type=file]");
+    const status = slot.querySelector(".cam-status");
+    const openBtn = slot.querySelector(".btn-open");
+    const recordBtn = slot.querySelector(".btn-record");
+    const stopBtn = slot.querySelector(".btn-stop");
+    const retakeBtn = slot.querySelector(".btn-retake");
+    const recBadge = slot.querySelector(".rec-badge");
+    const recTimer = slot.querySelector(".rec-timer");
+    let stream = null, recorder = null, chunks = [], timerHandle = null, seconds = 0;
+
+    openBtn.onclick = async function(){
+        try{
+            stream = await navigator.mediaDevices.getUserMedia({
+                video:{ facingMode:{ ideal:"environment" } },
+                audio:true
+            });
+            liveVideo.srcObject = stream;
+            liveVideo.style.display = "block";
+            placeholder.style.display = "none";
+            openBtn.classList.add("hidden");
+            recordBtn.classList.remove("hidden");
+            status.textContent = "Camera live — start recording";
+        }catch(e){
+            status.textContent = "Camera/microphone permission denied";
+        }
+    };
+
+    recordBtn.onclick = function(){
+        chunks = [];
+        let mime = "video/webm;codecs=vp8,opus";
+        if(typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mime)){
+            mime = "video/webm";
+        }
+        recorder = new MediaRecorder(stream, { mimeType: mime });
+
+        recorder.ondataavailable = function(e){
+            if(e.data && e.data.size > 0){ chunks.push(e.data); }
+        };
+
+        recorder.onstop = function(){
+            const blob = new Blob(chunks, { type:"video/webm" });
+            const file = new File([blob], slot.dataset.slot + ".webm", { type:"video/webm" });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+
+            playback.src = URL.createObjectURL(blob);
+            playback.style.display = "block";
+            liveVideo.style.display = "none";
+            recBadge.style.display = "none";
+            stopBtn.classList.add("hidden");
+            retakeBtn.classList.remove("hidden");
+            status.textContent = "Recorded " + seconds + "s ✓";
+            slot.classList.add("done");
+            clearInterval(timerHandle);
+
+            if(stream){ stream.getTracks().forEach(function(t){ t.stop(); }); }
+        };
+
+        recorder.start();
+        recordBtn.classList.add("hidden");
+        stopBtn.classList.remove("hidden");
+        recBadge.style.display = "flex";
+        seconds = 0;
+        recTimer.textContent = "0s";
+
+        timerHandle = setInterval(function(){
+            seconds++;
+            recTimer.textContent = seconds + "s";
+            if(seconds >= maxSeconds){ recorder.stop(); }
+        }, 1000);
+    };
+
+    stopBtn.onclick = function(){
+        if(recorder && recorder.state === "recording"){ recorder.stop(); }
+    };
+
+    retakeBtn.onclick = function(){
+        playback.style.display = "none";
+        placeholder.style.display = "flex";
+        retakeBtn.classList.add("hidden");
+        openBtn.classList.remove("hidden");
+        input.value = "";
+        status.textContent = "Not recorded (max " + maxSeconds + "s)";
+        slot.classList.remove("done");
+    };
+}
+
+document.querySelectorAll('.capture-slot[data-kind="photo"]').forEach(initPhotoSlot);
+document.querySelectorAll('.capture-slot[data-kind="video"]').forEach(function(s){ initVideoSlot(s, 15); });
+
+document.getElementById("proofForm").addEventListener("submit", function(e){
+    const type = document.getElementById("proof_type").value;
+
+    if(!type){
+        e.preventDefault();
+        alert("Please select a proof type.");
+        return;
+    }
+
+    const activeSection = type === "Nozzle Testing"
+        ? document.getElementById("nozzle_section")
+        : document.getElementById("dip_section");
+
+    const missing = [];
+
+    activeSection.querySelectorAll('.capture-slot[data-required="1"]').forEach(function(slot){
+        // skip slots inside a fuel block currently hidden (No Stock selected)
+        let hiddenAncestor = slot.closest('[id$="_slots"]');
+        if(hiddenAncestor && hiddenAncestor.classList.contains("hidden")){
+            return;
+        }
+        if(!slot.classList.contains("done")){
+            missing.push(slot.querySelector(".slot-label").textContent.trim());
+        }
+    });
+
+    if(missing.length > 0){
+        e.preventDefault();
+        alert("Please capture live from the camera for:\n\n" + missing.join("\n"));
+    }
+});
+
 </script>
 
 </body>

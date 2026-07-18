@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <title>Lube Stock - Sai Fuel Mart</title>
 
@@ -133,18 +134,35 @@ Dashboard
 <i class="fa-solid fa-chart-line"></i>
 Reports
 </a>
+
 <a class="active" href="/lube-stock">
 <i class="fa-solid fa-bottle-droplet"></i>
 Lube Stock
 </a>
 
-<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
 
-
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
 
 <a href="/activity-log">
 <i class="fa-solid fa-clock-rotate-left"></i>
 Activity Log
+</a>
+
+<a href="/analytics">
+<i class="fa-solid fa-chart-pie"></i>
+Analytics
+</a>
+
+<a href="/full-system-export">
+<i class="fa-solid fa-file-export"></i>
+Full Data Excel
 </a>
 
 <a href="/backup-database">
@@ -159,13 +177,11 @@ Logout
 
 {% endif %}
 
-
 {% if session.get("role") == "manager" %}
 
-<a class="active" href="/dashboard">
+<a href="/dashboard">
 <i class="fa-solid fa-house"></i>
 Dashboard
-
 </a>
 
 <a href="/daily-closing">
@@ -188,7 +204,12 @@ Tank Level
 Credit Transport
 </a>
 
-<a href="/lube-stock">
+<a href="/digital-collection">
+<i class="fa-solid fa-credit-card"></i>
+Digital Collection
+</a>
+
+<a class="active" href="/lube-stock">
 <i class="fa-solid fa-bottle-droplet"></i>
 Lube Stock
 </a>
@@ -196,6 +217,16 @@ Lube Stock
 <a href="/attendance">
 <i class="fa-solid fa-user-check"></i>
 Attendance
+</a>
+
+<a href="/proof-upload">
+<i class="fa-solid fa-camera"></i>
+Proof Upload
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
 </a>
 
 <a href="/reports">

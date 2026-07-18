@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Settings - Sai Fuel Mart</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -17,20 +18,136 @@
         </div>
 
         <nav>
-            <a href="/dashboard"><i class="fa-solid fa-house"></i> Dashboard</a>
-            <a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i> Daily Closing</a>
-            <a href="/nozzle-management">
+
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/activity-log">
+<i class="fa-solid fa-clock-rotate-left"></i>
+Activity Log
+</a>
+
+<a href="/analytics">
+<i class="fa-solid fa-chart-pie"></i>
+Analytics
+</a>
+
+<a href="/full-system-export">
+<i class="fa-solid fa-file-export"></i>
+Full Data Excel
+</a>
+
+<a href="/backup-database">
+<i class="fa-solid fa-database"></i>
+Backup
+</a>
+
+<a class="active" href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+
+<a href="/dashboard">
+<i class="fa-solid fa-house"></i>
+Dashboard
+</a>
+
+<a href="/daily-closing">
+<i class="fa-solid fa-file-invoice-dollar"></i>
+Daily Closing
+</a>
+
+<a href="/nozzle-management">
 <i class="fa-solid fa-gas-pump"></i>
 Nozzle Management
 </a>
-            <a href="/tank-level"><i class="fa-solid fa-oil-well"></i> Tank Level</a>
-            <a href="/credit-transport"><i class="fa-solid fa-truck"></i> Credit Transport</a>
-            <a href="/digital-collection"><i class="fa-solid fa-credit-card"></i> Digital Collection</a>
-            <a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i> Lube Stock</a>
-            <a href="/attendance"><i class="fa-solid fa-user-check"></i> Attendance</a>
-            <a href="/reports"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            <a class="active" href="/settings"><i class="fa-solid fa-gear"></i> Settings</a>
-        </nav>
+
+<a href="/tank-level">
+<i class="fa-solid fa-oil-well"></i>
+Tank Level
+</a>
+
+<a href="/credit-transport">
+<i class="fa-solid fa-truck"></i>
+Credit Transport
+</a>
+
+<a href="/digital-collection">
+<i class="fa-solid fa-credit-card"></i>
+Digital Collection
+</a>
+
+<a href="/lube-stock">
+<i class="fa-solid fa-bottle-droplet"></i>
+Lube Stock
+</a>
+
+<a href="/attendance">
+<i class="fa-solid fa-user-check"></i>
+Attendance
+</a>
+
+<a href="/proof-upload">
+<i class="fa-solid fa-camera"></i>
+Proof Upload
+</a>
+
+<a href="/proof-register">
+<i class="fa-solid fa-folder-open"></i>
+Proof Register
+</a>
+
+<a href="/reports">
+<i class="fa-solid fa-chart-line"></i>
+Reports
+</a>
+
+<a class="active" href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
+<a href="/logout">
+<i class="fa-solid fa-right-from-bracket"></i>
+Logout
+</a>
+
+{% endif %}
+
+</nav>
     </aside>
 
     <main class="main-content">
@@ -38,51 +155,126 @@ Nozzle Management
         <div class="topbar">
             <div>
                 <h1>Settings</h1>
-                <p>Manage fuel rates and basic setup</p>
+                <p>Business info, fuel rates and database backup</p>
             </div>
         </div>
 
-        <form method="POST" action="/save-settings" class="box">
+        <form method="POST" action="/save-settings">
+
+        <div class="box">
+
+            <div class="box-title">
+                <i class="fa-solid fa-building"></i> Business Info
+            </div>
+
+            <p style="color:#667085;font-size:13px;margin-bottom:18px;margin-top:-14px;">
+                Shown on the letterhead of every transporter bill PDF you export.
+            </p>
+
+            <div class="form-grid">
+
+                <div class="input-group">
+                    <label>Station Name</label>
+                    <input type="text" name="station_name" placeholder="Sai Fuel Mart"
+                        value="{{ settings['station_name'] if settings and settings['station_name'] else '' }}">
+                </div>
+
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <input type="text" name="phone_number" placeholder="98765 43210"
+                        value="{{ settings['phone_number'] if settings and settings['phone_number'] else '' }}">
+                </div>
+
+                <div class="input-group" style="grid-column:1 / -1;">
+                    <label>Address</label>
+                    <input type="text" name="station_address" placeholder="NH-16, Village Road, District, State - PIN"
+                        value="{{ settings['station_address'] if settings and settings['station_address'] else '' }}">
+                </div>
+
+                <div class="input-group">
+                    <label>GSTIN</label>
+                    <input type="text" name="gstin" placeholder="22AAAAA0000A1Z5"
+                        value="{{ settings['gstin'] if settings and settings['gstin'] else '' }}">
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="box">
 
             <div class="box-title">
                 <i class="fa-solid fa-gas-pump"></i> Fuel Rate Settings
             </div>
 
-            <a href="/download-db" class="btn btn-success">
-    Download Database Backup
-</a>
+            <div class="cards" style="margin-bottom:22px;">
 
-            <div class="form-grid">
-
-                <div class="input-group">
-                    <label>MS Rate</label>
-                    <input type="number" step="0.01" name="ms_rate" value="{{ settings['ms_rate'] if settings else '' }}">
-
+                <div class="summary-card petrol">
+                    <span>MS Rate (₹/L)</span>
+                    <input type="number" step="0.01" name="ms_rate"
+                        value="{{ settings['ms_rate'] if settings else '' }}"
+                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
                 </div>
 
-                <div class="input-group">
-                    <label>HSD Rate</label>
-                    <input type="number" step="0.01" name="hsd_rate" value="{{ settings['hsd_rate'] if settings else '' }}">
-
+                <div class="summary-card diesel">
+                    <span>HSD Rate (₹/L)</span>
+                    <input type="number" step="0.01" name="hsd_rate"
+                        value="{{ settings['hsd_rate'] if settings else '' }}"
+                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
                 </div>
 
-                <div class="input-group">
-
-<label>CNG Rate</label>
-
-<input type="number" step="0.01" name="cng_rate" value="{{ settings['cng_rate'] if settings else '' }}">
-
-</div>
+                <div class="summary-card total">
+                    <span>CNG Rate (₹/Kg)</span>
+                    <input type="number" step="0.01" name="cng_rate"
+                        value="{{ settings['cng_rate'] if settings else '' }}"
+                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
+                </div>
 
             </div>
-
-            <br>
 
             <button class="save-btn-top" type="submit">
                 <i class="fa-solid fa-floppy-disk"></i> Save Settings
             </button>
 
+        </div>
+
         </form>
+
+        {% if session.get("role") == "admin" %}
+        <div class="box">
+
+            <div class="box-title">
+                <i class="fa-solid fa-database"></i> Database Backup
+            </div>
+
+            <p style="color:#667085;font-size:13px;margin-bottom:16px;">
+                Downloads a complete Excel export of every table — transporters, entries, lube stock,
+                attendance, daily closings and more — straight from the live database.
+            </p>
+
+            <a href="/full-system-export" class="save-btn-top" style="background:#16a34a;">
+                <i class="fa-solid fa-file-export"></i> Download Full Backup (Excel)
+            </a>
+
+        </div>
+
+        <div class="box">
+
+            <div class="box-title">
+                <i class="fa-solid fa-broom"></i> Data Maintenance
+            </div>
+
+            <p style="color:#667085;font-size:13px;margin-bottom:16px;">
+                Find and remove duplicate nozzle readings (same nozzle + date saved more than once), which inflate
+                MS/HSD/CNG totals on Reports and the printed Daily Report.
+            </p>
+
+            <a href="/preview-duplicate-nozzle-entries" class="save-btn-top" style="background:#dc2626;">
+                <i class="fa-solid fa-magnifying-glass"></i> Check for Duplicate Nozzle Entries
+            </a>
+
+        </div>
+        {% endif %}
 
     </main>
 

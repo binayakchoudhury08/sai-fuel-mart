@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Transporter History</title>
 
@@ -128,6 +129,36 @@ body{
     color:#dc2626;
 }
 
+.table-scroll{
+    width:100%;
+    overflow-x:auto;
+}
+
+@media(max-width:700px){
+    body{
+        padding:14px;
+    }
+
+    .box{
+        padding:18px;
+        border-radius:20px;
+    }
+
+    .stats{
+        grid-template-columns:1fr 1fr;
+    }
+
+    .topbar{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:14px;
+    }
+
+    .entry-table{
+        min-width:900px;
+    }
+}
+
 </style>
 
 </head>
@@ -193,6 +224,7 @@ Back
 
 <div class="box">
 
+<div class="table-scroll">
 <table class="entry-table">
 
 <thead>
@@ -271,6 +303,7 @@ Delete
 </tbody>
 
 </table>
+</div>
 
 </div>
 

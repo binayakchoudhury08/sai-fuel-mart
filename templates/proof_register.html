@@ -26,6 +26,8 @@ button{background:#16a34a;color:white;font-weight:bold;border:none;cursor:pointe
 <body>
 
 <h1>Proof Register</h1>
+<a href="/dashboard" style="display:inline-block;margin-bottom:16px;font-weight:700;color:#07120C;text-decoration:none;font-size:13px;">← Back to Dashboard</a>
+<a href="/proof-upload" style="display:inline-block;margin-bottom:16px;margin-left:14px;font-weight:700;color:#16a34a;text-decoration:none;font-size:13px;">+ New Proof Upload</a>
 
 <div class="filter-box">
 <form method="GET" action="/proof-register">
@@ -52,6 +54,11 @@ button{background:#16a34a;color:white;font-weight:bold;border:none;cursor:pointe
 </div>
 
 <form method="POST" action="/delete-proof-register">
+
+<label class="select-line" style="margin-bottom:12px;">
+<input type="checkbox" id="selectAll" onclick="document.querySelectorAll('input[name=proof_ids]').forEach(function(cb){cb.checked=this.checked;}, this)">
+Select All
+</label>
 
 <button type="submit"
 class="delete-btn"
@@ -92,12 +99,18 @@ Select
 
 {% else %}
 
-<span class="badge ok">Photo Uploaded</span>
+<span class="badge ok">
+{% if row["video_url"] %}Video Recorded{% else %}Photo Uploaded{% endif %}
+</span>
 
 {% if row["photo_url"] %}
 <a href="{{ row['photo_url'] }}" target="_blank">
 <img src="{{ row['photo_url'] }}">
 </a>
+{% endif %}
+
+{% if row["video_url"] %}
+<video controls style="width:100%;border-radius:10px;margin-top:10px;" src="{{ row['video_url'] }}"></video>
 {% endif %}
 
 {% endif %}
