@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuel Rates - Settings - Sai Fuel Mart</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:30px;color:#0f172a;}
+.container{max-width:760px;margin:auto;}
+.back-btn{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;text-decoration:none;background:#07120C;color:white;padding:11px 18px;border-radius:12px;font-weight:700;font-size:13px;}
+.card{background:white;border-radius:26px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.06);}
+.head{display:flex;align-items:center;gap:16px;margin-bottom:6px;}
+.head-icon{width:52px;height:52px;border-radius:16px;background:#ecfdf5;color:#16a34a;display:flex;align-items:center;justify-content:center;font-size:22px;}
+h1{font-size:22px;margin:0;}
+p.sub{color:#64748b;margin:22px 0 26px;font-size:13.5px;}
+.rate-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.rate-card{border-radius:18px;padding:20px;border:1px solid #e5e7eb;}
+.rate-card.ms{background:#eff6ff;}
+.rate-card.hsd{background:#fff7ed;}
+.rate-card.cng{background:#f0fdf4;}
+.rate-card label{display:block;font-size:12.5px;font-weight:800;color:#475467;margin-bottom:10px;}
+.rate-card input{width:100%;border:none;background:transparent;font-size:26px;font-weight:800;color:#07120C;padding:0;}
+.rate-card input:focus{outline:none;}
+.save-btn{width:100%;margin-top:26px;padding:16px;background:#16a34a;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+@media(max-width:600px){.rate-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<a href="/settings" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Settings</a>
+
+<div class="card">
+
+<div class="head">
+<div class="head-icon"><i class="fa-solid fa-gas-pump"></i></div>
+<h1>Fuel Rates</h1>
+</div>
+
+<p class="sub">Used across Daily Closing, Nozzle Management and Tank Level calculations.</p>
+
+<form method="POST" action="/save-fuel-rates">
+
+<div class="rate-grid">
+
+<div class="rate-card ms">
+<label>MS Rate (₹/L)</label>
+<input type="number" step="0.01" name="ms_rate" value="{{ settings['ms_rate'] if settings else '' }}">
+</div>
+
+<div class="rate-card hsd">
+<label>HSD Rate (₹/L)</label>
+<input type="number" step="0.01" name="hsd_rate" value="{{ settings['hsd_rate'] if settings else '' }}">
+</div>
+
+<div class="rate-card cng">
+<label>CNG Rate (₹/Kg)</label>
+<input type="number" step="0.01" name="cng_rate" value="{{ settings['cng_rate'] if settings else '' }}">
+</div>
+
+</div>
+
+<button class="save-btn" type="submit">
+<i class="fa-solid fa-floppy-disk"></i> Save Fuel Rates
+</button>
+
+</form>
+
+</div>
+</div>
+</body>
+</html>

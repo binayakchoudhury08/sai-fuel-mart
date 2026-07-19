@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transporter Discounts - Settings - Sai Fuel Mart</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:30px;color:#0f172a;}
+.container{max-width:900px;margin:auto;}
+.back-btn{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;text-decoration:none;background:#07120C;color:white;padding:11px 18px;border-radius:12px;font-weight:700;font-size:13px;}
+.card{background:white;border-radius:26px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.06);}
+.head{display:flex;align-items:center;gap:16px;margin-bottom:6px;}
+.head-icon{width:52px;height:52px;border-radius:16px;background:#fdf4ff;color:#a21caf;display:flex;align-items:center;justify-content:center;font-size:22px;}
+h1{font-size:22px;margin:0;}
+p.sub{color:#64748b;margin:22px 0 10px;font-size:13.5px;}
+
+.example-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:16px 18px;margin-bottom:24px;font-size:13px;color:#334155;}
+.example-box b{color:#07120C;}
+.example-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+.example-row:last-child{border-bottom:none;font-weight:800;color:#16a34a;}
+
+table{width:100%;border-collapse:collapse;}
+th{background:#07120C;color:white;padding:12px;text-align:left;font-size:13px;}
+td{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;}
+td input{width:130px;padding:9px 11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;}
+td input:focus{outline:none;border-color:#a21caf;box-shadow:0 0 0 3px rgba(162,28,175,.12);}
+.table-scroll{overflow-x:auto;}
+
+.save-btn{width:100%;margin-top:22px;padding:16px;background:#16a34a;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.empty{text-align:center;color:#94a3b8;padding:40px;}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<a href="/settings" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Settings</a>
+
+<div class="card">
+
+<div class="head">
+<div class="head-icon"><i class="fa-solid fa-tags"></i></div>
+<h1>Transporter Discounts</h1>
+</div>
+
+<p class="sub">A per-litre discount rate — not a flat amount. The total discount on a bill is calculated as
+<b>Discount Rate × Total HSD Litres billed in that period</b>. Leave at 0 for no discount line on that transporter's bill.</p>
+
+<div class="example-box">
+<div class="example-row"><span>Discount Rs. 0.50/L &nbsp;×&nbsp; 500 L billed</span><span>= Rs. 250.00 discount</span></div>
+<div class="example-row"><span>Discount Rs. 1.00/L &nbsp;×&nbsp; 500 L billed</span><span>= Rs. 500.00 discount</span></div>
+</div>
+
+{% if transporters %}
+<form method="POST" action="/save-transporter-discounts">
+<div class="table-scroll">
+<table>
+<tr>
+<th>Transporter</th>
+<th>Discount Rate (Rs. per Litre)</th>
+</tr>
+{% for t in transporters %}
+<tr>
+<td>{{ t["party_name"] }}</td>
+<td>
+<input type="number" step="0.01" min="0"
+name="discount_{{ t['id'] }}"
+value="{{ t['discount'] or 0 }}">
+</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+<button class="save-btn" type="submit">
+<i class="fa-solid fa-floppy-disk"></i> Save All Discounts
+</button>
+</form>
+{% else %}
+<p class="empty">No transporters added yet.</p>
+{% endif %}
+
+</div>
+</div>
+</body>
+</html>

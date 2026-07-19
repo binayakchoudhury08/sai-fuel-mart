@@ -219,6 +219,11 @@ body{
 
 /* TABLE */
 
+.table-scroll{
+    width:100%;
+    overflow-x:auto;
+}
+
 .entry-table{
     width:100%;
     border-collapse:separate;

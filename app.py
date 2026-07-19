@@ -710,7 +710,7 @@ def export_party_transport_excel():
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT party_name
+        SELECT *
         FROM credit_transporters
         WHERE id=%s
     """, (transporter_id,))
@@ -741,14 +741,12 @@ def export_party_transport_excel():
     ])
 
     total_hsd = 0
-    total_rate = 0
     total_hsd_amount = 0
     total_cash = 0
     total_final = 0
 
     for r in rows:
         total_hsd += float(r["hsd_qty"] or 0)
-        total_rate += float(r["rate"] or 0)
         total_hsd_amount += float(r["hsd_amount"] or 0)
         total_cash += float(r["cash_taken"] or 0)
         total_final += float(r["total_amount"] or 0)
@@ -764,7 +762,7 @@ def export_party_transport_excel():
             r["rate"],
             r["hsd_amount"],
             r["cash_taken"],
-            r["total_amount"]
+            round(float(r["total_amount"] or 0))
         ])
 
     ws.append([])
@@ -772,19 +770,48 @@ def export_party_transport_excel():
     total_row = [
        "", "", "", "", "", "TOTAL",
        round(total_hsd, 2),
-       round(total_rate, 2),
+       "-",
        round(total_hsd_amount),
        round(total_cash),
        round(total_final)
 ]
 
     ws.append(total_row)
+    total_row_number = ws.max_row
+
+    discount_per_litre = round(float(party.get("discount") or 0), 2) if party else 0
+    total_discount = round(discount_per_litre * total_hsd)
+
+    if discount_per_litre > 0:
+        net_payable = round(total_final) - total_discount
+
+        ws.append([])
+        ws.append(["", "", "", "", "", "", "", "", "", "Total Amount", round(total_final)])
+        total_amt_row_number = ws.max_row
+
+        ws.append(["", "", "", "", "", "", "", "", "", f"Discount (Rs.{discount_per_litre}/L x {total_hsd:.2f} L)", total_discount])
+        discount_row_number = ws.max_row
+
+        ws.append(["", "", "", "", "", "", "", "", "", "Net Payable", net_payable])
+        net_row_number = ws.max_row
+
+        for cell in ws[total_amt_row_number]:
+            cell.font = Font(bold=True, color="07120C")
+            cell.fill = PatternFill("solid", fgColor="F1F5F9")
+
+        for cell in ws[discount_row_number]:
+            cell.font = Font(bold=True, color="B91C1C")
+            cell.fill = PatternFill("solid", fgColor="FEE2E2")
+
+        for cell in ws[net_row_number]:
+            cell.font = Font(bold=True, size=13, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="16A34A")
 
     for cell in ws[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="07120C")
 
-    for cell in ws[ws.max_row]:
+    for cell in ws[total_row_number]:
         cell.font = Font(bold=True)
         cell.fill = PatternFill("solid", fgColor="D9EAD3")
 
@@ -976,7 +1003,7 @@ def export_party_transport_pdf():
             f"{rate:.2f}",
             f"{hsd_amount:.2f}",
             f"{cash:.2f}",
-            f"{final:.2f}"
+            f"{final:.0f}"
         ])
 
     if not rows:
@@ -988,8 +1015,30 @@ def export_party_transport_pdf():
         "-",
         f"{total_hsd_amount:.2f}",
         f"{total_cash:.2f}",
-        f"{total_final:.2f}"
+        f"{total_final:.0f}"
     ])
+
+    total_row_index = len(data) - 1
+
+    discount_per_litre = round(float(party.get("discount") or 0), 2) if party else 0
+    total_discount = round(discount_per_litre * total_hsd, 2)
+
+    if discount_per_litre > 0:
+        net_payable = round(total_final - total_discount, 2)
+
+        data.append([
+            "", "", "", "", "", "", "", "", "Total Amount",
+            f"{total_final:.0f}"
+        ])
+        data.append([
+            "", "", "", "", "", "", "", "",
+            f"Discount (Rs.{discount_per_litre}/L x {total_hsd:.2f}L)",
+            f"{total_discount:.0f}"
+        ])
+        data.append([
+            "", "", "", "", "", "", "", "", "Net Payable",
+            f"{net_payable:.0f}"
+        ])
 
     table = Table(
         data,
@@ -997,12 +1046,12 @@ def export_party_transport_pdf():
         repeatRows=1
     )
 
-    table.setStyle(TableStyle([
+    table_style = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#07120C")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
 
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (0, total_row_index), (-1, total_row_index), "Helvetica-Bold"),
 
         ("FONTSIZE", (0, 0), (-1, -1), 7.5),
         ("LEADING", (0, 0), (-1, -1), 9),
@@ -1015,14 +1064,47 @@ def export_party_transport_pdf():
         ("ALIGN", (1, 1), (1, -1), "CENTER"),
         ("ALIGN", (5, 1), (-1, -1), "RIGHT"),
 
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#DCFCE7")),
-        ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#07120C")),
+        ("BACKGROUND", (0, total_row_index), (-1, total_row_index), colors.HexColor("#DCFCE7")),
+        ("TEXTCOLOR", (0, total_row_index), (-1, total_row_index), colors.HexColor("#07120C")),
 
-        ("ROWBACKGROUNDS", (0, 1), (-1, -3), [
+        ("ROWBACKGROUNDS", (0, 1), (-1, total_row_index - 1), [
             colors.white,
             colors.HexColor("#F8FAFC")
         ]),
-    ]))
+    ]
+
+    if discount_per_litre > 0:
+        total_amt_row_index = total_row_index + 1
+        discount_row_index = total_row_index + 2
+        net_row_index = len(data) - 1
+
+        table_style.append(("SPAN", (0, total_amt_row_index), (7, total_amt_row_index)))
+        table_style.append(("SPAN", (0, discount_row_index), (7, discount_row_index)))
+        table_style.append(("SPAN", (0, net_row_index), (7, net_row_index)))
+
+        table_style.append(("LINEABOVE", (0, total_amt_row_index), (-1, total_amt_row_index), 0.6, colors.HexColor("#94a3b8")))
+
+        # Total Amount row — light grey, bold
+        table_style.append(("BACKGROUND", (0, total_amt_row_index), (-1, total_amt_row_index), colors.HexColor("#F1F5F9")))
+        table_style.append(("FONTNAME", (0, total_amt_row_index), (-1, total_amt_row_index), "Helvetica-Bold"))
+        table_style.append(("TEXTCOLOR", (0, total_amt_row_index), (-1, total_amt_row_index), colors.HexColor("#07120C")))
+        table_style.append(("FONTSIZE", (0, total_amt_row_index), (-1, total_amt_row_index), 8.5))
+
+        # Discount row — red tint, bold
+        table_style.append(("BACKGROUND", (0, discount_row_index), (-1, discount_row_index), colors.HexColor("#FEE2E2")))
+        table_style.append(("FONTNAME", (0, discount_row_index), (-1, discount_row_index), "Helvetica-Bold"))
+        table_style.append(("TEXTCOLOR", (0, discount_row_index), (-1, discount_row_index), colors.HexColor("#B91C1C")))
+        table_style.append(("FONTSIZE", (0, discount_row_index), (-1, discount_row_index), 8.5))
+
+        # Net Payable row — bold green, standout
+        table_style.append(("BACKGROUND", (0, net_row_index), (-1, net_row_index), colors.HexColor("#16A34A")))
+        table_style.append(("FONTNAME", (0, net_row_index), (-1, net_row_index), "Helvetica-Bold"))
+        table_style.append(("TEXTCOLOR", (0, net_row_index), (-1, net_row_index), colors.white))
+        table_style.append(("FONTSIZE", (0, net_row_index), (-1, net_row_index), 10))
+        table_style.append(("TOPPADDING", (0, net_row_index), (-1, net_row_index), 9))
+        table_style.append(("BOTTOMPADDING", (0, net_row_index), (-1, net_row_index), 9))
+
+    table.setStyle(TableStyle(table_style))
 
     elements.append(table)
     elements.append(Spacer(1, 30))
@@ -4537,23 +4619,95 @@ def settings():
     cur = conn.cursor()
     cur.execute("SELECT * FROM settings WHERE id=1")
     settings_data = cur.fetchone()
+
+    transporter_count = 0
+    if is_admin():
+        cur.execute("SELECT COUNT(*) AS total FROM credit_transporters")
+        transporter_count = cur.fetchone()["total"]
+
     conn.close()
 
-    return render_template("settings.html", settings=settings_data)
+    return render_template(
+        "settings.html",
+        settings=settings_data,
+        transporter_count=transporter_count
+    )
+
+
+@app.route("/settings-business-info")
+def settings_business_info():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    settings_data = cur.fetchone()
+    conn.close()
+
+    return render_template("settings_business_info.html", settings=settings_data)
+
+
+@app.route("/settings-fuel-rates")
+def settings_fuel_rates():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    settings_data = cur.fetchone()
+    conn.close()
+
+    return render_template("settings_fuel_rates.html", settings=settings_data)
+
+
+@app.route("/settings-transporter-discounts")
+def settings_transporter_discounts():
+    if not session.get("logged_in") or not is_admin():
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, party_name, discount
+            FROM credit_transporters
+            ORDER BY party_name ASC
+        """)
+        transporters = cur.fetchall()
+    except Exception:
+        # self-heal: a startup migration hiccup may have skipped adding
+        # this column — add it now and retry once instead of crashing
+        conn.rollback()
+        cur.execute("""
+            ALTER TABLE credit_transporters ADD COLUMN IF NOT EXISTS discount REAL DEFAULT 0
+        """)
+        conn.commit()
+        cur.execute("""
+            SELECT id, party_name, discount
+            FROM credit_transporters
+            ORDER BY party_name ASC
+        """)
+        transporters = cur.fetchall()
+
+    conn.close()
+
+    return render_template(
+        "settings_transporter_discounts.html",
+        transporters=transporters
+    )
 
 # =========================================
 # SAVE SETTINGS
 # =========================================
 
-@app.route("/save-settings", methods=["POST"])
-def save_settings():
+@app.route("/save-business-info", methods=["POST"])
+def save_business_info():
 
     if not session.get("logged_in"):
         return redirect(url_for("login"))
-
-    ms_rate = float(request.form.get("ms_rate", 0) or 0)
-    hsd_rate = float(request.form.get("hsd_rate", 0) or 0)
-    cng_rate = float(request.form.get("cng_rate", 0) or 0)
 
     station_name = request.form.get("station_name", "").strip()
     station_address = request.form.get("station_address", "").strip()
@@ -4564,61 +4718,24 @@ def save_settings():
     cur = conn.cursor()
 
     try:
-        # CHECK EXISTING SETTINGS
-
-        cur.execute("""
-            SELECT id
-            FROM settings
-            LIMIT 1
-        """)
-
+        cur.execute("SELECT id FROM settings LIMIT 1")
         existing = cur.fetchone()
 
         if existing:
-
             cur.execute("""
                 UPDATE settings
-                SET
-                    ms_rate=%s,
-                    hsd_rate=%s,
-                    cng_rate=%s,
-                    station_name=%s,
-                    station_address=%s,
-                    gstin=%s,
-                    phone_number=%s
+                SET station_name=%s, station_address=%s, gstin=%s, phone_number=%s
                 WHERE id=%s
-            """, (
-                ms_rate,
-                hsd_rate,
-                cng_rate,
-                station_name,
-                station_address,
-                gstin,
-                phone_number,
-                existing["id"]
-            ))
-
+            """, (station_name, station_address, gstin, phone_number, existing["id"]))
         else:
-
             cur.execute("""
-                INSERT INTO settings (
-                    ms_rate, hsd_rate, cng_rate,
-                    station_name, station_address, gstin, phone_number
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                ms_rate,
-                hsd_rate,
-                cng_rate,
-                station_name,
-                station_address,
-                gstin,
-                phone_number
-            ))
+                INSERT INTO settings (station_name, station_address, gstin, phone_number)
+                VALUES (%s, %s, %s, %s)
+            """, (station_name, station_address, gstin, phone_number))
 
         log_activity(
             cur, "Settings", "Updated",
-            f"Rates: MS ₹{ms_rate}, HSD ₹{hsd_rate}, CNG ₹{cng_rate} — Business info updated"
+            f"Business info updated — {station_name}"
         )
 
         conn.commit()
@@ -4629,8 +4746,104 @@ def save_settings():
     finally:
         conn.close()
 
-    return redirect(url_for("settings"))
+    return redirect(url_for("settings_business_info"))
 
+
+@app.route("/save-fuel-rates", methods=["POST"])
+def save_fuel_rates():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    ms_rate = float(request.form.get("ms_rate", 0) or 0)
+    hsd_rate = float(request.form.get("hsd_rate", 0) or 0)
+    cng_rate = float(request.form.get("cng_rate", 0) or 0)
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM settings LIMIT 1")
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute("""
+                UPDATE settings
+                SET ms_rate=%s, hsd_rate=%s, cng_rate=%s
+                WHERE id=%s
+            """, (ms_rate, hsd_rate, cng_rate, existing["id"]))
+        else:
+            cur.execute("""
+                INSERT INTO settings (ms_rate, hsd_rate, cng_rate)
+                VALUES (%s, %s, %s)
+            """, (ms_rate, hsd_rate, cng_rate))
+
+        log_activity(
+            cur, "Settings", "Updated",
+            f"Fuel rates updated — MS ₹{ms_rate}, HSD ₹{hsd_rate}, CNG ₹{cng_rate}"
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("settings_fuel_rates"))
+
+
+@app.route("/save-transporter-discounts", methods=["POST"])
+def save_transporter_discounts():
+
+    if not session.get("logged_in") or not is_admin():
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            ALTER TABLE credit_transporters ADD COLUMN IF NOT EXISTS discount REAL DEFAULT 0
+        """)
+        cur.execute("SELECT id, party_name, discount FROM credit_transporters")
+        all_transporters = cur.fetchall()
+
+        changed = []
+
+        for t in all_transporters:
+            field_name = f"discount_{t['id']}"
+
+            if field_name not in request.form:
+                continue
+
+            new_discount = round(float(request.form.get(field_name) or 0), 2)
+            old_discount = round(float(t["discount"] or 0), 2)
+
+            if new_discount != old_discount:
+                cur.execute("""
+                    UPDATE credit_transporters
+                    SET discount=%s
+                    WHERE id=%s
+                """, (new_discount, t["id"]))
+                changed.append(f"{t['party_name']}: Rs.{old_discount} → Rs.{new_discount}")
+
+        if changed:
+            log_activity(
+                cur, "Settings", "Updated",
+                "Transporter discounts updated — " + "; ".join(changed)
+            )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("settings_transporter_discounts"))
 
 
 @app.route("/lube-stock")
@@ -6643,6 +6856,27 @@ def ensure_settings_columns():
 
 
 ensure_settings_columns()
+
+
+def ensure_transporter_discount_column():
+    """
+    Make sure credit_transporters has a per-transporter discount column
+    (flat Rs. amount, not a percentage), used by Settings and applied at
+    the bottom of the transporter bill PDF/Excel export.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            ALTER TABLE credit_transporters ADD COLUMN IF NOT EXISTS discount REAL DEFAULT 0
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[credit_transporters] could not ensure discount column exists: {e}")
+
+
+ensure_transporter_discount_column()
 
 
 def log_activity(cur, module, action, description):

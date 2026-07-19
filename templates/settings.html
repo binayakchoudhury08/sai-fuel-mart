@@ -66,6 +66,11 @@ Full Data Excel
 Backup
 </a>
 
+<a class="active" href="/settings">
+<i class="fa-solid fa-gear"></i>
+Settings
+</a>
+
 <a href="/logout">
 <i class="fa-solid fa-right-from-bracket"></i>
 Logout
@@ -150,130 +155,140 @@ Logout
         <div class="topbar">
             <div>
                 <h1>Settings</h1>
-                <p>Business info, fuel rates and database backup</p>
+                <p>Choose a section to manage</p>
             </div>
         </div>
 
-        <form method="POST" action="/save-settings">
+        <div class="settings-hub-grid">
 
-        <div class="box">
-
-            <div class="box-title">
-                <i class="fa-solid fa-building"></i> Business Info
-            </div>
-
-            <p style="color:#667085;font-size:13px;margin-bottom:18px;margin-top:-14px;">
-                Shown on the letterhead of every transporter bill PDF you export.
-            </p>
-
-            <div class="form-grid">
-
-                <div class="input-group">
-                    <label>Station Name</label>
-                    <input type="text" name="station_name" placeholder="Sai Fuel Mart"
-                        value="{{ settings['station_name'] if settings and settings['station_name'] else '' }}">
+            <a href="/settings-business-info" class="hub-card">
+                <div class="hub-icon" style="background:#eef2ff;color:#4338ca;">
+                    <i class="fa-solid fa-building"></i>
                 </div>
-
-                <div class="input-group">
-                    <label>Phone Number</label>
-                    <input type="text" name="phone_number" placeholder="98765 43210"
-                        value="{{ settings['phone_number'] if settings and settings['phone_number'] else '' }}">
+                <div class="hub-text">
+                    <h3>Business Info</h3>
+                    <p>Station name, address, GSTIN, phone — shown on every bill PDF letterhead.</p>
                 </div>
-
-                <div class="input-group" style="grid-column:1 / -1;">
-                    <label>Address</label>
-                    <input type="text" name="station_address" placeholder="NH-16, Village Road, District, State - PIN"
-                        value="{{ settings['station_address'] if settings and settings['station_address'] else '' }}">
-                </div>
-
-                <div class="input-group">
-                    <label>GSTIN</label>
-                    <input type="text" name="gstin" placeholder="22AAAAA0000A1Z5"
-                        value="{{ settings['gstin'] if settings and settings['gstin'] else '' }}">
-                </div>
-
-            </div>
-
-        </div>
-
-        <div class="box">
-
-            <div class="box-title">
-                <i class="fa-solid fa-gas-pump"></i> Fuel Rate Settings
-            </div>
-
-            <div class="cards" style="margin-bottom:22px;">
-
-                <div class="summary-card petrol">
-                    <span>MS Rate (₹/L)</span>
-                    <input type="number" step="0.01" name="ms_rate"
-                        value="{{ settings['ms_rate'] if settings else '' }}"
-                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
-                </div>
-
-                <div class="summary-card diesel">
-                    <span>HSD Rate (₹/L)</span>
-                    <input type="number" step="0.01" name="hsd_rate"
-                        value="{{ settings['hsd_rate'] if settings else '' }}"
-                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
-                </div>
-
-                <div class="summary-card total">
-                    <span>CNG Rate (₹/Kg)</span>
-                    <input type="number" step="0.01" name="cng_rate"
-                        value="{{ settings['cng_rate'] if settings else '' }}"
-                        style="font-size:24px;font-weight:800;border:none;padding:8px 0;margin-top:6px;">
-                </div>
-
-            </div>
-
-            <button class="save-btn-top" type="submit">
-                <i class="fa-solid fa-floppy-disk"></i> Save Settings
-            </button>
-
-        </div>
-
-        </form>
-
-        {% if session.get("role") == "admin" %}
-        <div class="box">
-
-            <div class="box-title">
-                <i class="fa-solid fa-database"></i> Database Backup
-            </div>
-
-            <p style="color:#667085;font-size:13px;margin-bottom:16px;">
-                Downloads a complete Excel export of every table — transporters, entries, lube stock,
-                attendance, daily closings and more — straight from the live database.
-            </p>
-
-            <a href="/full-system-export" class="save-btn-top" style="background:#16a34a;">
-                <i class="fa-solid fa-file-export"></i> Download Full Backup (Excel)
+                <i class="fa-solid fa-chevron-right hub-arrow"></i>
             </a>
 
-        </div>
-
-        <div class="box">
-
-            <div class="box-title">
-                <i class="fa-solid fa-broom"></i> Data Maintenance
-            </div>
-
-            <p style="color:#667085;font-size:13px;margin-bottom:16px;">
-                Find and remove duplicate nozzle readings (same nozzle + date saved more than once), which inflate
-                MS/HSD/CNG totals on Reports and the printed Daily Report.
-            </p>
-
-            <a href="/preview-duplicate-nozzle-entries" class="save-btn-top" style="background:#dc2626;">
-                <i class="fa-solid fa-magnifying-glass"></i> Check for Duplicate Nozzle Entries
+            <a href="/settings-fuel-rates" class="hub-card">
+                <div class="hub-icon" style="background:#ecfdf5;color:#16a34a;">
+                    <i class="fa-solid fa-gas-pump"></i>
+                </div>
+                <div class="hub-text">
+                    <h3>Fuel Rates</h3>
+                    <p>MS, HSD and CNG selling rates used across Daily Closing and Nozzle Management.</p>
+                </div>
+                <i class="fa-solid fa-chevron-right hub-arrow"></i>
             </a>
 
+            {% if session.get("role") == "admin" %}
+
+            <a href="/settings-transporter-discounts" class="hub-card">
+                <div class="hub-icon" style="background:#fdf4ff;color:#a21caf;">
+                    <i class="fa-solid fa-tags"></i>
+                </div>
+                <div class="hub-text">
+                    <h3>Transporter Discounts</h3>
+                    <p>Per-litre discount rate for each transporter, applied automatically on bill exports.
+                    {% if transporter_count %}{{ transporter_count }} transporter(s) on file.{% endif %}</p>
+                </div>
+                <i class="fa-solid fa-chevron-right hub-arrow"></i>
+            </a>
+
+            <a href="/preview-duplicate-nozzle-entries" class="hub-card">
+                <div class="hub-icon" style="background:#fef2f2;color:#dc2626;">
+                    <i class="fa-solid fa-broom"></i>
+                </div>
+                <div class="hub-text">
+                    <h3>Data Maintenance</h3>
+                    <p>Find and remove duplicate nozzle readings that inflate MS/HSD/CNG totals.</p>
+                </div>
+                <i class="fa-solid fa-chevron-right hub-arrow"></i>
+            </a>
+
+            <a href="/full-system-export" class="hub-card">
+                <div class="hub-icon" style="background:#f0fdf4;color:#16a34a;">
+                    <i class="fa-solid fa-database"></i>
+                </div>
+                <div class="hub-text">
+                    <h3>Database Backup</h3>
+                    <p>Download a complete Excel export of every table, straight from the live database.</p>
+                </div>
+                <i class="fa-solid fa-chevron-right hub-arrow"></i>
+            </a>
+
+            {% endif %}
+
         </div>
-        {% endif %}
 
     </main>
 
 </div>
+
+<style>
+.settings-hub-grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:18px;
+}
+
+.hub-card{
+    display:flex;
+    align-items:center;
+    gap:18px;
+    background:white;
+    border-radius:22px;
+    padding:22px;
+    text-decoration:none;
+    box-shadow:0 4px 18px rgba(0,0,0,.05);
+    border:1px solid #eef0f3;
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+
+.hub-card:hover{
+    transform:translateY(-3px);
+    box-shadow:0 14px 30px rgba(0,0,0,.09);
+    border-color:#d1fae5;
+}
+
+.hub-icon{
+    width:54px;
+    height:54px;
+    min-width:54px;
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:22px;
+}
+
+.hub-text h3{
+    margin:0 0 4px;
+    color:#07120C;
+    font-size:16px;
+}
+
+.hub-text p{
+    margin:0;
+    color:#667085;
+    font-size:12.5px;
+    line-height:1.5;
+}
+
+.hub-arrow{
+    margin-left:auto;
+    color:#cbd5e1;
+    font-size:14px;
+}
+
+@media(max-width:800px){
+    .settings-hub-grid{
+        grid-template-columns:1fr;
+    }
+}
+</style>
 
 </body>
 </html>
