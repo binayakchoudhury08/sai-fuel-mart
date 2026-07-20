@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuel Receipt Entry - Sai Fuel Mart</title>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/daily_closing.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+.kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:18px;
+    margin-bottom:24px;
+}
+
+.kpi-card{
+    background:white;
+    border-radius:20px;
+    padding:20px;
+    box-shadow:0 4px 18px rgba(0,0,0,.05);
+    border-left:5px solid #16a34a;
+    position:relative;
+    overflow:hidden;
+}
+
+.kpi-card::after{
+    content:"";
+    position:absolute;
+    top:-30px;
+    right:-30px;
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:rgba(22,163,74,.06);
+}
+
+.kpi-card.blue{ border-left-color:#2563eb; }
+.kpi-card.blue::after{ background:rgba(37,99,235,.06); }
+.kpi-card.purple{ border-left-color:#7c3aed; }
+.kpi-card.purple::after{ background:rgba(124,58,237,.06); }
+.kpi-card.orange{ border-left-color:#f97316; }
+.kpi-card.orange::after{ background:rgba(249,115,22,.06); }
+
+.kpi-card h4{
+    font-size:12.5px;
+    color:#667085;
+    margin:0 0 8px;
+    font-weight:700;
+}
+
+.kpi-card h2{
+    font-size:26px;
+    margin:0;
+    color:#07120C;
+}
+
+.comp-grid{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:12px;
+    margin-bottom:18px;
+}
+
+.comp-box{
+    background:#f8fafc;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:12px;
+    transition:border-color .2s, box-shadow .2s;
+}
+
+.comp-box:focus-within{
+    border-color:#16a34a;
+    box-shadow:0 0 0 3px rgba(22,163,74,.1);
+}
+
+.comp-box h5{
+    font-size:12px;
+    color:#667085;
+    margin-bottom:8px;
+    text-align:center;
+}
+
+.comp-box select,
+.comp-box input{
+    width:100%;
+    padding:8px 9px;
+    border:1px solid #d1d5db;
+    border-radius:9px;
+    margin-bottom:6px;
+    font-size:13px;
+}
+
+.comp-box select.fuel-ms{ background:#dcfce7; border-color:#86efac; }
+.comp-box select.fuel-hsd{ background:#dbeafe; border-color:#93c5fd; }
+
+.section-label{
+    font-size:13px;
+    font-weight:800;
+    color:#07120C;
+    margin:22px 0 12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.comp-total-bar{
+    display:flex;
+    gap:14px;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+}
+
+.comp-total-chip{
+    flex:1;
+    min-width:160px;
+    padding:12px 16px;
+    border-radius:14px;
+    font-weight:800;
+    font-size:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.comp-total-chip.ms{ background:#dcfce7; color:#15803d; }
+.comp-total-chip.hsd{ background:#dbeafe; color:#1d4ed8; }
+
+.filter-box{
+    background:white;
+    border-radius:20px;
+    padding:22px;
+    box-shadow:0 4px 18px rgba(0,0,0,.05);
+    margin-top:24px;
+}
+
+.filter-grid{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:14px;
+    align-items:end;
+}
+
+.filter-grid .input-group label{
+    font-size:12px;
+}
+
+.filter-grid input,
+.filter-grid select{
+    padding:11px 12px;
+    border:1px solid #d1d5db;
+    border-radius:12px;
+    width:100%;
+}
+
+.table-scroll{
+    width:100%;
+    overflow-x:auto;
+}
+
+.action-btn{
+    text-decoration:none;
+    padding:7px 12px;
+    border-radius:9px;
+    font-size:12px;
+    font-weight:700;
+    display:inline-block;
+    margin-right:6px;
+}
+
+.edit-btn{ background:#dbeafe; color:#1d4ed8; }
+.delete-btn{ background:#fee2e2; color:#dc2626; }
+
+.fuel-tag{
+    padding:3px 9px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:800;
+}
+.fuel-tag.ms{ background:#dcfce7; color:#15803d; }
+.fuel-tag.hsd{ background:#dbeafe; color:#1d4ed8; }
+
+@media(max-width:1000px){
+    .kpi-grid{ grid-template-columns:1fr 1fr; }
+    .filter-grid{ grid-template-columns:1fr 1fr; }
+}
+@media(max-width:700px){
+    .comp-grid{ grid-template-columns:1fr 1fr; }
+    .kpi-grid{ grid-template-columns:1fr; }
+    .filter-grid{ grid-template-columns:1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<aside class="sidebar">
+    <div class="logo">
+        <h2>SAI FUEL MART</h2>
+        <p>FUELING YOUR TRUST</p>
+    </div>
+
+    <nav>
+
+{% if session.get("role") == "admin" %}
+
+<a href="/dashboard"><i class="fa-solid fa-house"></i>Dashboard</a>
+<a href="/reports"><i class="fa-solid fa-chart-line"></i>Reports</a>
+<a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i>Lube Stock</a>
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+<a href="/proof-register"><i class="fa-solid fa-folder-open"></i>Proof Register</a>
+<a href="/activity-log"><i class="fa-solid fa-clock-rotate-left"></i>Activity Log</a>
+<a href="/analytics"><i class="fa-solid fa-chart-pie"></i>Analytics</a>
+<a href="/full-system-export"><i class="fa-solid fa-file-export"></i>Full Data Excel</a>
+<a href="/backup-database"><i class="fa-solid fa-database"></i>Backup</a>
+<a href="/settings"><i class="fa-solid fa-gear"></i>Settings</a>
+<a href="/logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+
+{% endif %}
+
+{% if session.get("role") == "manager" %}
+
+<a href="/dashboard"><i class="fa-solid fa-house"></i>Dashboard</a>
+<a href="/daily-closing"><i class="fa-solid fa-file-invoice-dollar"></i>Daily Closing</a>
+<a href="/nozzle-management"><i class="fa-solid fa-gas-pump"></i>Nozzle Management</a>
+<a href="/tank-level"><i class="fa-solid fa-oil-well"></i>Tank Level</a>
+<a class="active" href="/add-tank-entry"><i class="fa-solid fa-truck-ramp-box"></i>Fuel Receipts</a>
+<a href="/credit-transport"><i class="fa-solid fa-truck"></i>Credit Transport</a>
+<a href="/digital-collection"><i class="fa-solid fa-credit-card"></i>Digital Collection</a>
+<a href="/lube-stock"><i class="fa-solid fa-bottle-droplet"></i>Lube Stock</a>
+<a href="/attendance"><i class="fa-solid fa-user-check"></i>Attendance</a>
+<a href="/proof-upload"><i class="fa-solid fa-camera"></i>Proof Upload</a>
+<a href="/proof-register"><i class="fa-solid fa-folder-open"></i>Proof Register</a>
+<a href="/reports"><i class="fa-solid fa-chart-line"></i>Reports</a>
+<a href="/settings"><i class="fa-solid fa-gear"></i>Settings</a>
+<a href="/logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+
+{% endif %}
+
+</nav>
+</aside>
+
+<main class="main-content">
+
+<div class="topbar">
+    <div>
+        <h1>Fuel Receipt Entry</h1>
+        <p>One entry per vehicle — each compartment tagged MS or HSD independently, matching your delivery challan</p>
+    </div>
+    <a href="/tank-level" style="text-decoration:none;background:#07120C;color:white;padding:12px 18px;border-radius:14px;font-weight:700;font-size:13px;">
+        <i class="fa-solid fa-arrow-left"></i> Back to Tank Level
+    </a>
+</div>
+
+<div class="kpi-grid">
+
+    <div class="kpi-card">
+        <h4>RECEIPTS THIS MONTH</h4>
+        <h2>{{ month_stats["receipt_count"] if month_stats else 0 }}</h2>
+    </div>
+
+    <div class="kpi-card blue">
+        <h4>MS RECEIVED THIS MONTH</h4>
+        <h2>{{ month_stats["total_ms"] if month_stats else 0 }} L</h2>
+    </div>
+
+    <div class="kpi-card purple">
+        <h4>HSD RECEIVED THIS MONTH</h4>
+        <h2>{{ month_stats["total_hsd"] if month_stats else 0 }} L</h2>
+    </div>
+
+    <div class="kpi-card orange">
+        <h4>LAST DELIVERY</h4>
+        <h2 style="font-size:20px;">{{ last_receipt_date or "—" }}</h2>
+    </div>
+
+</div>
+
+<div class="box">
+
+    <div class="box-title">
+        <i class="fa-solid fa-file-invoice"></i>
+        New Fuel Receipt
+    </div>
+
+    <form method="POST" action="/save-fuel-receipt" id="receiptForm">
+
+        <div class="section-label"><i class="fa-solid fa-truck"></i> Delivery Details</div>
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Receipt Date</label>
+                <input type="date" name="receipt_date" id="receipt-date" required>
+            </div>
+
+            <div class="input-group">
+                <label>Invoice No.</label>
+                <input type="text" name="invoice_no" placeholder="9023898552">
+            </div>
+
+            <div class="input-group">
+                <label>Order No.</label>
+                <input type="text" name="order_no" placeholder="1150655053">
+            </div>
+
+            <div class="input-group">
+                <label>Vehicle No.</label>
+                <input type="text" name="vehicle_no" placeholder="OD19X2511"
+                    value="{{ last_receipt['vehicle_no'] if last_receipt else '' }}">
+            </div>
+
+            <div class="input-group">
+                <label>Carrier No.</label>
+                <input type="text" name="carrier_no" placeholder="28251197"
+                    value="{{ last_receipt['carrier_no'] if last_receipt else '' }}">
+            </div>
+
+            <div class="input-group">
+                <label>Carrier Name</label>
+                <input type="text" name="carrier_name" placeholder="SAI FUEL MART"
+                    value="{{ last_receipt['carrier_name'] if last_receipt else '' }}">
+            </div>
+
+            <div class="input-group">
+                <label>PO No.</label>
+                <input type="text" name="po_no" placeholder="26025581">
+            </div>
+
+            <div class="input-group">
+                <label>PO Date</label>
+                <input type="date" name="po_date">
+            </div>
+
+        </div>
+
+        <div class="section-label"><i class="fa-solid fa-flask"></i> Quality Checks</div>
+
+        <div class="form-grid">
+
+            <div class="input-group">
+                <label>Water Checked</label>
+                <select name="water_checked">
+                    <option value="NIL">NIL</option>
+                    <option value="Present">Present</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Density (Kg/m³)</label>
+                <input type="number" step="0.01" name="density" placeholder="826.4">
+            </div>
+
+            <div class="input-group">
+                <label>Temperature (°C)</label>
+                <input type="number" step="0.1" name="temperature_c" placeholder="15.0">
+            </div>
+
+            <div class="input-group">
+                <label>Dip Before Unloading</label>
+                <input type="number" step="0.01" name="dip_before" placeholder="908">
+            </div>
+
+            <div class="input-group">
+                <label>Dip After Unloading</label>
+                <input type="number" step="0.01" name="dip_after" placeholder="1018">
+            </div>
+
+        </div>
+
+        <div class="section-label"><i class="fa-solid fa-truck-fast"></i> Compartment-wise Readings (MS or HSD, per compartment)</div>
+
+        <div class="comp-total-bar">
+            <div class="comp-total-chip ms"><span>Total MS</span><span id="totalMs">0.00 L</span></div>
+            <div class="comp-total-chip hsd"><span>Total HSD</span><span id="totalHsd">0.00 L</span></div>
+        </div>
+
+        <div class="comp-grid">
+
+            {% for n in [1,2,3,4,5] %}
+            <div class="comp-box">
+                <h5>Compartment {{ n }}</h5>
+                <select name="comp{{ n }}_fuel" class="comp-fuel-select" data-comp="{{ n }}">
+                    <option value="">Select</option>
+                    <option value="MS">MS</option>
+                    <option value="HSD">HSD</option>
+                </select>
+                <input type="number" step="0.01" name="comp{{ n }}_dip" placeholder="Dip">
+                <input type="number" step="0.01" name="comp{{ n }}_vol" class="comp-vol-input" data-comp="{{ n }}" placeholder="Vol (L)">
+            </div>
+            {% endfor %}
+
+        </div>
+
+        <button class="save-btn-top" type="submit" style="margin-top:12px;">
+            <i class="fa-solid fa-floppy-disk"></i> Save Fuel Receipt
+        </button>
+
+    </form>
+
+</div>
+
+<div class="filter-box">
+
+    <div class="box-title">
+        <i class="fa-solid fa-filter"></i>
+        Advanced Filter
+    </div>
+
+    <div class="filter-grid">
+
+        <div class="input-group">
+            <label>From Date</label>
+            <input type="date" id="filterFrom">
+        </div>
+
+        <div class="input-group">
+            <label>To Date</label>
+            <input type="date" id="filterTo">
+        </div>
+
+        <div class="input-group">
+            <label>Fuel Type</label>
+            <select id="filterFuel">
+                <option value="">All</option>
+                <option value="MS">MS Only</option>
+                <option value="HSD">HSD Only</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Search (Invoice/Vehicle/Carrier)</label>
+            <input type="text" id="filterSearch" placeholder="Type to search...">
+        </div>
+
+        <div class="input-group">
+            <button type="button" class="save-btn-top" id="clearFilterBtn" style="justify-content:center;">
+                <i class="fa-solid fa-rotate-left"></i> Clear
+            </button>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="box">
+
+    <div class="box-title">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        Receipt History
+    </div>
+
+    <div class="table-scroll">
+    <table class="entry-table" id="receipt-table">
+        <tr>
+            <th>Date</th>
+            <th>Invoice No</th>
+            <th>Vehicle No</th>
+            <th>Carrier</th>
+            <th>MS (L)</th>
+            <th>HSD (L)</th>
+            <th>Water</th>
+            <th>Action</th>
+        </tr>
+
+        {% for r in receipts %}
+        <tr>
+            <td>{{ r["receipt_date"] }}</td>
+            <td>{{ r["invoice_no"] }}</td>
+            <td>{{ r["vehicle_no"] }}</td>
+            <td>{{ r["carrier_name"] }}</td>
+            <td>{% if r["total_ms_vol"] %}<span class="fuel-tag ms">{{ r["total_ms_vol"] }} L</span>{% else %}—{% endif %}</td>
+            <td>{% if r["total_hsd_vol"] %}<span class="fuel-tag hsd">{{ r["total_hsd_vol"] }} L</span>{% else %}—{% endif %}</td>
+            <td>{{ r["water_checked"] }}</td>
+            <td>
+                <a href="/edit-fuel-receipt/{{ r['id'] }}" class="action-btn edit-btn">Edit</a>
+                <a href="/delete-fuel-receipt/{{ r['id'] }}" class="action-btn delete-btn"
+                   onclick="return confirm('Delete this fuel receipt record?')">Delete</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">No fuel receipts logged yet.</td>
+        </tr>
+        {% endfor %}
+
+    </table>
+    </div>
+
+</div>
+
+</main>
+</div>
+
+<script>
+document.getElementById("receipt-date").value = new Date().toISOString().split("T")[0];
+
+function recalcCompTotals(){
+    var totalMs = 0, totalHsd = 0;
+
+    document.querySelectorAll(".comp-fuel-select").forEach(function(select){
+        var n = select.getAttribute("data-comp");
+        var volInput = document.querySelector('.comp-vol-input[data-comp="' + n + '"]');
+        var vol = parseFloat(volInput.value) || 0;
+
+        select.classList.remove("fuel-ms", "fuel-hsd");
+
+        if(select.value === "MS"){
+            totalMs += vol;
+            select.classList.add("fuel-ms");
+        } else if(select.value === "HSD"){
+            totalHsd += vol;
+            select.classList.add("fuel-hsd");
+        }
+    });
+
+    document.getElementById("totalMs").textContent = totalMs.toFixed(2) + " L";
+    document.getElementById("totalHsd").textContent = totalHsd.toFixed(2) + " L";
+}
+
+document.querySelectorAll(".comp-fuel-select, .comp-vol-input").forEach(function(el){
+    el.addEventListener("input", recalcCompTotals);
+    el.addEventListener("change", recalcCompTotals);
+});
+
+function applyFilters(){
+    var from = document.getElementById("filterFrom").value;
+    var to = document.getElementById("filterTo").value;
+    var fuel = document.getElementById("filterFuel").value;
+    var search = document.getElementById("filterSearch").value.toLowerCase();
+
+    document.querySelectorAll("#receipt-table tr").forEach(function(row, index){
+        if(index === 0){ return; }
+
+        var dateCell = row.cells[0] ? row.cells[0].innerText : "";
+        var msCell = row.cells[4] ? row.cells[4].innerText : "";
+        var hsdCell = row.cells[5] ? row.cells[5].innerText : "";
+        var rowText = row.innerText.toLowerCase();
+
+        var matchDate = true;
+        if(from && dateCell && dateCell < from){ matchDate = false; }
+        if(to && dateCell && dateCell > to){ matchDate = false; }
+
+        var matchFuel = true;
+        if(fuel === "MS" && msCell.trim() === "—"){ matchFuel = false; }
+        if(fuel === "HSD" && hsdCell.trim() === "—"){ matchFuel = false; }
+
+        var matchSearch = rowText.includes(search);
+
+        row.style.display = (matchDate && matchFuel && matchSearch) ? "" : "none";
+    });
+}
+
+["filterFrom","filterTo","filterFuel","filterSearch"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", applyFilters);
+    document.getElementById(id).addEventListener("change", applyFilters);
+});
+
+document.getElementById("clearFilterBtn").addEventListener("click", function(){
+    document.getElementById("filterFrom").value = "";
+    document.getElementById("filterTo").value = "";
+    document.getElementById("filterFuel").value = "";
+    document.getElementById("filterSearch").value = "";
+    applyFilters();
+});
+</script>
+
+</body>
+</html>

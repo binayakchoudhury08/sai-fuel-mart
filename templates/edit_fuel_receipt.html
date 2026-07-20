@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit Fuel Receipt - Sai Fuel Mart</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;margin:0;padding:30px;color:#0f172a;}
+.container{max-width:1000px;margin:auto;}
+.back-btn{display:inline-flex;align-items:center;gap:8px;margin-bottom:18px;text-decoration:none;background:#07120C;color:white;padding:11px 18px;border-radius:12px;font-weight:700;font-size:13px;}
+.card{background:white;border-radius:26px;padding:32px;box-shadow:0 10px 35px rgba(0,0,0,.06);}
+h1{font-size:22px;margin:0 0 22px;}
+.section-label{font-size:13px;font-weight:800;color:#07120C;margin:20px 0 12px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.input-group{display:flex;flex-direction:column;}
+label{font-size:12.5px;font-weight:700;color:#334155;margin-bottom:7px;}
+input,select{padding:11px 12px;border:1px solid #d1d5db;border-radius:11px;font-size:14px;}
+input:focus,select:focus{outline:none;border-color:#16a34a;}
+
+.comp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:10px;}
+.comp-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:12px;}
+.comp-box h5{font-size:12px;color:#667085;margin:0 0 8px;text-align:center;}
+.comp-box select, .comp-box input{width:100%;margin-bottom:6px;font-size:13px;}
+
+.save-btn{width:100%;margin-top:24px;padding:16px;background:#16a34a;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;}
+
+@media(max-width:800px){
+    .form-grid{grid-template-columns:1fr 1fr;}
+    .comp-grid{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<a href="/add-tank-entry" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back to Fuel Receipts</a>
+
+<div class="card">
+
+<h1>Edit Fuel Receipt #{{ r["id"] }}</h1>
+
+<form method="POST" action="/update-fuel-receipt/{{ r['id'] }}">
+
+    <div class="section-label">Delivery Details</div>
+
+    <div class="form-grid">
+
+        <div class="input-group">
+            <label>Receipt Date</label>
+            <input type="date" name="receipt_date" value="{{ r['receipt_date'] }}" required>
+        </div>
+
+        <div class="input-group">
+            <label>Invoice No.</label>
+            <input type="text" name="invoice_no" value="{{ r['invoice_no'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>Order No.</label>
+            <input type="text" name="order_no" value="{{ r['order_no'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>Vehicle No.</label>
+            <input type="text" name="vehicle_no" value="{{ r['vehicle_no'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>Carrier No.</label>
+            <input type="text" name="carrier_no" value="{{ r['carrier_no'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>Carrier Name</label>
+            <input type="text" name="carrier_name" value="{{ r['carrier_name'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>PO No.</label>
+            <input type="text" name="po_no" value="{{ r['po_no'] or '' }}">
+        </div>
+
+        <div class="input-group">
+            <label>PO Date</label>
+            <input type="date" name="po_date" value="{{ r['po_date'] or '' }}">
+        </div>
+
+    </div>
+
+    <div class="section-label">Quality Checks</div>
+
+    <div class="form-grid">
+
+        <div class="input-group">
+            <label>Water Checked</label>
+            <select name="water_checked">
+                <option value="NIL" {% if r['water_checked'] == 'NIL' %}selected{% endif %}>NIL</option>
+                <option value="Present" {% if r['water_checked'] == 'Present' %}selected{% endif %}>Present</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Density (Kg/m³)</label>
+            <input type="number" step="0.01" name="density" value="{{ r['density'] or 0 }}">
+        </div>
+
+        <div class="input-group">
+            <label>Temperature (°C)</label>
+            <input type="number" step="0.1" name="temperature_c" value="{{ r['temperature_c'] or 0 }}">
+        </div>
+
+        <div class="input-group">
+            <label>Dip Before Unloading</label>
+            <input type="number" step="0.01" name="dip_before" value="{{ r['dip_before'] or 0 }}">
+        </div>
+
+        <div class="input-group">
+            <label>Dip After Unloading</label>
+            <input type="number" step="0.01" name="dip_after" value="{{ r['dip_after'] or 0 }}">
+        </div>
+
+    </div>
+
+    <div class="section-label">Compartment-wise Readings</div>
+
+    <div class="comp-grid">
+
+        {% for n in [1,2,3,4,5] %}
+        <div class="comp-box">
+            <h5>Compartment {{ n }}</h5>
+            <select name="comp{{ n }}_fuel">
+                <option value="">Select</option>
+                <option value="MS" {% if r['comp' ~ n ~ '_fuel'] == 'MS' %}selected{% endif %}>MS</option>
+                <option value="HSD" {% if r['comp' ~ n ~ '_fuel'] == 'HSD' %}selected{% endif %}>HSD</option>
+            </select>
+            <input type="number" step="0.01" name="comp{{ n }}_dip" placeholder="Dip" value="{{ r['comp' ~ n ~ '_dip'] or 0 }}">
+            <input type="number" step="0.01" name="comp{{ n }}_vol" placeholder="Vol (L)" value="{{ r['comp' ~ n ~ '_vol'] or 0 }}">
+        </div>
+        {% endfor %}
+
+    </div>
+
+    <button class="save-btn" type="submit">
+        <i class="fa-solid fa-floppy-disk"></i> Update Fuel Receipt
+    </button>
+
+</form>
+
+</div>
+</div>
+</body>
+</html>

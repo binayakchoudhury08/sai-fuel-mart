@@ -194,12 +194,20 @@ function updateAllTotals(){
     const netCreditDue = Math.max(creditGiven - transportReceived, 0);
     const totalExpense = sum(".expense-amount");
 
+    // Cash in hand = everything actually paid in cash today.
+    // totalFuelSale already includes BOTH cash- and credit-fuel value
+    // (nozzle totals don't distinguish payment method), so only
+    // fuelCredit needs subtracting back out. cashLubeSale is already
+    // net of credit lube (it's only the cash-mode lube rows), so
+    // creditLubeSale must NOT be subtracted again here — doing so
+    // was silently understating Cash in Hand by the credit-lube
+    // amount on every day with credit lube sales.
     const cashInHand =
         totalFuelSale +
         lubeTotals.cashLubeSale +
         transportReceived -
         digitalCollection -
-        creditGiven -
+        fuelCredit -
         totalExpense;
 
     setText("ms-sale-card", money(msAmount));
@@ -459,12 +467,13 @@ function setupSaveClosing(){
         const netCreditDue = Math.max(creditGiven - transportReceived, 0);
         const totalExpense = sum(".expense-amount");
 
+        // same fix as updateAllTotals — don't double-subtract credit lube
         const cashInHand =
             totalFuelSale +
             lubeTotals.cashLubeSale +
             transportReceived -
             digitalCollection -
-            creditGiven -
+            fuelCredit -
             totalExpense;
 
         const data = {

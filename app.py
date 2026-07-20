@@ -737,7 +737,7 @@ def export_party_transport_excel():
     ws.append([
         "Date", "SL No", "Party Name", "Challan No", "Vehicle No",
         "Slip No", "HSD Qty", "Rate", "HSD Amount",
-        "Diesel", "Final Amount"
+        "Cash Taken", "Final Amount"
     ])
 
     total_hsd = 0
@@ -973,7 +973,7 @@ def export_party_transport_pdf():
     data = [[
         "Date", "SL", "Challan", "Vehicle",
         "Slip", "HSD Qty (L)", "Rate", "HSD Amt",
-        "Diesel", "Final Amt"
+        "Cash Taken", "Final Amt"
     ]]
 
     total_hsd = 0
@@ -2792,6 +2792,31 @@ def tank_level():
     cur.execute("SELECT * FROM tank_level WHERE fuel_type='HSD' ORDER BY id DESC LIMIT 1")
     hsd_latest = cur.fetchone()
 
+    def days_remaining(fuel_type, latest_row):
+        if not latest_row or not latest_row["current_stock"]:
+            return None
+
+        cur.execute("""
+            SELECT AVG(sale_stock) AS avg_sale
+            FROM (
+                SELECT sale_stock
+                FROM tank_level
+                WHERE fuel_type=%s AND sale_stock > 0
+                ORDER BY date DESC
+                LIMIT 7
+            ) recent
+        """, (fuel_type,))
+        avg_row = cur.fetchone()
+        avg_sale = float(avg_row["avg_sale"] or 0) if avg_row else 0
+
+        if avg_sale <= 0:
+            return None
+
+        return round(float(latest_row["current_stock"]) / avg_sale, 1)
+
+    ms_days_remaining = days_remaining("MS", ms_latest)
+    hsd_days_remaining = days_remaining("HSD", hsd_latest)
+
     conn.close()
 
     return render_template(
@@ -2799,7 +2824,9 @@ def tank_level():
         rows=rows,
         monthly=monthly,
         ms_latest=ms_latest,
-        hsd_latest=hsd_latest
+        hsd_latest=hsd_latest,
+        ms_days_remaining=ms_days_remaining,
+        hsd_days_remaining=hsd_days_remaining
     )
 
 
@@ -2874,6 +2901,148 @@ def save_tank_level():
     conn.close()
 
     return redirect(url_for("tank_level"))
+
+
+@app.route("/api/tank-sync", methods=["POST", "OPTIONS"])
+def api_tank_sync():
+    """
+    Receives live tank readings pushed from the HP Smart Connect ATG
+    bookmarklet (running in the browser at the pump). Cross-origin by
+    design — the ATG computer's browser calls this directly — so it
+    needs its own CORS headers and a shared-secret check instead of a
+    normal login session.
+    """
+
+    if request.method == "OPTIONS":
+        resp = jsonify({"status": "ok"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return resp
+
+    payload = request.get_json(force=True, silent=True) or {}
+
+    expected_secret = os.environ.get("TANK_SYNC_SECRET", "")
+
+    if not expected_secret or payload.get("secret") != expected_secret:
+        resp = jsonify({"status": "error", "message": "Invalid or missing secret"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp, 403
+
+    tanks = payload.get("tanks", [])
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    synced = []
+
+    try:
+        cur.execute("""
+            SELECT ms_litres, hsd_litres
+            FROM daily_closing
+            WHERE date = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """, (today,))
+        closing_data = cur.fetchone()
+
+        cur.execute("SELECT ms_rate, hsd_rate FROM settings WHERE id = 1")
+        settings_data = cur.fetchone()
+
+        for t in tanks:
+            fuel_type = (t.get("fuel_type") or "").upper()
+            if fuel_type not in ("MS", "HSD"):
+                continue
+
+            net_volume = round(float(t.get("net_volume") or 0), 2)
+            today_receipt = round(float(t.get("today_receipt_ltr") or 0), 2)
+            today_sale_atg = round(float(t.get("today_sale_ltr") or 0), 2)
+            capacity = round(float(t.get("capacity") or 0), 2)
+            water_ltr = round(float(t.get("water_ltr") or 0), 2)
+            temperature_c = round(float(t.get("temperature_c") or 0), 2)
+            dip_mm = round(float(t.get("dip_mm") or 0), 2)
+            gross_volume = round(float(t.get("gross_volume") or 0), 2)
+            water_dip_mm = round(float(t.get("water_dip_mm") or 0), 2)
+            ullage_ltr = round(float(t.get("ullage_ltr") or 0), 2)
+            decantation_status = (t.get("decantation_status") or "")[:50]
+            density_status = (t.get("density_status") or "")[:50]
+            density_at_15 = round(float(t.get("density_at_15") or 0), 2)
+            density_kg_m3 = round(float(t.get("density_kg_m3") or 0), 2)
+            den_float_height = round(float(t.get("den_float_height") or 0), 2)
+
+            # work backwards from the live reading to get today's opening stock
+            opening_stock = round(net_volume - today_receipt + today_sale_atg, 2)
+            received_stock = today_receipt
+            own_tanker_stock = 0
+            actual_dip = net_volume
+
+            if closing_data:
+                sale_stock = float(closing_data["ms_litres"] or 0) if fuel_type == "MS" else float(closing_data["hsd_litres"] or 0)
+            else:
+                # no daily closing saved yet today — use the ATG's own running total instead
+                sale_stock = today_sale_atg
+
+            theoretical_stock = opening_stock + received_stock + own_tanker_stock - sale_stock
+            difference = round(actual_dip - theoretical_stock, 2)
+
+            rate = float(settings_data["ms_rate"] or 0) if fuel_type == "MS" else float(settings_data["hsd_rate"] or 0)
+
+            gain_qty = difference if difference > 0 else 0
+            shortage_qty = abs(difference) if difference < 0 else 0
+            gain_amount = round(gain_qty * rate, 2)
+            shortage_amount = round(shortage_qty * rate, 2)
+
+            # replace today's reading for this fuel instead of piling up
+            # duplicates if the bookmarklet is clicked more than once a day
+            cur.execute("""
+                DELETE FROM tank_level
+                WHERE date=%s AND fuel_type=%s
+            """, (today, fuel_type))
+
+            cur.execute("""
+                INSERT INTO tank_level (
+                    date, fuel_type, opening_stock, received_stock, own_tanker_stock,
+                    sale_stock, gain_qty, shortage_qty, current_stock,
+                    gain_amount, shortage_amount, created_at,
+                    capacity, water_ltr, temperature_c,
+                    dip_mm, gross_volume, water_dip_mm, ullage_ltr,
+                    decantation_status, density_status, density_at_15,
+                    density_kg_m3, den_float_height
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                today, fuel_type, opening_stock, received_stock, own_tanker_stock,
+                sale_stock, gain_qty, shortage_qty, actual_dip,
+                gain_amount, shortage_amount,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                capacity, water_ltr, temperature_c,
+                dip_mm, gross_volume, water_dip_mm, ullage_ltr,
+                decantation_status, density_status, density_at_15,
+                density_kg_m3, den_float_height
+            ))
+
+            log_activity(
+                cur, "Tank Level", "Created",
+                f"Auto-synced {fuel_type} from ATG — live dip {actual_dip}L (was {sale_stock}L sold today)"
+            )
+
+            synced.append(fuel_type)
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        resp = jsonify({"status": "error", "message": str(e)})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp, 500
+
+    conn.close()
+
+    resp = jsonify({"status": "success", "synced": synced, "date": today})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 @app.route("/edit-tank-level/<int:id>")
@@ -2971,6 +3140,256 @@ def delete_tank_level(id):
     conn.close()
 
     return redirect(url_for("tank_level"))
+
+
+@app.route("/add-tank-entry")
+def add_tank_entry():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM fuel_receipts
+        ORDER BY id DESC
+        LIMIT 200
+    """)
+    receipts = cur.fetchall()
+
+    # pre-fill vehicle/carrier from the most recent receipt — these are
+    # almost always the same fixed tanker/carrier for this pump
+    cur.execute("""
+        SELECT vehicle_no, carrier_no, carrier_name
+        FROM fuel_receipts
+        ORDER BY id DESC
+        LIMIT 1
+    """)
+    last_receipt = cur.fetchone()
+
+    cur.execute("""
+        SELECT
+            COUNT(*) AS receipt_count,
+            COALESCE(SUM(total_ms_vol), 0) AS total_ms,
+            COALESCE(SUM(total_hsd_vol), 0) AS total_hsd
+        FROM fuel_receipts
+        WHERE TO_CHAR(receipt_date::date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
+    """)
+    month_stats = cur.fetchone()
+
+    cur.execute("""
+        SELECT receipt_date
+        FROM fuel_receipts
+        ORDER BY id DESC
+        LIMIT 1
+    """)
+    last_date_row = cur.fetchone()
+
+    conn.close()
+
+    return render_template(
+        "add_tank_entry.html",
+        receipts=receipts,
+        last_receipt=last_receipt,
+        month_stats=month_stats,
+        last_receipt_date=last_date_row["receipt_date"] if last_date_row else None
+    )
+
+
+@app.route("/save-fuel-receipt", methods=["POST"])
+def save_fuel_receipt():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        comp_data = []
+        total_ms_vol = 0
+        total_hsd_vol = 0
+
+        for n in range(1, 6):
+            fuel = request.form.get(f"comp{n}_fuel", "")
+            dip = round(float(request.form.get(f"comp{n}_dip") or 0), 2)
+            vol = round(float(request.form.get(f"comp{n}_vol") or 0), 2)
+
+            comp_data.extend([fuel, dip, vol])
+
+            if fuel == "MS":
+                total_ms_vol += vol
+            elif fuel == "HSD":
+                total_hsd_vol += vol
+
+        cur.execute("""
+            INSERT INTO fuel_receipts (
+                receipt_date, invoice_no, order_no, vehicle_no,
+                carrier_no, carrier_name, po_no, po_date,
+                water_checked, density, temperature_c,
+                dip_before, dip_after,
+                comp1_fuel, comp1_dip, comp1_vol,
+                comp2_fuel, comp2_dip, comp2_vol,
+                comp3_fuel, comp3_dip, comp3_vol,
+                comp4_fuel, comp4_dip, comp4_vol,
+                comp5_fuel, comp5_dip, comp5_vol,
+                total_ms_vol, total_hsd_vol, created_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        """, (
+            request.form.get("receipt_date"),
+            request.form.get("invoice_no", ""),
+            request.form.get("order_no", ""),
+            request.form.get("vehicle_no", ""),
+            request.form.get("carrier_no", ""),
+            request.form.get("carrier_name", ""),
+            request.form.get("po_no", ""),
+            request.form.get("po_date", ""),
+            request.form.get("water_checked", "NIL"),
+            round(float(request.form.get("density") or 0), 2),
+            round(float(request.form.get("temperature_c") or 0), 2),
+            round(float(request.form.get("dip_before") or 0), 2),
+            round(float(request.form.get("dip_after") or 0), 2),
+            *comp_data,
+            round(total_ms_vol, 2),
+            round(total_hsd_vol, 2),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ))
+
+        new_id = cur.fetchone()["id"]
+
+        log_activity(
+            cur, "Tank Level", "Created",
+            f"Fuel receipt #{new_id} logged — Invoice {request.form.get('invoice_no','')} "
+            f"(MS {total_ms_vol}L, HSD {total_hsd_vol}L)"
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("add_tank_entry"))
+
+
+@app.route("/edit-fuel-receipt/<int:id>")
+def edit_fuel_receipt(id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM fuel_receipts WHERE id=%s", (id,))
+    receipt = cur.fetchone()
+
+    conn.close()
+
+    if not receipt:
+        flash("Fuel receipt not found.")
+        return redirect(url_for("add_tank_entry"))
+
+    return render_template("edit_fuel_receipt.html", r=receipt)
+
+
+@app.route("/update-fuel-receipt/<int:id>", methods=["POST"])
+def update_fuel_receipt(id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    try:
+        comp_data = []
+        total_ms_vol = 0
+        total_hsd_vol = 0
+
+        for n in range(1, 6):
+            fuel = request.form.get(f"comp{n}_fuel", "")
+            dip = round(float(request.form.get(f"comp{n}_dip") or 0), 2)
+            vol = round(float(request.form.get(f"comp{n}_vol") or 0), 2)
+
+            comp_data.extend([fuel, dip, vol])
+
+            if fuel == "MS":
+                total_ms_vol += vol
+            elif fuel == "HSD":
+                total_hsd_vol += vol
+
+        cur.execute("""
+            UPDATE fuel_receipts
+            SET receipt_date=%s, invoice_no=%s, order_no=%s, vehicle_no=%s,
+                carrier_no=%s, carrier_name=%s, po_no=%s, po_date=%s,
+                water_checked=%s, density=%s, temperature_c=%s,
+                dip_before=%s, dip_after=%s,
+                comp1_fuel=%s, comp1_dip=%s, comp1_vol=%s,
+                comp2_fuel=%s, comp2_dip=%s, comp2_vol=%s,
+                comp3_fuel=%s, comp3_dip=%s, comp3_vol=%s,
+                comp4_fuel=%s, comp4_dip=%s, comp4_vol=%s,
+                comp5_fuel=%s, comp5_dip=%s, comp5_vol=%s,
+                total_ms_vol=%s, total_hsd_vol=%s
+            WHERE id=%s
+        """, (
+            request.form.get("receipt_date"),
+            request.form.get("invoice_no", ""),
+            request.form.get("order_no", ""),
+            request.form.get("vehicle_no", ""),
+            request.form.get("carrier_no", ""),
+            request.form.get("carrier_name", ""),
+            request.form.get("po_no", ""),
+            request.form.get("po_date", ""),
+            request.form.get("water_checked", "NIL"),
+            round(float(request.form.get("density") or 0), 2),
+            round(float(request.form.get("temperature_c") or 0), 2),
+            round(float(request.form.get("dip_before") or 0), 2),
+            round(float(request.form.get("dip_after") or 0), 2),
+            *comp_data,
+            round(total_ms_vol, 2),
+            round(total_hsd_vol, 2),
+            id
+        ))
+
+        log_activity(
+            cur, "Tank Level", "Updated",
+            f"Edited fuel receipt #{id} — Invoice {request.form.get('invoice_no','')} "
+            f"(MS {total_ms_vol}L, HSD {total_hsd_vol}L)"
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return redirect(url_for("add_tank_entry"))
+
+
+@app.route("/delete-fuel-receipt/<int:id>")
+def delete_fuel_receipt(id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM fuel_receipts WHERE id = %s", (id,))
+
+    log_activity(
+        cur, "Tank Level", "Deleted",
+        f"Deleted fuel receipt #{id}"
+    )
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("add_tank_entry"))
 
 
 def bill_filename(party_name, from_date, extension):
@@ -6877,6 +7296,98 @@ def ensure_transporter_discount_column():
 
 
 ensure_transporter_discount_column()
+
+
+def ensure_tank_level_atg_columns():
+    """
+    Make sure tank_level has every field the HP Smart Connect ATG page
+    shows — used for the animated tank visual, alerts, and the detailed
+    live-readings panel on Tank Level.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        for col, coltype in [
+            ("capacity", "REAL DEFAULT 0"),
+            ("water_ltr", "REAL DEFAULT 0"),
+            ("temperature_c", "REAL DEFAULT 0"),
+            ("dip_mm", "REAL DEFAULT 0"),
+            ("gross_volume", "REAL DEFAULT 0"),
+            ("water_dip_mm", "REAL DEFAULT 0"),
+            ("ullage_ltr", "REAL DEFAULT 0"),
+            ("decantation_status", "TEXT"),
+            ("density_status", "TEXT"),
+            ("density_at_15", "REAL DEFAULT 0"),
+            ("density_kg_m3", "REAL DEFAULT 0"),
+            ("den_float_height", "REAL DEFAULT 0"),
+        ]:
+            cur.execute(f"ALTER TABLE tank_level ADD COLUMN IF NOT EXISTS {col} {coltype}")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[tank_level] could not ensure ATG columns exist: {e}")
+
+
+ensure_tank_level_atg_columns()
+
+
+def ensure_fuel_receipts_table():
+    """
+    Table for fuel delivery invoices/challans (like the HPCL delivery
+    receipt) — a separate record from day-to-day Tank Level, which is
+    now driven automatically by the ATG bookmarklet sync. One receipt
+    covers the whole vehicle: shared header fields, then each of the
+    5 compartments independently tagged MS or HSD with its own dip/vol.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS fuel_receipts (
+                id SERIAL PRIMARY KEY,
+                receipt_date TEXT,
+                invoice_no TEXT,
+                order_no TEXT,
+                vehicle_no TEXT,
+                carrier_no TEXT,
+                carrier_name TEXT,
+                po_no TEXT,
+                po_date TEXT,
+                water_checked TEXT,
+                density REAL DEFAULT 0,
+                temperature_c REAL DEFAULT 0,
+                dip_before REAL DEFAULT 0,
+                dip_after REAL DEFAULT 0,
+                comp1_fuel TEXT, comp1_dip REAL DEFAULT 0, comp1_vol REAL DEFAULT 0,
+                comp2_fuel TEXT, comp2_dip REAL DEFAULT 0, comp2_vol REAL DEFAULT 0,
+                comp3_fuel TEXT, comp3_dip REAL DEFAULT 0, comp3_vol REAL DEFAULT 0,
+                comp4_fuel TEXT, comp4_dip REAL DEFAULT 0, comp4_vol REAL DEFAULT 0,
+                comp5_fuel TEXT, comp5_dip REAL DEFAULT 0, comp5_vol REAL DEFAULT 0,
+                total_ms_vol REAL DEFAULT 0,
+                total_hsd_vol REAL DEFAULT 0,
+                created_at TEXT
+            )
+        """)
+
+        # migrate an existing (pre-redesign) table safely: add any new
+        # columns that don't exist yet, drop ones we no longer use
+        for col, coltype in [
+            ("comp1_fuel", "TEXT"), ("comp2_fuel", "TEXT"), ("comp3_fuel", "TEXT"),
+            ("comp4_fuel", "TEXT"), ("comp5_fuel", "TEXT"),
+            ("total_ms_vol", "REAL DEFAULT 0"), ("total_hsd_vol", "REAL DEFAULT 0"),
+        ]:
+            cur.execute(f"ALTER TABLE fuel_receipts ADD COLUMN IF NOT EXISTS {col} {coltype}")
+
+        for col in ["photo_url", "remarks", "fuel_type", "quantity_ltr", "rate_per_unit", "total_amount"]:
+            cur.execute(f"ALTER TABLE fuel_receipts DROP COLUMN IF EXISTS {col}")
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[fuel_receipts] could not ensure table exists: {e}")
+
+
+ensure_fuel_receipts_table()
 
 
 def log_activity(cur, module, action, description):
