@@ -2830,6 +2830,46 @@ def tank_level():
     )
 
 
+@app.route("/api/tank-status")
+def api_tank_status():
+    if not session.get("logged_in"):
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    def safe_row(row):
+        if not row:
+            return None
+        out = {}
+        for key, value in dict(row).items():
+            if isinstance(value, (int, float)):
+                out[key] = value
+            elif value is None:
+                out[key] = None
+            else:
+                try:
+                    out[key] = float(value)
+                except (TypeError, ValueError):
+                    out[key] = str(value)
+        return out
+
+    cur.execute("SELECT * FROM tank_level WHERE fuel_type='MS' ORDER BY id DESC LIMIT 1")
+    ms_latest = safe_row(cur.fetchone())
+
+    cur.execute("SELECT * FROM tank_level WHERE fuel_type='HSD' ORDER BY id DESC LIMIT 1")
+    hsd_latest = safe_row(cur.fetchone())
+
+    conn.close()
+
+    return jsonify({
+        "status": "success",
+        "ms_latest": ms_latest,
+        "hsd_latest": hsd_latest,
+        "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+
+
 @app.route("/save-tank-level", methods=["POST"])
 def save_tank_level():
     if not session.get("logged_in"):

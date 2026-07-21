@@ -634,36 +634,36 @@ Logout
             </div>
 
             {% if ms_latest and ms_latest["created_at"] %}
-            <span class="sync-badge" data-timestamp="{{ ms_latest['created_at'] }}">synced —</span>
+            <span class="sync-badge" data-live="ms-sync-badge" data-timestamp="{{ ms_latest['created_at'] }}">synced —</span>
             {% endif %}
         </div>
 
         {% set ms_capacity = (ms_latest["capacity"] if ms_latest and ms_latest["capacity"] else 22000) | float %}
         {% set ms_percent = 0 %}
         {% if ms_latest and ms_latest["current_stock"] and ms_capacity > 0 %}
-            {% set ms_percent = ((ms_latest["current_stock"] / ms_capacity) * 100) | round(1) %}
+            {% set ms_percent = ((ms_latest["current_stock"] | float / ms_capacity) * 100) | round(1) %}
         {% endif %}
 
-        <div class="tank-visual-row">
+        <div class="tank-visual-row" data-capacity="{{ ms_capacity }}">
 
             <div class="tank-svg-wrap">
                 <svg viewBox="0 0 120 180" class="tank-svg">
                     <clipPath id="msClip"><rect x="10" y="10" width="100" height="160" rx="16"/></clipPath>
                     <rect x="10" y="10" width="100" height="160" rx="16" class="tank-outline"/>
                     <g clip-path="url(#msClip)">
-                        <rect class="tank-fill ms-fill" x="10" width="100" style="height:0px;" data-pct="{{ ms_percent }}"></rect>
-                        <rect class="tank-wave ms-fill" x="-20" width="160" height="5" style="opacity:0;" data-pct="{{ ms_percent }}"></rect>
+                        <rect class="tank-fill ms-fill" x="10" width="100" style="height:0px;" data-pct="{{ ms_percent }}" data-live="ms-fill"></rect>
+                        <rect class="tank-wave ms-fill" x="-20" width="160" height="5" style="opacity:0;" data-pct="{{ ms_percent }}" data-live="ms-wave"></rect>
                     </g>
                     <rect x="45" y="1" width="30" height="10" rx="3" class="tank-cap"/>
                 </svg>
-                <div class="tank-pct-label">{{ ms_percent }}%</div>
+                <div class="tank-pct-label" data-live="ms-pct-label">{{ ms_percent }}%</div>
             </div>
 
             <div class="tank-stats">
-                <div class="stock-value">{{ ms_latest["current_stock"] if ms_latest else 0 }} L</div>
+                <div class="stock-value" data-live="ms-stock-value">{{ ms_latest["current_stock"] if ms_latest else 0 }} L</div>
                 <div class="tank-sub">Live Dip Reading</div>
 
-                <div class="badge-row">
+                <div class="badge-row" data-live="ms-badge-row">
                 {% if ms_latest and ms_latest["gain_qty"] > 0 %}
                     <span class="badge badge-gain">+{{ ms_latest["gain_qty"] }} L Gain</span>
                 {% elif ms_latest and ms_latest["shortage_qty"] > 0 %}
@@ -677,13 +677,14 @@ Logout
                 <div class="mini-feature"><i class="fa-solid fa-hourglass-half"></i> ~{{ ms_days_remaining }} days of stock left</div>
                 {% endif %}
 
-                {% if ms_latest and ms_latest["temperature_c"] %}
-                <div class="mini-feature"><i class="fa-solid fa-temperature-half"></i> {{ ms_latest["temperature_c"] }}°C</div>
-                {% endif %}
+                <div class="mini-feature" data-live="ms-temp-feature" {% if not (ms_latest and ms_latest["temperature_c"]) %}style="display:none;"{% endif %}>
+                    <i class="fa-solid fa-temperature-half"></i>
+                    <span data-live="ms-temp-value">{{ (ms_latest["temperature_c"] if ms_latest else 0) or 0 }}</span>°C
+                </div>
 
-                {% if ms_latest and ms_latest["water_ltr"] and ms_latest["water_ltr"] > 0 %}
-                <div class="water-alert"><i class="fa-solid fa-triangle-exclamation"></i> Water detected: {{ ms_latest["water_ltr"] }} L</div>
-                {% endif %}
+                <div class="water-alert" data-live="ms-water-alert" {% if not (ms_latest and ms_latest["water_ltr"] and ms_latest["water_ltr"] > 0) %}style="display:none;"{% endif %}>
+                    <i class="fa-solid fa-triangle-exclamation"></i> Water detected: <span data-live="ms-water-value">{{ (ms_latest["water_ltr"] if ms_latest else 0) or 0 }}</span> L
+                </div>
             </div>
 
         </div>
@@ -702,36 +703,36 @@ Logout
             </div>
 
             {% if hsd_latest and hsd_latest["created_at"] %}
-            <span class="sync-badge" data-timestamp="{{ hsd_latest['created_at'] }}">synced —</span>
+            <span class="sync-badge" data-live="hsd-sync-badge" data-timestamp="{{ hsd_latest['created_at'] }}">synced —</span>
             {% endif %}
         </div>
 
         {% set hsd_capacity = (hsd_latest["capacity"] if hsd_latest and hsd_latest["capacity"] else 35000) | float %}
         {% set hsd_percent = 0 %}
         {% if hsd_latest and hsd_latest["current_stock"] and hsd_capacity > 0 %}
-            {% set hsd_percent = ((hsd_latest["current_stock"] / hsd_capacity) * 100) | round(1) %}
+            {% set hsd_percent = ((hsd_latest["current_stock"] | float / hsd_capacity) * 100) | round(1) %}
         {% endif %}
 
-        <div class="tank-visual-row">
+        <div class="tank-visual-row" data-capacity="{{ hsd_capacity }}">
 
             <div class="tank-svg-wrap">
                 <svg viewBox="0 0 120 180" class="tank-svg">
                     <clipPath id="hsdClip"><rect x="10" y="10" width="100" height="160" rx="16"/></clipPath>
                     <rect x="10" y="10" width="100" height="160" rx="16" class="tank-outline"/>
                     <g clip-path="url(#hsdClip)">
-                        <rect class="tank-fill hsd-fill" x="10" width="100" style="height:0px;" data-pct="{{ hsd_percent }}"></rect>
-                        <rect class="tank-wave hsd-fill" x="-20" width="160" height="5" style="opacity:0;" data-pct="{{ hsd_percent }}"></rect>
+                        <rect class="tank-fill hsd-fill" x="10" width="100" style="height:0px;" data-pct="{{ hsd_percent }}" data-live="hsd-fill"></rect>
+                        <rect class="tank-wave hsd-fill" x="-20" width="160" height="5" style="opacity:0;" data-pct="{{ hsd_percent }}" data-live="hsd-wave"></rect>
                     </g>
                     <rect x="45" y="1" width="30" height="10" rx="3" class="tank-cap"/>
                 </svg>
-                <div class="tank-pct-label">{{ hsd_percent }}%</div>
+                <div class="tank-pct-label" data-live="hsd-pct-label">{{ hsd_percent }}%</div>
             </div>
 
             <div class="tank-stats">
-                <div class="stock-value">{{ hsd_latest["current_stock"] if hsd_latest else 0 }} L</div>
+                <div class="stock-value" data-live="hsd-stock-value">{{ hsd_latest["current_stock"] if hsd_latest else 0 }} L</div>
                 <div class="tank-sub">Live Dip Reading</div>
 
-                <div class="badge-row">
+                <div class="badge-row" data-live="hsd-badge-row">
                 {% if hsd_latest and hsd_latest["gain_qty"] > 0 %}
                     <span class="badge badge-gain">+{{ hsd_latest["gain_qty"] }} L Gain</span>
                 {% elif hsd_latest and hsd_latest["shortage_qty"] > 0 %}
@@ -745,13 +746,14 @@ Logout
                 <div class="mini-feature"><i class="fa-solid fa-hourglass-half"></i> ~{{ hsd_days_remaining }} days of stock left</div>
                 {% endif %}
 
-                {% if hsd_latest and hsd_latest["temperature_c"] %}
-                <div class="mini-feature"><i class="fa-solid fa-temperature-half"></i> {{ hsd_latest["temperature_c"] }}°C</div>
-                {% endif %}
+                <div class="mini-feature" data-live="hsd-temp-feature" {% if not (hsd_latest and hsd_latest["temperature_c"]) %}style="display:none;"{% endif %}>
+                    <i class="fa-solid fa-temperature-half"></i>
+                    <span data-live="hsd-temp-value">{{ (hsd_latest["temperature_c"] if hsd_latest else 0) or 0 }}</span>°C
+                </div>
 
-                {% if hsd_latest and hsd_latest["water_ltr"] and hsd_latest["water_ltr"] > 0 %}
-                <div class="water-alert"><i class="fa-solid fa-triangle-exclamation"></i> Water detected: {{ hsd_latest["water_ltr"] }} L</div>
-                {% endif %}
+                <div class="water-alert" data-live="hsd-water-alert" {% if not (hsd_latest and hsd_latest["water_ltr"] and hsd_latest["water_ltr"] > 0) %}style="display:none;"{% endif %}>
+                    <i class="fa-solid fa-triangle-exclamation"></i> Water detected: <span data-live="hsd-water-value">{{ (hsd_latest["water_ltr"] if hsd_latest else 0) or 0 }}</span> L
+                </div>
             </div>
 
         </div>
@@ -799,41 +801,41 @@ Logout
 
         <div class="readings-slide">
             <table class="readings-table">
-                <tr><td>Capacity</td><td>{{ (ms_latest["capacity"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Dip</td><td>{{ (ms_latest["dip_mm"] if ms_latest else 0) or 0 }} mm</td></tr>
-                <tr><td>Gross Volume</td><td>{{ (ms_latest["gross_volume"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Net Volume</td><td>{{ (ms_latest["current_stock"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Water Dip</td><td>{{ (ms_latest["water_dip_mm"] if ms_latest else 0) or 0 }} mm</td></tr>
-                <tr><td>Water</td><td>{{ (ms_latest["water_ltr"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Temperature</td><td>{{ (ms_latest["temperature_c"] if ms_latest else 0) or 0 }} °C</td></tr>
-                <tr><td>Ullage</td><td>{{ (ms_latest["ullage_ltr"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Today's Sale</td><td>{{ (ms_latest["sale_stock"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Today's Receipt</td><td>{{ (ms_latest["received_stock"] if ms_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Decantation</td><td>{{ (ms_latest["decantation_status"] if ms_latest else "") or "—" }}</td></tr>
-                <tr><td>Density Status</td><td>{{ (ms_latest["density_status"] if ms_latest else "") or "—" }}</td></tr>
-                <tr><td>Density @15°C</td><td>{{ (ms_latest["density_at_15"] if ms_latest else 0) or "—" }}</td></tr>
-                <tr><td>Density</td><td>{{ (ms_latest["density_kg_m3"] if ms_latest else 0) or "—" }} kg/m³</td></tr>
-                <tr><td>Den. Float Height</td><td>{{ (ms_latest["den_float_height"] if ms_latest else 0) or 0 }}</td></tr>
+                <tr><td>Capacity</td><td><span data-live="ms-capacity" data-suffix=" L">{{ (ms_latest["capacity"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Dip</td><td><span data-live="ms-dip_mm" data-suffix=" mm">{{ (ms_latest["dip_mm"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Gross Volume</td><td><span data-live="ms-gross_volume" data-suffix=" L">{{ (ms_latest["gross_volume"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Net Volume</td><td><span data-live="ms-current_stock" data-suffix=" L">{{ (ms_latest["current_stock"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Water Dip</td><td><span data-live="ms-water_dip_mm" data-suffix=" mm">{{ (ms_latest["water_dip_mm"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Water</td><td><span data-live="ms-water_ltr" data-suffix=" L">{{ (ms_latest["water_ltr"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Temperature</td><td><span data-live="ms-temperature_c" data-suffix=" °C">{{ (ms_latest["temperature_c"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Ullage</td><td><span data-live="ms-ullage_ltr" data-suffix=" L">{{ (ms_latest["ullage_ltr"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Today's Sale</td><td><span data-live="ms-sale_stock" data-suffix=" L">{{ (ms_latest["sale_stock"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Today's Receipt</td><td><span data-live="ms-received_stock" data-suffix=" L">{{ (ms_latest["received_stock"] if ms_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Decantation</td><td><span data-live="ms-decantation_status" data-suffix="">{{ (ms_latest["decantation_status"] if ms_latest else "") or "—" }}</span></td></tr>
+                <tr><td>Density Status</td><td><span data-live="ms-density_status" data-suffix="">{{ (ms_latest["density_status"] if ms_latest else "") or "—" }}</span></td></tr>
+                <tr><td>Density @15°C</td><td><span data-live="ms-density_at_15" data-suffix="">{{ (ms_latest["density_at_15"] if ms_latest else 0) or "—" }}</span></td></tr>
+                <tr><td>Density</td><td><span data-live="ms-density_kg_m3" data-suffix=" kg/m³">{{ (ms_latest["density_kg_m3"] if ms_latest else 0) or "—" }}</span></td></tr>
+                <tr><td>Den. Float Height</td><td><span data-live="ms-den_float_height" data-suffix="">{{ (ms_latest["den_float_height"] if ms_latest else 0) or 0 }}</span></td></tr>
             </table>
         </div>
 
         <div class="readings-slide">
             <table class="readings-table">
-                <tr><td>Capacity</td><td>{{ (hsd_latest["capacity"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Dip</td><td>{{ (hsd_latest["dip_mm"] if hsd_latest else 0) or 0 }} mm</td></tr>
-                <tr><td>Gross Volume</td><td>{{ (hsd_latest["gross_volume"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Net Volume</td><td>{{ (hsd_latest["current_stock"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Water Dip</td><td>{{ (hsd_latest["water_dip_mm"] if hsd_latest else 0) or 0 }} mm</td></tr>
-                <tr><td>Water</td><td>{{ (hsd_latest["water_ltr"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Temperature</td><td>{{ (hsd_latest["temperature_c"] if hsd_latest else 0) or 0 }} °C</td></tr>
-                <tr><td>Ullage</td><td>{{ (hsd_latest["ullage_ltr"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Today's Sale</td><td>{{ (hsd_latest["sale_stock"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Today's Receipt</td><td>{{ (hsd_latest["received_stock"] if hsd_latest else 0) or 0 }} L</td></tr>
-                <tr><td>Decantation</td><td>{{ (hsd_latest["decantation_status"] if hsd_latest else "") or "—" }}</td></tr>
-                <tr><td>Density Status</td><td>{{ (hsd_latest["density_status"] if hsd_latest else "") or "—" }}</td></tr>
-                <tr><td>Density @15°C</td><td>{{ (hsd_latest["density_at_15"] if hsd_latest else 0) or "—" }}</td></tr>
-                <tr><td>Density</td><td>{{ (hsd_latest["density_kg_m3"] if hsd_latest else 0) or "—" }} kg/m³</td></tr>
-                <tr><td>Den. Float Height</td><td>{{ (hsd_latest["den_float_height"] if hsd_latest else 0) or 0 }}</td></tr>
+                <tr><td>Capacity</td><td><span data-live="hsd-capacity" data-suffix=" L">{{ (hsd_latest["capacity"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Dip</td><td><span data-live="hsd-dip_mm" data-suffix=" mm">{{ (hsd_latest["dip_mm"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Gross Volume</td><td><span data-live="hsd-gross_volume" data-suffix=" L">{{ (hsd_latest["gross_volume"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Net Volume</td><td><span data-live="hsd-current_stock" data-suffix=" L">{{ (hsd_latest["current_stock"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Water Dip</td><td><span data-live="hsd-water_dip_mm" data-suffix=" mm">{{ (hsd_latest["water_dip_mm"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Water</td><td><span data-live="hsd-water_ltr" data-suffix=" L">{{ (hsd_latest["water_ltr"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Temperature</td><td><span data-live="hsd-temperature_c" data-suffix=" °C">{{ (hsd_latest["temperature_c"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Ullage</td><td><span data-live="hsd-ullage_ltr" data-suffix=" L">{{ (hsd_latest["ullage_ltr"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Today's Sale</td><td><span data-live="hsd-sale_stock" data-suffix=" L">{{ (hsd_latest["sale_stock"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Today's Receipt</td><td><span data-live="hsd-received_stock" data-suffix=" L">{{ (hsd_latest["received_stock"] if hsd_latest else 0) or 0 }}</span></td></tr>
+                <tr><td>Decantation</td><td><span data-live="hsd-decantation_status" data-suffix="">{{ (hsd_latest["decantation_status"] if hsd_latest else "") or "—" }}</span></td></tr>
+                <tr><td>Density Status</td><td><span data-live="hsd-density_status" data-suffix="">{{ (hsd_latest["density_status"] if hsd_latest else "") or "—" }}</span></td></tr>
+                <tr><td>Density @15°C</td><td><span data-live="hsd-density_at_15" data-suffix="">{{ (hsd_latest["density_at_15"] if hsd_latest else 0) or "—" }}</span></td></tr>
+                <tr><td>Density</td><td><span data-live="hsd-density_kg_m3" data-suffix=" kg/m³">{{ (hsd_latest["density_kg_m3"] if hsd_latest else 0) or "—" }}</span></td></tr>
+                <tr><td>Den. Float Height</td><td><span data-live="hsd-den_float_height" data-suffix="">{{ (hsd_latest["den_float_height"] if hsd_latest else 0) or 0 }}</span></td></tr>
             </table>
         </div>
 
@@ -904,7 +906,7 @@ function setupSyncBadges(){
         if(!info){ return; }
 
         badge.textContent = info.text;
-        if(info.fresh){ badge.classList.add("fresh"); }
+        badge.classList.toggle("fresh", !!info.fresh);
     });
 }
 
@@ -936,6 +938,131 @@ function setupEntranceAnimations(){
         el.style.animationDelay = (index * 0.08) + "s";
     });
 }
+
+function updateTankFill(prefix, capacity, currentStock){
+    var TANK_TOP = 10, TANK_BOTTOM = 170, TANK_HEIGHT = 160;
+
+    var pct = 0;
+    if(capacity > 0 && currentStock){
+        pct = Math.round((currentStock / capacity) * 1000) / 10;
+    }
+    if(pct > 100){ pct = 100; }
+    if(pct < 0){ pct = 0; }
+
+    var fill = document.querySelector('[data-live="' + prefix + '-fill"]');
+    var wave = document.querySelector('[data-live="' + prefix + '-wave"]');
+    var label = document.querySelector('[data-live="' + prefix + '-pct-label"]');
+
+    if(fill){
+        var h = (pct / 100) * TANK_HEIGHT;
+        fill.style.height = h + "px";
+        fill.setAttribute("y", (TANK_BOTTOM - h) + "");
+    }
+    if(wave){
+        var y = TANK_BOTTOM - ((pct / 100) * TANK_HEIGHT);
+        wave.setAttribute("y", y + "");
+        wave.style.opacity = pct > 0 ? "0.35" : "0";
+    }
+    if(label){
+        label.textContent = pct + "%";
+    }
+}
+
+function updateBadgeRow(prefix, data){
+    var row = document.querySelector('[data-live="' + prefix + '-badge-row"]');
+    if(!row){ return; }
+
+    if(data.gain_qty > 0){
+        row.innerHTML = '<span class="badge badge-gain">+' + data.gain_qty + ' L Gain</span>';
+    } else if(data.shortage_qty > 0){
+        row.innerHTML = '<span class="badge badge-short">-' + data.shortage_qty + ' L Short</span>';
+    } else {
+        row.innerHTML = '<span class="badge badge-neutral">Balanced</span>';
+    }
+}
+
+function updateTextFields(prefix, data){
+    Object.keys(data).forEach(function(key){
+        var el = document.querySelector('[data-live="' + prefix + '-' + key + '"]');
+        if(!el){ return; }
+
+        var suffix = el.getAttribute("data-suffix") || "";
+        var value = data[key];
+
+        if(value === null || value === undefined || value === ""){
+            value = "—";
+            suffix = "";
+        }
+
+        el.textContent = value + suffix;
+    });
+}
+
+function applyTankUpdate(prefix, data, fallbackCapacity){
+    if(!data){ return; }
+
+    var capacity = data.capacity || fallbackCapacity;
+
+    updateTankFill(prefix, capacity, data.current_stock);
+    updateBadgeRow(prefix, data);
+    updateTextFields(prefix, data);
+
+    var stockValueEl = document.querySelector('[data-live="' + prefix + '-stock-value"]');
+    if(stockValueEl){
+        stockValueEl.textContent = (data.current_stock || 0) + " L";
+    }
+
+    var tempFeature = document.querySelector('[data-live="' + prefix + '-temp-feature"]');
+    var tempValue = document.querySelector('[data-live="' + prefix + '-temp-value"]');
+    if(tempFeature && tempValue){
+        if(data.temperature_c){
+            tempFeature.style.display = "flex";
+            tempValue.textContent = data.temperature_c;
+        } else {
+            tempFeature.style.display = "none";
+        }
+    }
+
+    var waterAlert = document.querySelector('[data-live="' + prefix + '-water-alert"]');
+    var waterValue = document.querySelector('[data-live="' + prefix + '-water-value"]');
+    if(waterAlert && waterValue){
+        if(data.water_ltr && data.water_ltr > 0){
+            waterAlert.style.display = "flex";
+            waterValue.textContent = data.water_ltr;
+        } else {
+            waterAlert.style.display = "none";
+        }
+    }
+
+    var syncBadge = document.querySelector('[data-live="' + prefix + '-sync-badge"]');
+    if(syncBadge && data.created_at){
+        syncBadge.setAttribute("data-timestamp", data.created_at);
+    }
+}
+
+function pollTankStatus(){
+    fetch("/api/tank-status")
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if(data.status !== "success"){ return; }
+
+            var msCapacityAttr = document.querySelector(".ms-icon");
+            var hsdCapacityAttr = document.querySelector(".hsd-icon");
+
+            applyTankUpdate("ms", data.ms_latest, 22000);
+            applyTankUpdate("hsd", data.hsd_latest, 35000);
+
+            setupSyncBadges();
+        })
+        .catch(function(){ /* silent — keep showing last known data */ });
+}
+
+// live "synced Xm ago" ticker — recomputes every second without a server call
+setInterval(setupSyncBadges, 1000);
+
+// pull fresh readings from the database every 30 seconds, so this page
+// reflects the latest bookmarklet sync automatically without a reload
+setInterval(pollTankStatus, 30000);
 
 animateTanks();
 setupSyncBadges();
