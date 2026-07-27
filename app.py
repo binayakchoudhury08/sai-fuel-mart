@@ -748,7 +748,7 @@ def export_party_transport_excel():
     ws.append([
         "Date", "SL No", "Party Name", "Challan No", "Vehicle No",
         "Slip No", "HSD Qty", "Rate", "HSD Amount",
-        "Diesel", "Final Amount"
+        "Cash Taken", "Final Amount"
     ])
 
     total_hsd = 0
@@ -1010,7 +1010,7 @@ def export_party_transport_pdf():
     data = [[
         "Date", "SL", "Challan", "Vehicle",
         "Slip", "HSD Qty (L)", "Rate", "HSD Amt",
-        "Diesel", "Final Amt"
+        "Cash Taken", "Final Amt"
     ]]
 
     total_hsd = 0
