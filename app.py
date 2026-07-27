@@ -28,6 +28,17 @@ app = Flask(__name__)
 app.secret_key = "sai-fuel-mart-secret-key"
 app.permanent_session_lifetime = timedelta(days=30)
 
+
+@app.route("/service-worker.js")
+def service_worker():
+    """
+    Served from the root (not /static/) so its control scope covers the
+    whole app — a service worker registered from /static/service-worker.js
+    would only be allowed to control pages under /static/, not the actual
+    app pages like /dashboard or /tank-level.
+    """
+    return app.send_static_file("service-worker.js")
+
 USERS = {
 
     "admin": {
@@ -737,7 +748,7 @@ def export_party_transport_excel():
     ws.append([
         "Date", "SL No", "Party Name", "Challan No", "Vehicle No",
         "Slip No", "HSD Qty", "Rate", "HSD Amount",
-        "Cash Taken", "Final Amount"
+        "Diesel", "Final Amount"
     ])
 
     total_hsd = 0
@@ -831,6 +842,32 @@ def export_party_transport_excel():
 
 
 @app.route("/export-party-transport-pdf")
+def format_indian(n):
+    """
+    Formats a number using the Indian numbering system (lakhs/crores):
+    rightmost 3 digits, then groups of 2 — e.g. 298050.80 -> "2,98,051"
+    """
+    n = int(round(float(n or 0)))
+    negative = n < 0
+    n = abs(n)
+    s = str(n)
+
+    if len(s) <= 3:
+        result = s
+    else:
+        last3 = s[-3:]
+        rest = s[:-3]
+        parts = []
+        while len(rest) > 2:
+            parts.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.insert(0, rest)
+        result = ",".join(parts) + "," + last3
+
+    return ("-" if negative else "") + result
+
+
 def export_party_transport_pdf():
 
     if not session.get("logged_in"):
@@ -973,7 +1010,7 @@ def export_party_transport_pdf():
     data = [[
         "Date", "SL", "Challan", "Vehicle",
         "Slip", "HSD Qty (L)", "Rate", "HSD Amt",
-        "Cash Taken", "Final Amt"
+        "Diesel", "Final Amt"
     ]]
 
     total_hsd = 0
@@ -1003,7 +1040,7 @@ def export_party_transport_pdf():
             f"{rate:.2f}",
             f"{hsd_amount:.2f}",
             f"{cash:.2f}",
-            f"{final:.0f}"
+            f"{final:.2f}"
         ])
 
     if not rows:
@@ -1015,7 +1052,7 @@ def export_party_transport_pdf():
         "-",
         f"{total_hsd_amount:.2f}",
         f"{total_cash:.2f}",
-        f"{total_final:.0f}"
+        f"{format_indian(total_final)}.00"
     ])
 
     total_row_index = len(data) - 1
@@ -1028,16 +1065,16 @@ def export_party_transport_pdf():
 
         data.append([
             "", "", "", "", "", "", "", "", "Total Amount",
-            f"{total_final:.0f}"
+            f"{format_indian(total_final)}.00"
         ])
         data.append([
             "", "", "", "", "", "", "", "",
             f"Discount (Rs.{discount_per_litre}/L x {total_hsd:.2f}L)",
-            f"{total_discount:.0f}"
+            f"{format_indian(total_discount)}.00"
         ])
         data.append([
             "", "", "", "", "", "", "", "", "Net Payable",
-            f"{net_payable:.0f}"
+            f"{format_indian(net_payable)}.00"
         ])
 
     table = Table(
@@ -3275,7 +3312,7 @@ def save_fuel_receipt():
                 comp5_fuel, comp5_dip, comp5_vol,
                 total_ms_vol, total_hsd_vol, created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
         """, (
             request.form.get("receipt_date"),
@@ -4374,71 +4411,32 @@ def reports():
 
         dc.*,
 
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'MS1'
-        ),0) AS ms1,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'MS2'
-        ),0) AS ms2,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'MS3'
-        ),0) AS ms3,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'HSD1'
-        ),0) AS hsd1,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'HSD2'
-        ),0) AS hsd2,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'HSD3'
-        ),0) AS hsd3,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'CNG1'
-        ),0) AS cng1,
-
-        COALESCE((
-            SELECT SUM(ne.total_sale)
-            FROM nozzle_entries ne
-            JOIN nozzle_master nm ON ne.nozzle_id = nm.id
-            WHERE TO_CHAR(ne.entry_date, 'YYYY-MM-DD') = TO_CHAR(dc.date, 'YYYY-MM-DD')
-            AND nm.nozzle_name = 'CNG2'
-        ),0) AS cng2
+        COALESCE(nz.ms1, 0) AS ms1,
+        COALESCE(nz.ms2, 0) AS ms2,
+        COALESCE(nz.ms3, 0) AS ms3,
+        COALESCE(nz.hsd1, 0) AS hsd1,
+        COALESCE(nz.hsd2, 0) AS hsd2,
+        COALESCE(nz.hsd3, 0) AS hsd3,
+        COALESCE(nz.cng1, 0) AS cng1,
+        COALESCE(nz.cng2, 0) AS cng2
 
     FROM daily_closing dc
+
+    LEFT JOIN (
+        SELECT
+            TO_CHAR(ne.entry_date, 'YYYY-MM-DD') AS entry_day,
+            SUM(CASE WHEN nm.nozzle_name = 'MS1' THEN ne.total_sale ELSE 0 END) AS ms1,
+            SUM(CASE WHEN nm.nozzle_name = 'MS2' THEN ne.total_sale ELSE 0 END) AS ms2,
+            SUM(CASE WHEN nm.nozzle_name = 'MS3' THEN ne.total_sale ELSE 0 END) AS ms3,
+            SUM(CASE WHEN nm.nozzle_name = 'HSD1' THEN ne.total_sale ELSE 0 END) AS hsd1,
+            SUM(CASE WHEN nm.nozzle_name = 'HSD2' THEN ne.total_sale ELSE 0 END) AS hsd2,
+            SUM(CASE WHEN nm.nozzle_name = 'HSD3' THEN ne.total_sale ELSE 0 END) AS hsd3,
+            SUM(CASE WHEN nm.nozzle_name = 'CNG1' THEN ne.total_sale ELSE 0 END) AS cng1,
+            SUM(CASE WHEN nm.nozzle_name = 'CNG2' THEN ne.total_sale ELSE 0 END) AS cng2
+        FROM nozzle_entries ne
+        JOIN nozzle_master nm ON ne.nozzle_id = nm.id
+        GROUP BY TO_CHAR(ne.entry_date, 'YYYY-MM-DD')
+    ) nz ON nz.entry_day = TO_CHAR(dc.date, 'YYYY-MM-DD')
 
     WHERE 1=1
 """
