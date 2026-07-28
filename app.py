@@ -841,7 +841,6 @@ def export_party_transport_excel():
     )
 
 
-@app.route("/export-party-transport-pdf")
 def format_indian(n):
     """
     Formats a number using the Indian numbering system (lakhs/crores):
@@ -868,6 +867,7 @@ def format_indian(n):
     return ("-" if negative else "") + result
 
 
+@app.route("/export-party-transport-pdf")
 def export_party_transport_pdf():
 
     if not session.get("logged_in"):
