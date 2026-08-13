@@ -748,7 +748,7 @@ def export_party_transport_excel():
     ws.append([
         "Date", "SL No", "Party Name", "Challan No", "Vehicle No",
         "Slip No", "HSD Qty", "Rate", "HSD Amount",
-        "Diesel", "Final Amount"
+        "Cash Taken", "Final Amount"
     ])
 
     total_hsd = 0
@@ -3249,7 +3249,11 @@ def add_tank_entry():
         SELECT
             COUNT(*) AS receipt_count,
             COALESCE(SUM(total_ms_vol), 0) AS total_ms,
-            COALESCE(SUM(total_hsd_vol), 0) AS total_hsd
+            COALESCE(SUM(total_hsd_vol), 0) AS total_hsd,
+            COALESCE(SUM(CASE WHEN total_dip_variance > 0 THEN total_dip_variance ELSE 0 END), 0) AS total_gain_mm,
+            COALESCE(SUM(CASE WHEN total_dip_variance < 0 THEN ABS(total_dip_variance) ELSE 0 END), 0) AS total_shortage_mm,
+            COUNT(*) FILTER (WHERE total_dip_variance < 0) AS shortage_count,
+            COUNT(*) FILTER (WHERE ABS(COALESCE(density_variance, 0)) > 3) AS density_alert_count
         FROM fuel_receipts
         WHERE TO_CHAR(receipt_date::date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM')
     """)
@@ -3286,33 +3290,46 @@ def save_fuel_receipt():
         comp_data = []
         total_ms_vol = 0
         total_hsd_vol = 0
+        total_dip_variance = 0
 
         for n in range(1, 6):
             fuel = request.form.get(f"comp{n}_fuel", "")
             dip = round(float(request.form.get(f"comp{n}_dip") or 0), 2)
             vol = round(float(request.form.get(f"comp{n}_vol") or 0), 2)
+            challan_dip = round(float(request.form.get(f"comp{n}_challan_dip") or 0), 2)
 
-            comp_data.extend([fuel, dip, vol])
+            comp_data.extend([fuel, dip, vol, challan_dip])
 
             if fuel == "MS":
                 total_ms_vol += vol
             elif fuel == "HSD":
                 total_hsd_vol += vol
 
+            # positive = actual dip came in higher than the challan claimed
+            # (gain); negative = actual came in lower (shortage) — matches
+            # exactly how it's checked by hand against the challan on paper
+            if challan_dip > 0:
+                total_dip_variance += (dip - challan_dip)
+
+        measured_density = round(float(request.form.get("density") or 0), 2)
+        challan_density = round(float(request.form.get("challan_density") or 0), 2)
+        density_variance = round(measured_density - challan_density, 2) if challan_density > 0 else 0
+
         cur.execute("""
             INSERT INTO fuel_receipts (
                 receipt_date, invoice_no, order_no, vehicle_no,
                 carrier_no, carrier_name, po_no, po_date,
-                water_checked, density, temperature_c,
+                water_checked, density, challan_density, temperature_c,
                 dip_before, dip_after,
-                comp1_fuel, comp1_dip, comp1_vol,
-                comp2_fuel, comp2_dip, comp2_vol,
-                comp3_fuel, comp3_dip, comp3_vol,
-                comp4_fuel, comp4_dip, comp4_vol,
-                comp5_fuel, comp5_dip, comp5_vol,
-                total_ms_vol, total_hsd_vol, created_at
+                comp1_fuel, comp1_dip, comp1_vol, comp1_challan_dip,
+                comp2_fuel, comp2_dip, comp2_vol, comp2_challan_dip,
+                comp3_fuel, comp3_dip, comp3_vol, comp3_challan_dip,
+                comp4_fuel, comp4_dip, comp4_vol, comp4_challan_dip,
+                comp5_fuel, comp5_dip, comp5_vol, comp5_challan_dip,
+                total_ms_vol, total_hsd_vol, total_dip_variance, density_variance,
+                created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING id
         """, (
             request.form.get("receipt_date"),
@@ -3324,22 +3341,26 @@ def save_fuel_receipt():
             request.form.get("po_no", ""),
             request.form.get("po_date", ""),
             request.form.get("water_checked", "NIL"),
-            round(float(request.form.get("density") or 0), 2),
+            measured_density,
+            challan_density,
             round(float(request.form.get("temperature_c") or 0), 2),
             round(float(request.form.get("dip_before") or 0), 2),
             round(float(request.form.get("dip_after") or 0), 2),
             *comp_data,
             round(total_ms_vol, 2),
             round(total_hsd_vol, 2),
+            round(total_dip_variance, 2),
+            density_variance,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ))
 
         new_id = cur.fetchone()["id"]
 
+        variance_note = f"variance {total_dip_variance:+.1f}mm" if total_dip_variance != 0 else "no variance"
         log_activity(
             cur, "Tank Level", "Created",
             f"Fuel receipt #{new_id} logged — Invoice {request.form.get('invoice_no','')} "
-            f"(MS {total_ms_vol}L, HSD {total_hsd_vol}L)"
+            f"(MS {total_ms_vol}L, HSD {total_hsd_vol}L, {variance_note})"
         )
 
         conn.commit()
@@ -3385,31 +3406,40 @@ def update_fuel_receipt(id):
         comp_data = []
         total_ms_vol = 0
         total_hsd_vol = 0
+        total_dip_variance = 0
 
         for n in range(1, 6):
             fuel = request.form.get(f"comp{n}_fuel", "")
             dip = round(float(request.form.get(f"comp{n}_dip") or 0), 2)
             vol = round(float(request.form.get(f"comp{n}_vol") or 0), 2)
+            challan_dip = round(float(request.form.get(f"comp{n}_challan_dip") or 0), 2)
 
-            comp_data.extend([fuel, dip, vol])
+            comp_data.extend([fuel, dip, vol, challan_dip])
 
             if fuel == "MS":
                 total_ms_vol += vol
             elif fuel == "HSD":
                 total_hsd_vol += vol
 
+            if challan_dip > 0:
+                total_dip_variance += (dip - challan_dip)
+
+        measured_density = round(float(request.form.get("density") or 0), 2)
+        challan_density = round(float(request.form.get("challan_density") or 0), 2)
+        density_variance = round(measured_density - challan_density, 2) if challan_density > 0 else 0
+
         cur.execute("""
             UPDATE fuel_receipts
             SET receipt_date=%s, invoice_no=%s, order_no=%s, vehicle_no=%s,
                 carrier_no=%s, carrier_name=%s, po_no=%s, po_date=%s,
-                water_checked=%s, density=%s, temperature_c=%s,
+                water_checked=%s, density=%s, challan_density=%s, temperature_c=%s,
                 dip_before=%s, dip_after=%s,
-                comp1_fuel=%s, comp1_dip=%s, comp1_vol=%s,
-                comp2_fuel=%s, comp2_dip=%s, comp2_vol=%s,
-                comp3_fuel=%s, comp3_dip=%s, comp3_vol=%s,
-                comp4_fuel=%s, comp4_dip=%s, comp4_vol=%s,
-                comp5_fuel=%s, comp5_dip=%s, comp5_vol=%s,
-                total_ms_vol=%s, total_hsd_vol=%s
+                comp1_fuel=%s, comp1_dip=%s, comp1_vol=%s, comp1_challan_dip=%s,
+                comp2_fuel=%s, comp2_dip=%s, comp2_vol=%s, comp2_challan_dip=%s,
+                comp3_fuel=%s, comp3_dip=%s, comp3_vol=%s, comp3_challan_dip=%s,
+                comp4_fuel=%s, comp4_dip=%s, comp4_vol=%s, comp4_challan_dip=%s,
+                comp5_fuel=%s, comp5_dip=%s, comp5_vol=%s, comp5_challan_dip=%s,
+                total_ms_vol=%s, total_hsd_vol=%s, total_dip_variance=%s, density_variance=%s
             WHERE id=%s
         """, (
             request.form.get("receipt_date"),
@@ -3421,13 +3451,16 @@ def update_fuel_receipt(id):
             request.form.get("po_no", ""),
             request.form.get("po_date", ""),
             request.form.get("water_checked", "NIL"),
-            round(float(request.form.get("density") or 0), 2),
+            measured_density,
+            challan_density,
             round(float(request.form.get("temperature_c") or 0), 2),
             round(float(request.form.get("dip_before") or 0), 2),
             round(float(request.form.get("dip_after") or 0), 2),
             *comp_data,
             round(total_ms_vol, 2),
             round(total_hsd_vol, 2),
+            round(total_dip_variance, 2),
+            density_variance,
             id
         ))
 
@@ -7393,16 +7426,19 @@ def ensure_fuel_receipts_table():
                 po_date TEXT,
                 water_checked TEXT,
                 density REAL DEFAULT 0,
+                challan_density REAL DEFAULT 0,
                 temperature_c REAL DEFAULT 0,
                 dip_before REAL DEFAULT 0,
                 dip_after REAL DEFAULT 0,
-                comp1_fuel TEXT, comp1_dip REAL DEFAULT 0, comp1_vol REAL DEFAULT 0,
-                comp2_fuel TEXT, comp2_dip REAL DEFAULT 0, comp2_vol REAL DEFAULT 0,
-                comp3_fuel TEXT, comp3_dip REAL DEFAULT 0, comp3_vol REAL DEFAULT 0,
-                comp4_fuel TEXT, comp4_dip REAL DEFAULT 0, comp4_vol REAL DEFAULT 0,
-                comp5_fuel TEXT, comp5_dip REAL DEFAULT 0, comp5_vol REAL DEFAULT 0,
+                comp1_fuel TEXT, comp1_dip REAL DEFAULT 0, comp1_vol REAL DEFAULT 0, comp1_challan_dip REAL DEFAULT 0,
+                comp2_fuel TEXT, comp2_dip REAL DEFAULT 0, comp2_vol REAL DEFAULT 0, comp2_challan_dip REAL DEFAULT 0,
+                comp3_fuel TEXT, comp3_dip REAL DEFAULT 0, comp3_vol REAL DEFAULT 0, comp3_challan_dip REAL DEFAULT 0,
+                comp4_fuel TEXT, comp4_dip REAL DEFAULT 0, comp4_vol REAL DEFAULT 0, comp4_challan_dip REAL DEFAULT 0,
+                comp5_fuel TEXT, comp5_dip REAL DEFAULT 0, comp5_vol REAL DEFAULT 0, comp5_challan_dip REAL DEFAULT 0,
                 total_ms_vol REAL DEFAULT 0,
                 total_hsd_vol REAL DEFAULT 0,
+                total_dip_variance REAL DEFAULT 0,
+                density_variance REAL DEFAULT 0,
                 created_at TEXT
             )
         """)
@@ -7413,6 +7449,12 @@ def ensure_fuel_receipts_table():
             ("comp1_fuel", "TEXT"), ("comp2_fuel", "TEXT"), ("comp3_fuel", "TEXT"),
             ("comp4_fuel", "TEXT"), ("comp5_fuel", "TEXT"),
             ("total_ms_vol", "REAL DEFAULT 0"), ("total_hsd_vol", "REAL DEFAULT 0"),
+            ("comp1_challan_dip", "REAL DEFAULT 0"), ("comp2_challan_dip", "REAL DEFAULT 0"),
+            ("comp3_challan_dip", "REAL DEFAULT 0"), ("comp4_challan_dip", "REAL DEFAULT 0"),
+            ("comp5_challan_dip", "REAL DEFAULT 0"),
+            ("challan_density", "REAL DEFAULT 0"),
+            ("total_dip_variance", "REAL DEFAULT 0"),
+            ("density_variance", "REAL DEFAULT 0"),
         ]:
             cur.execute(f"ALTER TABLE fuel_receipts ADD COLUMN IF NOT EXISTS {col} {coltype}")
 

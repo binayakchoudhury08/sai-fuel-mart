@@ -51,6 +51,10 @@
 .kpi-card.purple::after{ background:rgba(124,58,237,.06); }
 .kpi-card.orange{ border-left-color:#f97316; }
 .kpi-card.orange::after{ background:rgba(249,115,22,.06); }
+.kpi-card.red{ border-left-color:#dc2626; }
+.kpi-card.red::after{ background:rgba(220,38,38,.06); }
+.kpi-card.teal{ border-left-color:#0d9488; }
+.kpi-card.teal::after{ background:rgba(13,148,136,.06); }
 
 .kpi-card h4{
     font-size:12.5px;
@@ -136,6 +140,34 @@
 
 .comp-total-chip.ms{ background:#dcfce7; color:#15803d; }
 .comp-total-chip.hsd{ background:#dbeafe; color:#1d4ed8; }
+.comp-total-chip.variance{ background:#f1f5f9; color:#334155; }
+.comp-total-chip.variance.gain{ background:#dcfce7; color:#15803d; }
+.comp-total-chip.variance.shortage{ background:#fee2e2; color:#b91c1c; }
+
+.variance-readout{
+    padding:11px 14px;
+    border-radius:11px;
+    background:#f1f5f9;
+    color:#334155;
+    font-weight:800;
+    font-size:14px;
+    text-align:center;
+}
+.variance-readout.gain{ background:#dcfce7; color:#15803d; }
+.variance-readout.shortage{ background:#fee2e2; color:#b91c1c; }
+
+.comp-variance-badge{
+    margin-top:2px;
+    padding:6px 8px;
+    border-radius:8px;
+    background:#f1f5f9;
+    color:#64748b;
+    font-weight:800;
+    font-size:12px;
+    text-align:center;
+}
+.comp-variance-badge.gain{ background:#dcfce7; color:#15803d; }
+.comp-variance-badge.shortage{ background:#fee2e2; color:#b91c1c; }
 
 .filter-box{
     background:white;
@@ -358,6 +390,26 @@
         <h2 style="font-size:20px;">{{ last_receipt_date or "—" }}</h2>
     </div>
 
+    <div class="kpi-card teal">
+        <h4>TOTAL GAIN (DIP) THIS MONTH</h4>
+        <h2>+{{ month_stats["total_gain_mm"] if month_stats else 0 }} mm</h2>
+    </div>
+
+    <div class="kpi-card red">
+        <h4>TOTAL SHORTAGE (DIP) THIS MONTH</h4>
+        <h2>-{{ month_stats["total_shortage_mm"] if month_stats else 0 }} mm</h2>
+    </div>
+
+    <div class="kpi-card red">
+        <h4>CHALLANS WITH SHORTAGE</h4>
+        <h2>{{ month_stats["shortage_count"] if month_stats else 0 }}</h2>
+    </div>
+
+    <div class="kpi-card orange">
+        <h4>DENSITY ALERTS (&gt;3 kg/m³ off)</h4>
+        <h2>{{ month_stats["density_alert_count"] if month_stats else 0 }}</h2>
+    </div>
+
 </div>
 
 <div class="box">
@@ -431,8 +483,18 @@
             </div>
 
             <div class="input-group">
-                <label>Density (Kg/m³)</label>
-                <input type="number" step="0.01" name="density" placeholder="826.4">
+                <label>Challan Density (Kg/m³) <span style="font-weight:400;color:#94a3b8;">from invoice</span></label>
+                <input type="number" step="0.01" name="challan_density" id="challan-density" placeholder="820.0">
+            </div>
+
+            <div class="input-group">
+                <label>Density at Receipt (Kg/m³) <span style="font-weight:400;color:#94a3b8;">measured</span></label>
+                <input type="number" step="0.01" name="density" id="measured-density" placeholder="826.4">
+            </div>
+
+            <div class="input-group">
+                <label>Density Variance</label>
+                <div class="variance-readout" id="density-variance-readout">—</div>
             </div>
 
             <div class="input-group">
@@ -452,11 +514,12 @@
 
         </div>
 
-        <div class="section-label"><i class="fa-solid fa-truck-fast"></i> Compartment-wise Readings (MS or HSD, per compartment)</div>
+        <div class="section-label"><i class="fa-solid fa-truck-fast"></i> Compartment-wise Readings — Challan Dip vs Actual Dip (MS or HSD, per compartment)</div>
 
         <div class="comp-total-bar">
             <div class="comp-total-chip ms"><span>Total MS</span><span id="totalMs">0.00 L</span></div>
             <div class="comp-total-chip hsd"><span>Total HSD</span><span id="totalHsd">0.00 L</span></div>
+            <div class="comp-total-chip variance" id="varianceChip"><span>Total Dip Variance</span><span id="totalVariance">0.0 mm</span></div>
         </div>
 
         <div class="comp-grid">
@@ -469,8 +532,10 @@
                     <option value="MS">MS</option>
                     <option value="HSD">HSD</option>
                 </select>
-                <input type="number" step="0.01" name="comp{{ n }}_dip" placeholder="Dip">
+                <input type="number" step="0.01" name="comp{{ n }}_challan_dip" class="comp-challan-dip-input" data-comp="{{ n }}" placeholder="Challan Dip">
+                <input type="number" step="0.01" name="comp{{ n }}_dip" class="comp-actual-dip-input" data-comp="{{ n }}" placeholder="Actual Dip">
                 <input type="number" step="0.01" name="comp{{ n }}_vol" class="comp-vol-input" data-comp="{{ n }}" placeholder="Vol (L)">
+                <div class="comp-variance-badge" id="compVariance{{ n }}" data-comp="{{ n }}">—</div>
             </div>
             {% endfor %}
 
@@ -543,6 +608,8 @@
             <th>Carrier</th>
             <th>MS (L)</th>
             <th>HSD (L)</th>
+            <th>Dip Variance</th>
+            <th>Density Var.</th>
             <th>Water</th>
             <th>Action</th>
         </tr>
@@ -555,6 +622,24 @@
             <td>{{ r["carrier_name"] }}</td>
             <td>{% if r["total_ms_vol"] %}<span class="fuel-tag ms">{{ r["total_ms_vol"] }} L</span>{% else %}—{% endif %}</td>
             <td>{% if r["total_hsd_vol"] %}<span class="fuel-tag hsd">{{ r["total_hsd_vol"] }} L</span>{% else %}—{% endif %}</td>
+            <td>
+                {% if r["total_dip_variance"] and r["total_dip_variance"] > 0 %}
+                    <span class="fuel-tag ms">+{{ r["total_dip_variance"] }} mm</span>
+                {% elif r["total_dip_variance"] and r["total_dip_variance"] < 0 %}
+                    <span class="fuel-tag" style="background:#fee2e2;color:#b91c1c;">{{ r["total_dip_variance"] }} mm</span>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                {% if r["density_variance"] and r["density_variance"]|abs > 3 %}
+                    <span class="fuel-tag" style="background:#fee2e2;color:#b91c1c;">{{ r["density_variance"] }} ⚠</span>
+                {% elif r["density_variance"] %}
+                    <span class="fuel-tag" style="background:#f1f5f9;color:#334155;">{{ r["density_variance"] }}</span>
+                {% else %}
+                    —
+                {% endif %}
+            </td>
             <td>{{ r["water_checked"] }}</td>
             <td>
                 <a href="/edit-fuel-receipt/{{ r['id'] }}" class="action-btn edit-btn">Edit</a>
@@ -564,7 +649,7 @@
         </tr>
         {% else %}
         <tr>
-            <td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">No fuel receipts logged yet.</td>
+            <td colspan="10" style="text-align:center;color:#94a3b8;padding:30px;">No fuel receipts logged yet.</td>
         </tr>
         {% endfor %}
 
@@ -606,6 +691,89 @@ document.querySelectorAll(".comp-fuel-select, .comp-vol-input").forEach(function
     el.addEventListener("input", recalcCompTotals);
     el.addEventListener("change", recalcCompTotals);
 });
+
+function recalcVariance(){
+    var totalVariance = 0;
+    var anyChallanEntered = false;
+
+    [1,2,3,4,5].forEach(function(n){
+        var challanInput = document.querySelector('.comp-challan-dip-input[data-comp="' + n + '"]');
+        var actualInput = document.querySelector('.comp-actual-dip-input[data-comp="' + n + '"]');
+        var badge = document.getElementById("compVariance" + n);
+
+        var challan = parseFloat(challanInput.value) || 0;
+        var actual = parseFloat(actualInput.value) || 0;
+
+        badge.classList.remove("gain", "shortage");
+
+        if(challan > 0){
+            anyChallanEntered = true;
+            var variance = actual - challan;
+            totalVariance += variance;
+
+            if(variance > 0){
+                badge.textContent = "+" + variance.toFixed(1) + " mm gain";
+                badge.classList.add("gain");
+            } else if(variance < 0){
+                badge.textContent = variance.toFixed(1) + " mm short";
+                badge.classList.add("shortage");
+            } else {
+                badge.textContent = "Exact match";
+            }
+        } else {
+            badge.textContent = "—";
+        }
+    });
+
+    var chip = document.getElementById("varianceChip");
+    var chipValue = document.getElementById("totalVariance");
+    chip.classList.remove("gain", "shortage");
+
+    if(!anyChallanEntered){
+        chipValue.textContent = "0.0 mm";
+    } else if(totalVariance > 0){
+        chipValue.textContent = "+" + totalVariance.toFixed(1) + " mm";
+        chip.classList.add("gain");
+    } else if(totalVariance < 0){
+        chipValue.textContent = totalVariance.toFixed(1) + " mm";
+        chip.classList.add("shortage");
+    } else {
+        chipValue.textContent = "0.0 mm (exact)";
+    }
+}
+
+document.querySelectorAll(".comp-challan-dip-input, .comp-actual-dip-input").forEach(function(el){
+    el.addEventListener("input", recalcVariance);
+});
+
+function recalcDensityVariance(){
+    var challan = parseFloat(document.getElementById("challan-density").value) || 0;
+    var measured = parseFloat(document.getElementById("measured-density").value) || 0;
+    var readout = document.getElementById("density-variance-readout");
+
+    readout.classList.remove("gain", "shortage");
+
+    if(challan <= 0 || measured <= 0){
+        readout.textContent = "—";
+        return;
+    }
+
+    var variance = measured - challan;
+
+    if(Math.abs(variance) > 3){
+        readout.textContent = (variance > 0 ? "+" : "") + variance.toFixed(1) + " ⚠ check quality";
+        readout.classList.add("shortage");
+    } else if(variance !== 0){
+        readout.textContent = (variance > 0 ? "+" : "") + variance.toFixed(1) + " (normal)";
+        readout.classList.add("gain");
+    } else {
+        readout.textContent = "0.0 (exact match)";
+        readout.classList.add("gain");
+    }
+}
+
+document.getElementById("challan-density").addEventListener("input", recalcDensityVariance);
+document.getElementById("measured-density").addEventListener("input", recalcDensityVariance);
 
 function applyFilters(){
     var from = document.getElementById("filterFrom").value;

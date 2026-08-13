@@ -112,7 +112,12 @@ input:focus,select:focus{outline:none;border-color:#16a34a;}
         </div>
 
         <div class="input-group">
-            <label>Density (Kg/m³)</label>
+            <label>Challan Density (Kg/m³)</label>
+            <input type="number" step="0.01" name="challan_density" value="{{ r['challan_density'] or 0 }}">
+        </div>
+
+        <div class="input-group">
+            <label>Density at Receipt (Kg/m³)</label>
             <input type="number" step="0.01" name="density" value="{{ r['density'] or 0 }}">
         </div>
 
@@ -133,7 +138,7 @@ input:focus,select:focus{outline:none;border-color:#16a34a;}
 
     </div>
 
-    <div class="section-label">Compartment-wise Readings</div>
+    <div class="section-label">Compartment-wise Readings — Challan Dip vs Actual Dip</div>
 
     <div class="comp-grid">
 
@@ -145,7 +150,8 @@ input:focus,select:focus{outline:none;border-color:#16a34a;}
                 <option value="MS" {% if r['comp' ~ n ~ '_fuel'] == 'MS' %}selected{% endif %}>MS</option>
                 <option value="HSD" {% if r['comp' ~ n ~ '_fuel'] == 'HSD' %}selected{% endif %}>HSD</option>
             </select>
-            <input type="number" step="0.01" name="comp{{ n }}_dip" placeholder="Dip" value="{{ r['comp' ~ n ~ '_dip'] or 0 }}">
+            <input type="number" step="0.01" name="comp{{ n }}_challan_dip" placeholder="Challan Dip" value="{{ r['comp' ~ n ~ '_challan_dip'] or 0 }}">
+            <input type="number" step="0.01" name="comp{{ n }}_dip" placeholder="Actual Dip" value="{{ r['comp' ~ n ~ '_dip'] or 0 }}">
             <input type="number" step="0.01" name="comp{{ n }}_vol" placeholder="Vol (L)" value="{{ r['comp' ~ n ~ '_vol'] or 0 }}">
         </div>
         {% endfor %}
