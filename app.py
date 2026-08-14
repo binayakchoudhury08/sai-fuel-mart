@@ -1248,8 +1248,8 @@ def export_daily_bills_zip():
             pdf_file = build_transport_pdf_bytes(party, biz, day_rows, date_str, date_str)
             excel_file = build_transport_excel_bytes(party, day_rows, date_str)
 
-            pdf_name = bill_filename(party_name, date_str, "pdf")
-            excel_name = bill_filename(party_name, date_str, "xlsx")
+            pdf_name = "PDF/" + bill_filename(party_name, date_str, "pdf")
+            excel_name = "Excel/" + bill_filename(party_name, date_str, "xlsx")
 
             # guard against two bills landing on the same filename
             # (shouldn't normally happen since each date is distinct,
