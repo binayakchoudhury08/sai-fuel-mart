@@ -1233,9 +1233,22 @@ def export_daily_bills_zip():
     zip_buffer = BytesIO()
     used_names = set()
 
+    def month_folder_name(date_value):
+        """Turns an entry_date (string or date object) into a folder
+        name like 'May 2025', so bills group by month first."""
+        if isinstance(date_value, str):
+            try:
+                parsed = datetime.strptime(date_value, "%Y-%m-%d")
+            except ValueError:
+                return "Unknown Month"
+        else:
+            parsed = date_value
+        return parsed.strftime("%B %Y")
+
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for entry_date in distinct_dates:
             date_str = str(entry_date)
+            month_folder = month_folder_name(entry_date)
 
             cur.execute("""
                 SELECT *
@@ -1248,8 +1261,8 @@ def export_daily_bills_zip():
             pdf_file = build_transport_pdf_bytes(party, biz, day_rows, date_str, date_str)
             excel_file = build_transport_excel_bytes(party, day_rows, date_str)
 
-            pdf_name = "PDF/" + bill_filename(party_name, date_str, "pdf")
-            excel_name = "Excel/" + bill_filename(party_name, date_str, "xlsx")
+            pdf_name = f"{month_folder}/PDF/" + bill_filename(party_name, date_str, "pdf")
+            excel_name = f"{month_folder}/Excel/" + bill_filename(party_name, date_str, "xlsx")
 
             # guard against two bills landing on the same filename
             # (shouldn't normally happen since each date is distinct,
