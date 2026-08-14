@@ -12,6 +12,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.chart import BarChart, PieChart, LineChart, Reference
 from openpyxl.utils import get_column_letter
 import tempfile
+import zipfile
 from reportlab.lib.pagesizes import A4, landscape
 import requests
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
@@ -707,39 +708,13 @@ def backup_database():
 # app.py
 # DAILY CLOSING ROUTE
 
-@app.route("/export-party-transport-excel")
-def export_party_transport_excel():
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    transporter_id = request.args.get("transporter_id")
-    from_date = request.args.get("from_date")
-    to_date = request.args.get("to_date")
-
-    conn = get_pg_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT *
-        FROM credit_transporters
-        WHERE id=%s
-    """, (transporter_id,))
-    party = cur.fetchone()
-
+def build_transport_excel_bytes(party, rows, from_date):
+    """
+    Builds one Credit Transport Bill Excel workbook (as BytesIO) for the
+    given rows. Used both by the single-range Excel export route and by
+    the daily-bills bulk export, which calls this once per day.
+    """
     party_name = party["party_name"] if party else "Transporter"
-
-    cur.execute("""
-        SELECT *
-        FROM transport_entries
-        WHERE transporter_id=%s
-          AND entry_date >= %s
-          AND entry_date <= %s
-        ORDER BY entry_date ASC, sl_no ASC
-    """, (transporter_id, from_date, to_date))
-
-    rows = cur.fetchall()
-    conn.close()
 
     wb = Workbook()
     ws = wb.active
@@ -831,7 +806,38 @@ def export_party_transport_excel():
     file = BytesIO()
     wb.save(file)
     file.seek(0)
+    return file
 
+
+@app.route("/export-party-transport-excel")
+def export_party_transport_excel():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.args.get("transporter_id")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM credit_transporters WHERE id=%s", (transporter_id,))
+    party = cur.fetchone()
+    party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("""
+        SELECT *
+        FROM transport_entries
+        WHERE transporter_id=%s
+          AND entry_date >= %s
+          AND entry_date <= %s
+        ORDER BY entry_date ASC, sl_no ASC
+    """, (transporter_id, from_date, to_date))
+    rows = cur.fetchall()
+    conn.close()
+
+    file = build_transport_excel_bytes(party, rows, from_date)
     filename = bill_filename(party_name, from_date, "xlsx")
 
     return send_file(
@@ -867,43 +873,13 @@ def format_indian(n):
     return ("-" if negative else "") + result
 
 
-@app.route("/export-party-transport-pdf")
-def export_party_transport_pdf():
-
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-    transporter_id = request.args.get("transporter_id")
-    from_date = request.args.get("from_date")
-    to_date = request.args.get("to_date")
-
-    conn = get_pg_conn()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT *
-        FROM credit_transporters
-        WHERE id=%s
-    """, (transporter_id,))
-    party = cur.fetchone()
-
+def build_transport_pdf_bytes(party, biz, rows, from_date, to_date):
+    """
+    Builds one Credit Transport Bill PDF (as BytesIO) for the given rows
+    and date range. Used both by the single-range PDF export route and
+    by the daily-bills bulk export, which calls this once per day.
+    """
     party_name = party["party_name"] if party else "Transporter"
-
-    cur.execute("SELECT * FROM settings WHERE id=1")
-    biz = cur.fetchone()
-
-    cur.execute("""
-        SELECT *
-        FROM transport_entries
-        WHERE transporter_id=%s
-          AND entry_date >= %s
-          AND entry_date <= %s
-        ORDER BY entry_date ASC, sl_no ASC
-    """, (transporter_id, from_date, to_date))
-
-    rows = cur.fetchall()
-
-    conn.close()
 
     station_name = (biz["station_name"] if biz and biz["station_name"] else "") or "SAI FUEL MART"
     station_address = biz["station_address"] if biz and biz["station_address"] else ""
@@ -1162,7 +1138,42 @@ def export_party_transport_pdf():
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
 
     file.seek(0)
+    return file
 
+
+@app.route("/export-party-transport-pdf")
+def export_party_transport_pdf():
+
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.args.get("transporter_id")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM credit_transporters WHERE id=%s", (transporter_id,))
+    party = cur.fetchone()
+    party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    biz = cur.fetchone()
+
+    cur.execute("""
+        SELECT *
+        FROM transport_entries
+        WHERE transporter_id=%s
+          AND entry_date >= %s
+          AND entry_date <= %s
+        ORDER BY entry_date ASC, sl_no ASC
+    """, (transporter_id, from_date, to_date))
+    rows = cur.fetchall()
+
+    conn.close()
+
+    file = build_transport_pdf_bytes(party, biz, rows, from_date, to_date)
     filename = bill_filename(party_name, from_date, "pdf")
 
     return send_file(
@@ -1170,6 +1181,102 @@ def export_party_transport_pdf():
         as_attachment=True,
         download_name=filename
     )
+
+
+@app.route("/export-daily-bills-zip")
+def export_daily_bills_zip():
+    """
+    Instead of one combined PDF/Excel spanning the whole date range,
+    this generates a SEPARATE PDF and Excel bill for each individual
+    day that has entries in the range — matching how bills are actually
+    issued day by day — and bundles all of them into one ZIP download.
+    """
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+    transporter_id = request.args.get("transporter_id")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM credit_transporters WHERE id=%s", (transporter_id,))
+    party = cur.fetchone()
+    party_name = party["party_name"] if party else "Transporter"
+
+    cur.execute("SELECT * FROM settings WHERE id=1")
+    biz = cur.fetchone()
+
+    # every distinct day in the range that actually has entries —
+    # each one becomes its own separate bill
+    cur.execute("""
+        SELECT DISTINCT entry_date
+        FROM transport_entries
+        WHERE transporter_id=%s
+          AND entry_date >= %s
+          AND entry_date <= %s
+        ORDER BY entry_date ASC
+    """, (transporter_id, from_date, to_date))
+    distinct_dates = [row["entry_date"] for row in cur.fetchall()]
+
+    if not distinct_dates:
+        conn.close()
+        return redirect(url_for(
+            "reports",
+            zip_no_entries="1",
+            zip_party=party_name,
+            zip_from=from_date,
+            zip_to=to_date
+        ) + "#entry-tab")
+
+    zip_buffer = BytesIO()
+    used_names = set()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for entry_date in distinct_dates:
+            date_str = str(entry_date)
+
+            cur.execute("""
+                SELECT *
+                FROM transport_entries
+                WHERE transporter_id=%s AND entry_date=%s
+                ORDER BY sl_no ASC
+            """, (transporter_id, date_str))
+            day_rows = cur.fetchall()
+
+            pdf_file = build_transport_pdf_bytes(party, biz, day_rows, date_str, date_str)
+            excel_file = build_transport_excel_bytes(party, day_rows, date_str)
+
+            pdf_name = bill_filename(party_name, date_str, "pdf")
+            excel_name = bill_filename(party_name, date_str, "xlsx")
+
+            # guard against two bills landing on the same filename
+            # (shouldn't normally happen since each date is distinct,
+            # but stay safe rather than silently overwrite one)
+            for name, data in [(pdf_name, pdf_file), (excel_name, excel_file)]:
+                final_name = name
+                counter = 2
+                while final_name in used_names:
+                    stem, dot, ext = name.rpartition(".")
+                    final_name = f"{stem}_{counter}.{ext}"
+                    counter += 1
+                used_names.add(final_name)
+                zf.writestr(final_name, data.getvalue())
+
+    conn.close()
+
+    zip_buffer.seek(0)
+
+    zip_filename = f"{re.sub(r'[^A-Za-z0-9]+', '_', party_name).strip('_')}_Daily_Bills_{from_date}_to_{to_date}.zip"
+
+    return send_file(
+        zip_buffer,
+        as_attachment=True,
+        download_name=zip_filename,
+        mimetype="application/zip"
+    )
+
 
 def reverse_daily_closing_for_date(cur, report_date):
     """

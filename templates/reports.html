@@ -421,7 +421,7 @@ body{
 
 .export-box form{
     display:grid;
-    grid-template-columns:2fr 1fr 1fr auto auto;
+    grid-template-columns:2fr 1fr 1fr auto auto auto;
     gap:16px;
     align-items:end;
 }
@@ -432,7 +432,8 @@ body{
 }
 
 .export-btn-excel,
-.export-btn-pdf{
+.export-btn-pdf,
+.export-btn-zip{
     border:none;
     padding:14px 22px;
     border-radius:14px;
@@ -456,8 +457,14 @@ body{
     color:white;
 }
 
+.export-btn-zip{
+    background:#7c3aed;
+    color:white;
+}
+
 .export-btn-excel:hover,
-.export-btn-pdf:hover{
+.export-btn-pdf:hover,
+.export-btn-zip:hover{
     transform:translateY(-1px);
     box-shadow:0 8px 18px rgba(0,0,0,.15);
 }
@@ -1373,6 +1380,13 @@ Export Excel
             📄 PDF
         </button>
 
+        <button
+            formaction="/export-daily-bills-zip"
+            class="export-btn-zip"
+            title="Generates one separate PDF + one separate Excel bill for every day in the range, bundled into a ZIP — instead of one combined file for the whole period">
+            🗂️ Daily Bills (ZIP)
+        </button>
+
     </form>
 
 </div>
@@ -1609,6 +1623,17 @@ document.querySelectorAll(".sidebar nav a").forEach(function(link){
     link.addEventListener("click", closeMobileSidebar);
 });
 </script>
+
+{% if request.args.get("zip_no_entries") %}
+<script>
+window.addEventListener("load", function(){
+    var party = {{ request.args.get("zip_party", "this transporter")|tojson }};
+    var fromDate = {{ request.args.get("zip_from", "")|tojson }};
+    var toDate = {{ request.args.get("zip_to", "")|tojson }};
+    alert("No transport entries found for " + party + " between " + fromDate + " and " + toDate + ".");
+});
+</script>
+{% endif %}
 
 </body>
 </html>
