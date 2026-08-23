@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file, flash, g, has_app_context
 from datetime import timedelta, datetime
 import sqlite3
 import os
@@ -459,7 +459,7 @@ def dashboard():
     SELECT
 
         ROUND(
-            SUM(total_fuel_sale),
+            SUM(total_fuel_sale)::numeric,
             2
         ) AS monthly_sale,
 
@@ -468,17 +468,17 @@ def dashboard():
                 SELECT cng_rate
                 FROM settings
                 WHERE id=1
-            )),
+            ))::numeric,
             2
         ) AS monthly_cng,
 
         ROUND(
-            SUM(total_expense),
+            SUM(total_expense)::numeric,
             2
         ) AS monthly_expense,
 
         ROUND(
-            SUM(net_credit_due),
+            SUM(net_credit_due)::numeric,
             2
         ) AS monthly_credit
 
@@ -1371,13 +1371,40 @@ def save_daily_closing():
         conn = get_pg_conn()
         cur = conn.cursor()
 
-        cur.execute("SELECT id FROM daily_closing WHERE date=%s", (data["date"],))
-        existing = cur.fetchone()
+        # ------------------------------------------------------------------
+        # DUPLICATE-SAVE GUARD
+        #
+        # Take a transaction-scoped advisory lock keyed on the closing date.
+        # If the same date is saved twice at the same moment (double-tap on
+        # mobile, PWA retry, flaky network), the second request now WAITS
+        # here instead of racing past the "does a row already exist?" check
+        # and inserting a second copy. The lock releases automatically on
+        # commit or rollback.
+        # ------------------------------------------------------------------
+        cur.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (f"daily_closing:{data['date']}",)
+        )
 
-        if existing:
-            reverse_daily_closing_for_date(cur, data["date"])
-            cur.execute("DELETE FROM daily_closing WHERE id=%s", (existing["id"],))
-            cur.execute("DELETE FROM nozzle_entries WHERE entry_date=%s", (data["date"],))
+        cur.execute("SELECT id FROM daily_closing WHERE date=%s", (data["date"],))
+        existing_rows = cur.fetchall()
+        existing = existing_rows[0] if existing_rows else None
+
+        # Always reverse + clear for this date, whether or not a closing row
+        # exists. The old code only cleared nozzle_entries when a daily_closing
+        # row already existed -- so readings typed on the Nozzle Management
+        # page first, then saved again from Daily Closing, produced TWO rows
+        # per nozzle per day. That doubled every MS/HSD/CNG total and made the
+        # Daily Closing page render each nozzle twice on the next load.
+        reverse_daily_closing_for_date(cur, data["date"])
+
+        if existing_rows:
+            # delete EVERY row for this date, not just the first one found --
+            # otherwise an already-duplicated date could never converge back
+            # to a single row no matter how many times it was re-saved
+            cur.execute("DELETE FROM daily_closing WHERE date=%s", (data["date"],))
+
+        cur.execute("DELETE FROM nozzle_entries WHERE entry_date=%s", (data["date"],))
 
         cur.execute("""
             INSERT INTO daily_closing (
@@ -1409,7 +1436,18 @@ def save_daily_closing():
         ))
 
         # SAVE NOZZLES
+        #
+        # Collapse the incoming list to ONE entry per nozzle before writing.
+        # If the page was rendered from already-duplicated data, the browser
+        # sends the same nozzle twice; without this the bad data would be
+        # written straight back and the duplication would never heal.
+        deduped_nozzles = {}
         for item in data.get("nozzle_entries", []):
+            nid = item.get("nozzle_id")
+            if nid:
+                deduped_nozzles[str(nid)] = item
+
+        for item in deduped_nozzles.values():
 
             nozzle_id = item.get("nozzle_id")
 
@@ -1607,12 +1645,34 @@ def save_lube_product():
     conn = get_pg_conn()
     cur = conn.cursor()
 
-    product_name = request.form.get("product_name")
+    product_name = (request.form.get("product_name") or "").strip()
     selling_rate = float(request.form.get("selling_rate") or 0)
     opening_stock = float(request.form.get("opening_stock") or 0)
     purchase_qty = float(request.form.get("purchase_qty") or 0)
 
     closing_stock = opening_stock + purchase_qty
+
+    if not product_name:
+        conn.close()
+        flash("Product name is required", "error")
+        return redirect(url_for("lube_stock"))
+
+    # Reject a product that already exists under the same name (ignoring
+    # case and stray spaces). Without this, "Shell 20W40" and "shell 20w40 "
+    # became two separate stock lines and every sale decremented whichever
+    # one the operator happened to pick -- so closing stock drifted apart
+    # and the same product showed up twice on Daily Closing's dropdown.
+    cur.execute("""
+        SELECT id
+        FROM lube_stock
+        WHERE LOWER(TRIM(product_name)) = LOWER(TRIM(%s))
+        LIMIT 1
+    """, (product_name,))
+
+    if cur.fetchone():
+        conn.close()
+        flash(f"'{product_name}' already exists in Lube Stock", "error")
+        return redirect(url_for("lube_stock"))
 
     cur.execute("""
 
@@ -1730,10 +1790,22 @@ def daily_closing():
 
     FROM nozzle_master nm
 
-    LEFT JOIN nozzle_entries ne
-
-    ON nm.id = ne.nozzle_id
-    AND ne.entry_date = %s
+    -- DISTINCT ON guarantees at most ONE reading row per nozzle for the
+    -- selected date. A plain LEFT JOIN on nozzle_entries multiplied the
+    -- result whenever a date had duplicate readings saved, which is what
+    -- made the Daily Closing page show every nozzle twice and double all
+    -- the MS/HSD/CNG totals.
+    LEFT JOIN (
+        SELECT DISTINCT ON (nozzle_id)
+            nozzle_id,
+            opening_reading,
+            closing_reading,
+            testing_qty,
+            total_sale
+        FROM nozzle_entries
+        WHERE entry_date = %s
+        ORDER BY nozzle_id, id DESC
+    ) ne ON nm.id = ne.nozzle_id
 
     ORDER BY
     nm.fuel_type,
@@ -2679,9 +2751,18 @@ def save_nozzle_entry():
         SELECT id
         FROM nozzle_entries
         WHERE entry_date=%s AND nozzle_id=%s
+        ORDER BY id DESC
     """, (entry_date, nozzle_id))
 
-    existing = cur.fetchone()
+    existing_rows = cur.fetchall()
+    existing = existing_rows[0] if existing_rows else None
+
+    # heal any duplicates already sitting in the table for this nozzle/day
+    if existing and len(existing_rows) > 1:
+        cur.execute("""
+            DELETE FROM nozzle_entries
+            WHERE entry_date=%s AND nozzle_id=%s AND id <> %s
+        """, (entry_date, nozzle_id, existing["id"]))
 
     if existing:
 
@@ -3066,6 +3147,16 @@ def save_tank_level():
     shortage_qty = abs(difference) if difference < 0 else 0
     gain_amount = round(gain_qty * rate, 2)
     shortage_amount = round(shortage_qty * rate, 2)
+
+    # One reading per fuel per day. /api/tank-sync already does this, but
+    # the manual form did a bare INSERT -- so saving the same date twice
+    # stacked rows, and every "latest reading" query in the app uses
+    # ORDER BY id DESC LIMIT 1, meaning the stale duplicate silently
+    # skewed the monthly gain/shortage totals.
+    cur.execute("""
+        DELETE FROM tank_level
+        WHERE date=%s AND fuel_type=%s
+    """, (request.form["date"], fuel_type))
 
     cur.execute("""
         INSERT INTO tank_level (
@@ -5463,61 +5554,78 @@ def lube_stock():
         return redirect(url_for("login"))
 
     conn = get_pg_conn()
-    cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM lube_stock
-        ORDER BY product_name ASC
-    """)
-    lube_items = cur.fetchall()
+    try:
+        cur = conn.cursor()
 
-    cur.execute("""
-        SELECT *
-        FROM lube_transactions
-        ORDER BY date DESC, id DESC
-    """)
-    lube_transactions = cur.fetchall()
-
-    cur.execute("""
-        SELECT COUNT(*) AS total_products,
-               COALESCE(SUM(closing_stock),0) AS total_stock,
-               COALESCE(SUM(sale_qty),0) AS total_sold
-        FROM lube_stock
-    """)
-    summary = cur.fetchone()
-
-    product_data = {}
-
-    for item in lube_items:
-        product_id = item["id"]
+        cur.execute("""
+            SELECT *
+            FROM lube_stock
+            ORDER BY product_name ASC
+        """)
+        lube_items = cur.fetchall()
 
         cur.execute("""
             SELECT *
             FROM lube_transactions
-            WHERE product_id=%s
             ORDER BY date DESC, id DESC
-        """, (product_id,))
-        transactions = cur.fetchall()
+        """)
+        lube_transactions = cur.fetchall()
 
-        total_purchase = sum(float(t["qty"] or 0) for t in transactions if t["transaction_type"] == "Purchase")
-        total_sale = sum(float(t["qty"] or 0) for t in transactions if t["transaction_type"] == "Sale")
+        cur.execute("""
+            SELECT COUNT(*) AS total_products,
+                   COALESCE(SUM(closing_stock),0) AS total_stock,
+                   COALESCE(SUM(sale_qty),0) AS total_sold
+            FROM lube_stock
+        """)
+        summary = cur.fetchone()
 
-        product_data[product_id] = {
-            "transactions": transactions,
-            "total_purchase": total_purchase,
-            "total_sale": total_sale
-        }
+        # Group in Python from the single query already fetched above.
+        # The old code ran one extra SELECT per product inside a loop --
+        # with 30 products that's 30 round-trips to Supabase on every page
+        # load, which is what made this page hang or time out.
+        product_data = {}
 
-    conn.close()
+        for item in lube_items:
+            product_data[item["id"]] = {
+                "transactions": [],
+                "total_purchase": 0.0,
+                "total_sale": 0.0
+            }
 
-    return render_template(
-        "lube_stock.html",
-        lube_items=lube_items,
-        lube_transactions=lube_transactions,
-        product_data=product_data,
-        summary=summary
-    )
+        for t in lube_transactions:
+            bucket = product_data.get(t["product_id"])
+
+            if bucket is None:
+                # transaction pointing at a deleted product -- skip rather
+                # than crash the whole page on a KeyError
+                continue
+
+            bucket["transactions"].append(t)
+
+            qty = float(t["qty"] or 0)
+
+            if t["transaction_type"] == "Purchase":
+                bucket["total_purchase"] += qty
+            elif t["transaction_type"] == "Sale":
+                bucket["total_sale"] += qty
+
+        return render_template(
+            "lube_stock.html",
+            lube_items=lube_items,
+            lube_transactions=lube_transactions,
+            product_data=product_data,
+            summary=summary
+        )
+
+    except Exception as e:
+        # never leave the page dead with a bare 500 -- say what broke
+        print(f"[lube_stock] failed to load: {e}")
+        flash(f"Could not load Lube Stock: {e}", "error")
+        return redirect(url_for("dashboard"))
+
+    finally:
+        conn.close()
 
 @app.route("/save-lube-transaction", methods=["POST"])
 def save_lube_transaction():
@@ -6442,15 +6550,25 @@ def save_attendance():
         SELECT id
         FROM attendance
         WHERE date=%s AND staff_name=%s
-        LIMIT 1
+        ORDER BY id DESC
     """, (
         attendance_date,
         staff_name
     ))
 
-    existing = cur.fetchone()
+    existing_rows = cur.fetchall()
+    existing = existing_rows[0] if existing_rows else None
 
     if existing:
+
+        # keep the newest row, delete any older duplicates for this
+        # staff+date so the count-based Present/Absent/Leave tallies on
+        # the attendance page stop over-counting
+        if len(existing_rows) > 1:
+            cur.execute("""
+                DELETE FROM attendance
+                WHERE date=%s AND staff_name=%s AND id <> %s
+            """, (attendance_date, staff_name, existing["id"]))
 
         cur.execute("""
             UPDATE attendance
@@ -6652,9 +6770,9 @@ def full_system_export():
     cur.execute("""
     SELECT
         TO_CHAR(date, 'YYYY-MM') AS month,
-        ROUND(SUM(total_fuel_sale),2) AS fuel,
-        ROUND(SUM(lube_sale),2) AS lube,
-        ROUND(SUM(credit_given),2) AS credit
+        ROUND(SUM(total_fuel_sale)::numeric,2) AS fuel,
+        ROUND(SUM(lube_sale)::numeric,2) AS lube,
+        ROUND(SUM(credit_given)::numeric,2) AS credit
     FROM daily_closing
     GROUP BY TO_CHAR(date, 'YYYY-MM')
     ORDER BY TO_CHAR(date, 'YYYY-MM')
@@ -7041,8 +7159,8 @@ WHERE TO_CHAR(date, 'YYYY-MM')=%s
     cur.execute("""
         SELECT
             TO_CHAR(date, 'YYYY-MM') AS month,
-            ROUND(SUM(total_fuel_sale),2) fuel_sale,
-            ROUND(SUM(lube_sale),2) lube_sale
+            ROUND(SUM(total_fuel_sale)::numeric,2) fuel_sale,
+            ROUND(SUM(lube_sale)::numeric,2) lube_sale
         FROM daily_closing
         GROUP BY TO_CHAR(date, 'YYYY-MM')
         ORDER BY month
@@ -7400,12 +7518,47 @@ def download_db():
     return redirect(url_for("full_system_export"))
 
 def get_pg_conn():
+    """
+    Open a Postgres connection AND register it to be force-closed when the
+    request ends.
 
-    return psycopg2.connect(
+    Most routes in this app call conn.close() by hand, but many do it only
+    on the happy path -- if a query raises (missing table, bad column, a
+    timeout), the connection is never returned and Supabase slowly runs out
+    of slots until every page in the app stops loading. Registering the
+    connection here means a leak is impossible no matter how a route exits.
+    Calling close() twice is a harmless no-op in psycopg2, so existing
+    close() calls keep working untouched.
+    """
+    conn = psycopg2.connect(
         os.environ["DATABASE_URL"],
         cursor_factory=psycopg2.extras.RealDictCursor,
         sslmode="require"
     )
+
+    try:
+        if has_app_context():
+            if not hasattr(g, "_pg_conns"):
+                g._pg_conns = []
+            g._pg_conns.append(conn)
+    except Exception:
+        # startup-time calls (the ensure_* helpers) run outside a request
+        # context -- they close their own connections, so this is fine
+        pass
+
+    return conn
+
+
+@app.teardown_appcontext
+def _close_pg_conns(exception=None):
+    for conn in getattr(g, "_pg_conns", []):
+        try:
+            if not conn.closed:
+                if exception is not None:
+                    conn.rollback()
+                conn.close()
+        except Exception:
+            pass
 
 def get_pg_cursor():
 
@@ -7590,6 +7743,121 @@ def ensure_fuel_receipts_table():
 ensure_fuel_receipts_table()
 
 
+def ensure_core_tables():
+    """
+    Create the tables the app reads/writes but that nothing ever created.
+
+    init_db() further up is dead code -- it's commented out at the call site
+    AND it used sqlite3 syntax against the old local .db file, so it never
+    built anything in Postgres. Every Postgres table was made by hand in the
+    Supabase dashboard, which is why lube_stock / attendance / proof_register
+    can silently be missing or mis-shaped: a missing table makes the whole
+    page 500 instead of just showing empty.
+    """
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS lube_stock (
+                id SERIAL PRIMARY KEY,
+                product_name TEXT,
+                selling_rate REAL DEFAULT 0,
+                opening_stock REAL DEFAULT 0,
+                purchase_qty REAL DEFAULT 0,
+                sale_qty REAL DEFAULT 0,
+                closing_stock REAL DEFAULT 0
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS attendance (
+                id SERIAL PRIMARY KEY,
+                date DATE,
+                staff_name TEXT,
+                attendance_status TEXT
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS proof_register (
+                id SERIAL PRIMARY KEY,
+                proof_date DATE,
+                proof_time TEXT,
+                proof_category TEXT,
+                fuel_type TEXT,
+                item_name TEXT,
+                stock_status TEXT,
+                photo_url TEXT,
+                video_url TEXT,
+                remarks TEXT,
+                latitude TEXT,
+                longitude TEXT,
+                location_url TEXT,
+                client_time TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        for table, col, coltype in [
+            ("lube_stock", "selling_rate", "REAL DEFAULT 0"),
+            ("lube_stock", "opening_stock", "REAL DEFAULT 0"),
+            ("lube_stock", "purchase_qty", "REAL DEFAULT 0"),
+            ("lube_stock", "sale_qty", "REAL DEFAULT 0"),
+            ("lube_stock", "closing_stock", "REAL DEFAULT 0"),
+            ("staff_master", "emp_id", "TEXT"),
+            ("staff_master", "department", "TEXT"),
+            ("staff_master", "joined_date", "TEXT"),
+            ("staff_master", "bank_account", "TEXT"),
+            ("staff_master", "shift", "TEXT"),
+            ("staff_master", "status", "TEXT"),
+        ]:
+            try:
+                cur.execute(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}"
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+        # ------------------------------------------------------------------
+        # The constraints that should have existed from day one.
+        #
+        # Every "duplicate entry" bug in this app traces back to check-then-
+        # insert logic with nothing at the database level backing it up. A
+        # unique index makes a duplicate physically impossible, even if two
+        # requests race or a future code path forgets to check.
+        #
+        # If existing duplicate rows block creation, the error is logged and
+        # the app still starts -- run schema_fix.sql once to clean up first.
+        # ------------------------------------------------------------------
+        for name, ddl in [
+            ("uniq_daily_closing_date",
+             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_daily_closing_date ON daily_closing (date)"),
+            ("uniq_nozzle_entry_day",
+             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_nozzle_entry_day ON nozzle_entries (entry_date, nozzle_id)"),
+            ("uniq_attendance_day",
+             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_attendance_day ON attendance (date, staff_name)"),
+            ("uniq_tank_level_day",
+             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_tank_level_day ON tank_level (date, fuel_type)"),
+            ("uniq_lube_product_name",
+             "CREATE UNIQUE INDEX IF NOT EXISTS uniq_lube_product_name ON lube_stock (LOWER(TRIM(product_name)))"),
+        ]:
+            try:
+                cur.execute(ddl)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f"[schema] could not create {name} (existing duplicates?): {e}")
+
+        conn.close()
+    except Exception as e:
+        print(f"[schema] could not ensure core tables exist: {e}")
+
+
+ensure_core_tables()
+
+
 def log_activity(cur, module, action, description):
     """
     Record who did what, when, across every part of the app. Call this
@@ -7597,6 +7865,19 @@ def log_activity(cur, module, action, description):
     before conn.commit() — so the log entry and the change it describes
     always land together, or not at all.
     """
+    # A SAVEPOINT is essential here, not optional. In Postgres, ANY failed
+    # statement poisons the entire transaction -- every following query
+    # errors with "current transaction is aborted" and the final commit()
+    # silently degrades into a rollback. So the old bare `except: pass`
+    # didn't protect the operation, it destroyed it: one bad log insert
+    # would throw away the whole daily closing while still reporting
+    # "saved successfully" to the user. Rolling back to the savepoint
+    # discards only the failed log line and leaves the real work intact.
+    try:
+        cur.execute("SAVEPOINT activity_log_sp")
+    except Exception:
+        return
+
     try:
         cur.execute("""
             INSERT INTO activity_log (
@@ -7610,9 +7891,12 @@ def log_activity(cur, module, action, description):
             action,
             description
         ))
+        cur.execute("RELEASE SAVEPOINT activity_log_sp")
     except Exception:
-        # logging should never be able to break the actual operation
-        pass
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT activity_log_sp")
+        except Exception:
+            pass
 
 @app.route("/activity-log")
 def activity_log():

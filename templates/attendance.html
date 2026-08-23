@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#07120C">
 <link rel="apple-touch-icon" href="/static/images/icons/apple-touch-icon.png">
@@ -801,6 +801,7 @@ body{
     }
 }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
 </head>
 
 <body>
@@ -879,7 +880,7 @@ Logout
 
 {% endif %}
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 
 <a href="/dashboard">
 <i class="fa-solid fa-house"></i>
@@ -971,7 +972,7 @@ Logout
 <input id="empSearch" placeholder="Search employee, ID, department...">
 </div>
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 <button class="add-member-btn" onclick="openAddModal()">
 <i class="fa-solid fa-plus"></i>
 Add Member
@@ -1069,7 +1070,7 @@ data-search="{{ staff['staff_name'] }} {{ staff['emp_id'] }} {{ staff['departmen
 <span><b>Joined:</b> {{ staff["joined_date"] or "-" }}</span>
 </div>
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 
 <div class="mark-row">
 
@@ -1204,17 +1205,17 @@ Attendance Calendar
 
 {% if r["attendance_status"] == "Present" %}
 <div class="day present" title="{{ r['date'] }} - Present">
-{{ r["date"][-2:] }}
+{{ (r["date"]|string)[-2:] }}
 <small>P</small>
 </div>
 {% elif r["attendance_status"] == "Absent" %}
 <div class="day absent" title="{{ r['date'] }} - Absent">
-{{ r["date"][-2:] }}
+{{ (r["date"]|string)[-2:] }}
 <small>A</small>
 </div>
 {% else %}
 <div class="day leave" title="{{ r['date'] }} - Leave">
-{{ r["date"][-2:] }}
+{{ (r["date"]|string)[-2:] }}
 <small>L</small>
 </div>
 {% endif %}
@@ -1231,7 +1232,7 @@ Attendance Calendar
 <th>Date</th>
 <th>Status</th>
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 <th>Action</th>
 {% endif %}
 
@@ -1254,7 +1255,7 @@ Attendance Calendar
 <td class="status-l">Leave</td>
 {% endif %}
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 <td class="hist-action">
 <a href="/edit-attendance/{{ r['id'] }}" class="edit">Edit</a>
 <a href="/delete-attendance/{{ r['id'] }}" class="delete" onclick="return confirm('Delete attendance?')">Delete</a>
@@ -1377,7 +1378,7 @@ All Salary Payment History
 
 <td>{{ s["remarks"] or "-" }}</td>
 
-{% if session.get("role") == "manager" %}
+{% if session.get("role") in ["manager", "admin"] %}
 <td>
 
 <div class="salary-action-flex">

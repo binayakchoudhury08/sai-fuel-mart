@@ -6,10 +6,11 @@
 // It only caches static assets (CSS/JS/icons) for a faster load and to
 // satisfy the installability requirement for an Android APK wrapper.
 
-const CACHE_NAME = "sfm-static-v1";
+const CACHE_NAME = "sfm-static-v2";
 
 const STATIC_ASSETS = [
     "/static/css/daily_closing.css",
+    "/static/css/mobile.css",
     "/static/js/daily_closing.js",
     "/static/images/icons/icon-192.png",
     "/static/images/icons/icon-512.png"

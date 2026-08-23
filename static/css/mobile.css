@@ -1,0 +1,381 @@
+/* =====================================================================
+   SAI FUEL MART — GLOBAL MOBILE LAYER
+   =====================================================================
+
+   Loaded LAST on every page, so it overrides the per-page <style> blocks
+   without any of them needing to be rewritten.
+
+   The desktop layout is deliberately untouched: everything here lives
+   inside a media query, so nothing changes above 900px.
+
+   Fixing, in order of how badly each one broke the phone experience:
+     1. Inputs below 16px — iOS silently zooms the whole page on focus,
+        which is what makes the app feel "shifted" and unusable after
+        tapping any field. This is the single biggest offender.
+     2. Fixed multi-column grids (repeat(4/5/7,1fr)) squashing into slivers
+     3. Wide tables (min-width up to 1200px) overflowing the viewport
+     4. Touch targets under the 44px minimum
+     5. Sidebar / hamburger behaviour between 900px and 1100px
+   ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+   ALWAYS ON — safe at every width
+   --------------------------------------------------------------------- */
+
+*, *::before, *::after { -webkit-tap-highlight-color: rgba(22,163,74,.15); }
+
+html {
+    -webkit-text-size-adjust: 100%;  /* stop iOS rescaling text on rotate */
+    text-size-adjust: 100%;
+}
+
+body {
+    overflow-x: hidden;   /* kill sideways drift from any stray wide child */
+}
+
+/* Respect notches and the iPhone home indicator */
+@supports (padding: max(0px)) {
+    .sidebar {
+        padding-left: max(18px, env(safe-area-inset-left));
+        padding-bottom: max(18px, env(safe-area-inset-bottom));
+    }
+}
+
+/* Any wide table gets momentum scrolling instead of clipping */
+.table-wrap, .table-responsive, .entry-table-wrap {
+    -webkit-overflow-scrolling: touch;
+}
+
+
+/* =====================================================================
+   TABLET AND BELOW  (<= 1100px)
+   Closes the gap where the old CSS made the sidebar a full-width block
+   that pushed all content down the page.
+   ===================================================================== */
+
+@media (max-width: 1100px) {
+
+    .container { flex-direction: column; }
+
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 18px 14px 40px !important;
+    }
+
+    /* wide fixed grids start collapsing here */
+    .kpi-grid,
+    .content-grid,
+    .chart-grid,
+    .form-grid,
+    .stats-grid,
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+
+/* =====================================================================
+   PHONE  (<= 900px) — the main mobile layout
+   ===================================================================== */
+
+@media (max-width: 900px) {
+
+    /* -----------------------------------------------------------------
+       1. INPUTS AT 16px — THE ZOOM FIX
+       Safari zooms in on any focused field under 16px and never zooms
+       back out. Every form control on every page is forced to 16px here.
+       ----------------------------------------------------------------- */
+    input, select, textarea, button,
+    .input-group input, .input-group select, .input-group textarea,
+    .search input, table input, table select {
+        font-size: 16px !important;
+        max-width: 100%;
+    }
+
+    input, select, textarea {
+        padding: 13px 14px !important;
+        border-radius: 12px !important;
+        min-height: 48px;          /* comfortable thumb target */
+    }
+
+    /* date inputs collapse to nothing on iOS without this */
+    input[type="date"],
+    input[type="month"],
+    input[type="time"] {
+        -webkit-appearance: none;
+        appearance: none;
+        min-width: 100%;
+        display: block;
+    }
+
+    /* number spinners waste width on a phone */
+    input[type="number"] {
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+
+    /* -----------------------------------------------------------------
+       2. SIDEBAR — off-canvas drawer
+       The markup already ships a hamburger and a backdrop; this makes
+       the drawer behave properly and stops the page scrolling behind it.
+       ----------------------------------------------------------------- */
+    .mobile-menu-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        position: fixed !important;
+        top: 12px;
+        left: 12px;
+        z-index: 1200;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: #07120C;
+        color: #fff;
+        border: none;
+        font-size: 18px !important;
+        box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    }
+
+    .sidebar {
+        position: fixed !important;
+        top: 0; left: 0; bottom: 0;
+        width: 82vw !important;
+        max-width: 300px !important;
+        height: 100% !important;
+        z-index: 1300;
+        overflow-y: auto;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+    }
+
+    .sidebar.open { transform: translateX(0); }
+
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.5);
+        z-index: 1250;
+    }
+    .sidebar-backdrop.active { display: block; }
+
+    /* clear the fixed hamburger so it never covers the page title */
+    .main-content { padding-top: 70px !important; }
+    .topbar { padding-left: 56px; }
+
+
+    /* -----------------------------------------------------------------
+       3. GRIDS — everything to a single column
+       ----------------------------------------------------------------- */
+    .kpi-grid, .content-grid, .chart-grid, .form-grid,
+    .stats-grid, .summary-grid, .grid, .row-2, .row-3, .row-4,
+    [class*="grid-"] {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* the one hardcoded two-column split (390px + rest) */
+    .split, .split-view, .panel-split {
+        grid-template-columns: 1fr !important;
+        display: block !important;
+    }
+
+    .topbar {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 10px;
+    }
+
+    .topbar form,
+    .topbar .search,
+    .topbar .actions {
+        width: 100%;
+    }
+
+
+    /* -----------------------------------------------------------------
+       4. TABLES — horizontal scroll, never squash
+       Financial tables must keep their columns aligned, so they scroll
+       sideways rather than wrapping into an unreadable mess.
+       ----------------------------------------------------------------- */
+    .table-wrap, .table-responsive, .entry-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        border-radius: 14px;
+    }
+
+    /* wrap any bare table that isn't already inside a scroll container */
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+
+    .table, .entry-table, table.table {
+        min-width: 720px;     /* down from 850–1200 */
+    }
+
+    .table th, .table td,
+    .entry-table th, .entry-table td,
+    table th, table td {
+        padding: 11px 10px !important;
+        font-size: 14px !important;
+    }
+
+    /* a subtle cue that the table scrolls */
+    .table-wrap::after {
+        content: "";
+        display: block;
+        height: 3px;
+        margin-top: 6px;
+        border-radius: 3px;
+        background: linear-gradient(90deg, #16a34a 0%, #e5e7eb 40%);
+        opacity: .5;
+    }
+
+
+    /* -----------------------------------------------------------------
+       5. CARDS, PANELS, MODALS
+       ----------------------------------------------------------------- */
+    .card, .panel, .box, .kpi-card {
+        border-radius: 18px !important;
+        padding: 16px !important;
+    }
+
+    .panel { overflow: visible !important; }  /* was clipping dropdowns */
+
+    .product-list { max-height: none !important; }
+
+    .modal, .modal-box, .modal-content {
+        width: 94vw !important;
+        max-width: 94vw !important;
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        margin: 6vh auto !important;
+        border-radius: 20px !important;
+    }
+
+
+    /* -----------------------------------------------------------------
+       6. BUTTONS — 44px minimum touch target
+       ----------------------------------------------------------------- */
+    button, .btn, .save-btn, .save-btn-top, .export-btn,
+    .add-member-btn, .salary-btn, a.edit, a.delete, .pbtn, .abtn, .lbtn {
+        min-height: 44px;
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+    }
+
+    /* full-width primary actions read as "the thing to tap" */
+    .save-btn, .save-btn-top {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* the P / A / L attendance marks stay in a row, evenly split */
+    .mark-row {
+        display: flex !important;
+        gap: 8px;
+        width: 100%;
+    }
+    .mark-row form { flex: 1; }
+    .mark-row button { width: 100%; }
+
+    .mini-actions, .hist-action {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+
+    /* -----------------------------------------------------------------
+       7. TYPOGRAPHY
+       ----------------------------------------------------------------- */
+    h1 { font-size: 22px !important; }
+    h2 { font-size: 19px !important; }
+    h3 { font-size: 17px !important; }
+
+    .kpi-card b, .kpi-card .value { font-size: 21px !important; }
+    .box-title { font-size: 16px !important; }
+
+    /* long values (₹ amounts, vehicle numbers) must not blow out layout */
+    td, .stat b, .kpi-card b {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+
+
+    /* charts need a fixed height or Chart.js grows forever */
+    canvas { max-width: 100% !important; height: auto !important; }
+    .chart-box, .chart-card { min-height: 260px; }
+}
+
+
+/* =====================================================================
+   SMALL PHONES (<= 480px)
+   ===================================================================== */
+
+@media (max-width: 480px) {
+
+    .main-content { padding: 66px 10px 34px !important; }
+
+    .card, .panel, .box, .kpi-card { padding: 13px !important; }
+
+    .table, .entry-table, table.table { min-width: 620px; }
+
+    .table th, .table td,
+    .entry-table th, .entry-table td {
+        padding: 9px 8px !important;
+        font-size: 13px !important;
+    }
+
+    h1 { font-size: 19px !important; }
+
+    .logo h2 { font-size: 20px; }
+
+    /* stack the attendance marks if three across is too tight */
+    .mini-actions a { flex: 1; text-align: center; }
+}
+
+
+/* =====================================================================
+   LANDSCAPE PHONE — reclaim vertical space
+   ===================================================================== */
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .main-content { padding-top: 58px !important; }
+    .sidebar { padding-top: 14px; }
+    .modal, .modal-box { max-height: 92vh !important; }
+}
+
+
+/* =====================================================================
+   PRINT — the daily report / transporter bill pages
+   ===================================================================== */
+
+@media print {
+    .sidebar,
+    .sidebar-backdrop,
+    .mobile-menu-btn,
+    .save-btn, .save-btn-top, .export-btn,
+    .mini-actions, .hist-action, .no-print {
+        display: none !important;
+    }
+
+    .main-content { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+
+    table { display: table !important; white-space: normal !important; }
+    .table, .entry-table { min-width: 0 !important; }
+
+    body { background: #fff !important; }
+}

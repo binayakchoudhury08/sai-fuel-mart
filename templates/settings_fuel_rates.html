@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#07120C">
 <link rel="apple-touch-icon" href="/static/images/icons/apple-touch-icon.png">
@@ -35,6 +35,7 @@ p.sub{color:#64748b;margin:22px 0 26px;font-size:13.5px;}
 .save-btn{width:100%;margin-top:26px;padding:16px;background:#16a34a;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
 @media(max-width:600px){.rate-grid{grid-template-columns:1fr;}}
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
 </head>
 
 <body>

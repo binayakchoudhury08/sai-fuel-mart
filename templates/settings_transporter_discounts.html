@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#07120C">
 <link rel="apple-touch-icon" href="/static/images/icons/apple-touch-icon.png">
@@ -40,6 +40,7 @@ td input:focus{outline:none;border-color:#a21caf;box-shadow:0 0 0 3px rgba(162,2
 .save-btn{width:100%;margin-top:22px;padding:16px;background:#16a34a;color:white;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
 .empty{text-align:center;color:#94a3b8;padding:40px;}
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
 </head>
 
 <body>
