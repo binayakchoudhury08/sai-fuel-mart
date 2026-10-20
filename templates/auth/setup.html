@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}First-time setup{% endblock %}
+{% block bare %}<div class="authpage"><form class="authbox" method="post">
+  <div class="brand"><span class="brand-mark">S</span><span><b>Create the owner account</b><span>This runs once, on a fresh install</span></span></div>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if not code_required %}<div class="notice">Set <b>SETUP_CODE</b> in Render → Environment first (any secret word), then reload this page.</div>{% endif %}
+  <div class="stack">
+    <div><label>Setup code (from Render)</label><input name="setup_code" required autocomplete="off"></div>
+    <div><label>Your name</label><input name="full_name" maxlength="80"></div>
+    <div><label>Username</label><input name="username" required autocapitalize="none" pattern="[A-Za-z0-9._\-]+"></div>
+    <div><label>Password (8+ characters)</label><input type="password" name="password" minlength="8" required autocomplete="new-password"></div>
+    <div><label>Password again</label><input type="password" name="password2" minlength="8" required autocomplete="new-password"></div>
+    <button class="btn" style="width:100%">Create owner account</button>
+  </div></form></div>{% endblock %}

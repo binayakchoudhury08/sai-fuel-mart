@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden with context %}{% block title %}Photo proofs{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Photo proofs</h1><p>Tanker challans, expense bills, meter photos, stock counts.</p></div></div>
+{% if not configured %}<div class="notice">Photo storage isn’t connected. The owner must add SUPABASE_URL, SUPABASE_SERVICE_KEY and a public bucket named “proofs” (see the setup guide).</div>{% endif %}
+<section class="section"><header><h2>Add a photo</h2></header><div class="body"><form method="post" enctype="multipart/form-data" data-geo>{{ hidden() }}<div class="fields">
+<div><label>Photo</label><input type="file" name="photo" accept="image/*,application/pdf" capture="environment" required></div>
+<div><label>Type</label><select name="category">{% for c in ['Tanker challan','Meter reading','Expense bill','Cash deposit','Stock count','Density check','General'] %}<option>{{ c }}</option>{% endfor %}</select></div>
+<div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+<div class="wide"><label>Note</label><input name="note"></div></div><input type="hidden" name="lat"><input type="hidden" name="lng">
+<p style="margin-top:10px"><button class="btn" {% if not configured %}disabled{% endif %}>Upload</button></p></form></div></section>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Note</th><th>By</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.business_date|d }}</td><td>{{ r.category }}</td><td>{{ r.note }}</td><td><small>{{ r.created_by }}</small></td>
+<td class="actions"><a class="btn small secondary" href="{{ r.file_url }}" target="_blank" rel="noopener">Open</a>{% if r.latitude %} <a class="btn small secondary" href="https://maps.google.com/?q={{ r.latitude }},{{ r.longitude }}" target="_blank" rel="noopener">Map</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No photos yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

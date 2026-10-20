@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import status_badge, money with context %}{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Daily sales &amp; cash</h1><p>{{ start|d }} to {{ end|d }}</p></div></div>
+{% include "reports/_tabs.html" %}{% include "reports/_range.html" %}
+<div class="stats"><div><b>{{ tot.gross_sale|inr }}</b><span>Total sale</span></div>
+{% for f in fuels if tot.qty[f.code] %}<div><b>{{ tot.qty[f.code]|qty }}</b><span>{{ f.code }} {{ f.unit }}</span></div>{% endfor %}
+<div><b>{{ tot.credit|inr }}</b><span>Credit given</span></div><div><b>{{ tot.payments|inr }}</b><span>Payments received</span></div>
+<div><b class="{% if tot.difference < 0 %}neg{% elif tot.difference > 0 %}pos{% endif %}">{{ tot.difference|inr }}</b><span>Net cash short/excess ({{ tot.short_days }} short day{{ 's' if tot.short_days != 1 }})</span></div></div>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Status</th>{% for f in fuels %}<th class="num">{{ f.code }}</th>{% endfor %}<th class="num">Total sale</th><th class="num">Digital</th><th class="num">Credit</th><th class="num">Received</th><th class="num">Expenses</th><th class="num">Expected cash</th><th class="num">Counted</th><th class="num">Short/excess</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ url_for('day.day_view', d=r.date.isoformat()) }}">{{ r.date.strftime('%d %b') }}</a></td><td>{{ status_badge(r.status) }}</td>
+{% for f in fuels %}<td class="num">{{ r.qty.get(f.code)|qty if r.qty.get(f.code) else '' }}</td>{% endfor %}
+<td class="num">{{ r.gross_sale|inr }}</td><td class="num">{{ r.digital|inr }}</td><td class="num">{{ r.credit|inr }}</td><td class="num">{{ r.payments|inr }}</td><td class="num">{{ r.expenses|inr }}</td>
+<td class="num">{{ r.expected_cash|inr }}</td><td class="num">{{ r.counted|inr if r.counted is not none else '—' }}</td><td class="num">{{ money(r.difference, True) }}</td></tr>
+{% else %}<tr><td colspan="12" class="empty">No data in this range.</td></tr>{% endfor %}</tbody>
+{% if rows %}<tfoot><tr><td colspan="2">Total</td>{% for f in fuels %}<td class="num">{{ tot.qty[f.code]|qty }}</td>{% endfor %}<td class="num">{{ tot.gross_sale|inr }}</td><td class="num">{{ tot.digital|inr }}</td><td class="num">{{ tot.credit|inr }}</td><td class="num">{{ tot.payments|inr }}</td><td class="num">{{ tot.expenses|inr }}</td><td class="num">{{ tot.expected_cash|inr }}</td><td></td><td class="num">{{ money(tot.difference, True) }}</td></tr></tfoot>{% endif %}</table></div></section>
+{% endblock %}

@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Closing {{ d|d }}</title>
+<link rel="stylesheet" href="/static/css/app.css"><style>body{background:#fff;color:#000;padding:18px;font-size:13px}table{margin-bottom:12px}th{background:#eee;color:#000}h1{font-size:20px}h2{font-size:14px;margin:12px 0 4px}</style>
+<body><p class="noprint"><button class="btn" onclick="print()">Print / save as PDF</button> <a class="btn secondary" href="/day/{{ d.isoformat() }}">Back</a></p>
+<h1>{{ st.station_name }} — Daily closing {{ d.strftime('%d %b %Y') }}</h1><p>{{ st.station_address }} · Status: {{ t.status }}</p>
+<h2>Meter readings</h2><table><tr><th>Nozzle</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Test</th><th class="num">Sale</th><th class="num">Rate</th><th class="num">Amount</th></tr>
+{% for r in t.nozzles if r.saved %}<tr><td>{{ r.nozzle.name }} ({{ r.nozzle.fuel_code }})</td><td class="num">{{ r.opening }}</td><td class="num">{{ r.closing }}</td><td class="num">{{ r.testing }}</td><td class="num">{{ r.sale_qty }}</td><td class="num">{{ r.rate }}</td><td class="num">{{ r.amount|inr }}</td></tr>{% endfor %}
+{% for c,b in t.by_fuel.items() if b.qty %}<tr><td colspan="4"><b>{{ b.name }}</b></td><td class="num"><b>{{ b.qty }}</b></td><td></td><td class="num"><b>{{ b.amount|inr }}</b></td></tr>{% endfor %}</table>
+<h2>Cash reconciliation</h2><table>
+<tr><td>Fuel sale</td><td class="num">{{ t.fuel_total|inr }}</td></tr><tr><td>Lube sale</td><td class="num">{{ t.lube_total|inr }}</td></tr>
+<tr><td>Less credit sales</td><td class="num">−{{ t.credit_total|inr }}</td></tr>
+{% for c in t.collections if c.amount %}<tr><td>Less {{ c.name }}</td><td class="num">−{{ c.amount|inr }}</td></tr>{% endfor %}
+{% for m, a in t.pay_by_mode.items() if a %}<tr><td>Party payments – {{ m }}{% if m not in ('Cash','UPI at pump') %} (not in drawer){% endif %}</td><td class="num">{% if m in ('Cash','UPI at pump') %}+{% endif %}{{ a|inr }}</td></tr>{% endfor %}
+<tr><td>Less cash given to drivers</td><td class="num">−{{ t.cash_advance|inr }}</td></tr><tr><td>Less expenses from counter</td><td class="num">−{{ t.exp_counter|inr }}</td></tr>
+<tr><td>Less staff paid from counter</td><td class="num">−{{ t.staff_cash|inr }}</td></tr>
+<tr><td><b>Cash expected</b></td><td class="num"><b>{{ t.expected_cash|inr }}</b></td></tr><tr><td><b>Cash counted</b></td><td class="num"><b>{{ t.counted_cash|inr if t.counted_cash is not none else '—' }}</b></td></tr>
+<tr><td><b>Short (−) / Excess (+)</b></td><td class="num"><b>{{ t.difference|inr if t.difference is not none else '—' }}</b></td></tr></table>
+{% if t.party_rows %}<h2>Credit &amp; payments</h2><table><tr><th>Party</th><th>Type</th><th>Vehicle / Challan</th><th class="num">Debit</th><th class="num">Credit</th></tr>
+{% for r in t.party_rows if not r.voided %}<tr><td>{{ r.party_name }}</td><td>{{ r.kind }}{% if r.kind=='fuel' %} {{ r.qty }} {{ r.fuel_code }}{% endif %}{% if r.receipt_no %} {{ r.receipt_no }}{% endif %}</td><td>{{ r.vehicle_no }} {{ r.challan_no }}</td><td class="num">{{ r.debit|inr if r.debit else '' }}</td><td class="num">{{ r.credit|inr if r.credit else '' }}</td></tr>{% endfor %}</table>{% endif %}
+{% if t.expenses %}<h2>Expenses</h2><table>{% for e in t.expenses if not e.voided %}<tr><td>{{ e.description }} ({{ e.category }})</td><td>{{ 'Counter' if e.from_counter else 'Owner' }}</td><td class="num">{{ e.amount|inr }}</td></tr>{% endfor %}</table>{% endif %}
+{% if t.day and t.day.notes %}<h2>Notes</h2><p>{{ t.day.notes }}</p>{% endif %}
+<p style="margin-top:30px">Prepared by: ____________ &nbsp;&nbsp;&nbsp; Verified by: ____________</p></body></html>

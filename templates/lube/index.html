@@ -1,0 +1,38 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, void with context %}{% block title %}Lube stock{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Lube stock</h1><p>Stock is counted from every purchase, sale and adjustment, so it cannot drift.</p></div>
+{% if can('manager') %}<a class="btn secondary" href="{{ url_for('reports.lube_xlsx') }}">Excel</a>{% endif %}</div>
+<div class="stats"><div><b>{{ products|selectattr('active')|list|length }}</b><span>Products</span></div><div><b>{{ value|inr }}</b><span>Stock value at selling rate</span></div>
+<div><b class="{% if low %}neg{% endif %}">{{ low|length }}</b><span>At or below reorder level</span></div></div>
+<section class="section"><header><h2>Products</h2><input type="search" placeholder="Search" data-filter="#lt" style="max-width:240px"></header>
+<div class="body flush tablewrap"><table id="lt"><thead><tr><th>Product</th><th class="num">Rate</th><th class="num">In stock</th><th class="num">Sold this month</th><th>Reorder at</th>{% if can('manager') %}<th></th>{% endif %}</tr></thead><tbody>
+{% for p in products %}<tr class="{% if not p.active %}void{% endif %}"><td><b>{{ p.name }}</b></td><td class="num">{{ p.sale_rate|inr }}</td>
+<td class="num {% if p.stock <= p.reorder_level %}neg{% endif %}"><b>{{ p.stock|qty }}</b> {{ p.unit }}</td><td class="num">{{ p.sold_month|qty }}</td><td>{{ p.reorder_level|qty }}</td>
+{% if can('manager') %}<td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('lube.save_product') }}">{{ hidden() }}<input type="hidden" name="id" value="{{ p.id }}">
+<label>Name</label><input name="name" value="{{ p.name }}"><label>Unit</label><input name="unit" value="{{ p.unit }}"><label>Selling rate</label><input name="sale_rate" value="{{ p.sale_rate }}">
+<label>Reorder at</label><input name="reorder_level" value="{{ p.reorder_level }}"><label>Status</label><select name="active"><option value="1">Active</option><option value="0" {% if not p.active %}selected{% endif %}>Hidden</option></select>
+<button class="btn small">Save</button></form></details></td>{% endif %}</tr>
+{% else %}<tr><td colspan="6" class="empty">No products yet.</td></tr>{% endfor %}</tbody></table></div>
+{% if can('manager') %}
+<details class="add"><summary>Record purchase / return / adjustment</summary><div class="body"><form method="post" action="{{ url_for('lube.add_move') }}">{{ hidden() }}<div class="fields">
+<div><label>Type</label><select name="kind"><option value="purchase">Purchase (stock in)</option><option value="return">Customer return (stock in)</option><option value="adjust">Adjustment after count</option></select></div>
+<div><label>Product</label><select name="product_id" required><option value="">Choose…</option>{% for p in products if p.active %}<option value="{{ p.id }}">{{ p.name }} ({{ p.stock|qty }})</option>{% endfor %}</select></div>
+<div><label>Quantity</label><input name="qty" inputmode="decimal" required></div>
+<div><label>Purchase rate (₹)</label><input name="rate" inputmode="decimal"></div>
+<div><label>Adjustment direction</label><select name="direction"><option value="increase">Add</option><option value="decrease">Remove</option></select></div>
+<div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+<div class="wide"><label>Remarks (bill no., reason for adjustment)</label><input name="remarks"></div>
+</div><p style="margin-top:10px"><button class="btn">Save stock entry</button></p></form></div></details>
+<details class="add"><summary>Add a product</summary><div class="body"><form method="post" action="{{ url_for('lube.save_product') }}">{{ hidden() }}<div class="fields">
+<div><label>Name</label><input name="name" required></div><div><label>Unit</label><input name="unit" value="pcs"></div>
+<div><label>Selling rate (₹)</label><input name="sale_rate" inputmode="decimal" required></div><div><label>Opening stock</label><input name="opening_stock" inputmode="decimal" value="0"></div>
+<div><label>Reorder when stock reaches</label><input name="reorder_level" inputmode="decimal" value="5"></div>
+</div><p style="margin-top:10px"><button class="btn">Add product</button></p></form></div></details>{% endif %}
+</section>
+<section class="section"><header><h2>Recent stock movements</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Product</th><th>Type</th><th class="num">Qty</th><th class="num">Amount</th><th>Details</th><th></th></tr></thead><tbody>
+{% for m in moves %}<tr class="{% if m.voided %}void{% endif %}"><td>{{ m.business_date|d }}</td><td>{{ m.product_name }}</td><td>{{ m.kind|title }}</td>
+<td class="num {% if m.qty < 0 %}neg{% else %}pos{% endif %}">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td><td class="num">{{ m.amount|inr if m.amount else '' }}</td>
+<td><small>{{ m.pay_mode or '' }}{% if m.party_name %} – {{ m.party_name }}{% endif %} {{ m.remarks }} · {{ m.created_by }}{% if m.voided %} · cancelled: {{ m.void_reason }}{% endif %}</small></td>
+<td class="actions keep">{% if can('manager') and not m.voided and m.kind != 'opening' %}{{ void(url_for('day.void_lube_move', mid=m.id), back=url_for('lube.index')) }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="empty">No movements yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

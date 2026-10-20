@@ -1,0 +1,93 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf, void with context %}{% block title %}{{ p.name }}{% endblock %}
+{% block content %}
+{% set here = request.full_path %}
+<div class="pagehead"><div class="grow"><h1>{{ p.name }}</h1>
+<p>{% if p.mobile %}<a href="tel:{{ p.mobile }}">{{ p.mobile }}</a> · {% endif %}{{ p.vehicles }}{% if not p.active %} <span class="badge">inactive</span>{% endif %}</p></div>
+<div class="btnrow">{% if wa %}<a class="btn secondary" href="{{ wa }}" target="_blank" rel="noopener">Send balance on WhatsApp</a>{% endif %}</div></div>
+
+<div class="stats">
+  <div><b class="{% if balance > 0 %}neg{% elif balance < 0 %}pos{% endif %}">{{ balance|inr }}</b><span>{{ 'Owes now' if balance >= 0 else 'Advance with us' }}</span></div>
+  <div><b>{{ stmt.totals.debit|inr }}</b><span>Credit given in period</span></div>
+  <div><b>{{ stmt.totals.credit|inr }}</b><span>Received in period</span></div>
+  <div><b>{{ stmt.totals.fuel_qty|qty }} L</b><span>Fuel in period</span></div>
+  {% if p.credit_limit %}<div><b>{{ p.credit_limit|inr }}</b><span>Credit limit</span></div>{% endif %}
+</div>
+
+<div class="grid2" style="margin-bottom:16px">
+<section class="section"><header><h2>Give fuel on credit</h2></header><div class="body">
+<form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}" data-fuelform>{{ hidden() }}
+<div class="fields">
+  <div><label>Type</label><select name="kind"><option value="fuel">Fuel on credit</option><option value="cash_advance">Cash given to driver</option></select></div>
+  <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+  <div><label>Fuel</label><select name="fuel_code">{% for f in fuels %}<option value="{{ f.code }}" data-rate="{{ rates.get(f.code,'') }}" {% if f.code=='HSD' %}selected{% endif %}>{{ f.code }} – ₹{{ rates.get(f.code,'–') }}</option>{% endfor %}</select></div>
+  <div><label>Litres</label><input name="qty" inputmode="decimal"></div>
+  <div><label>or Amount (₹)</label><input name="amount" inputmode="decimal"></div>
+  {% if can('manager') %}<div><label>Rate (if different)</label><input name="rate" inputmode="decimal"></div>{% endif %}
+  <div><label>Vehicle</label><input name="vehicle_no" autocapitalize="characters" list="veh"></div>
+  <div><label>Challan</label><input name="challan_no"></div><div><label>Slip</label><input name="slip_no"></div>
+  <div class="wide"><label>Remarks</label><input name="remarks"></div>
+</div><datalist id="veh">{% for v in p.vehicles.split(',') if v.strip() %}<option value="{{ v.strip() }}">{% endfor %}</datalist>
+<p class="hint" data-preview></p><p style="margin-top:10px"><button class="btn">Save credit</button></p></form></div></section>
+
+<section class="section"><header><h2>Receive payment</h2></header><div class="body">
+<form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}">{{ hidden() }}<input type="hidden" name="kind" value="payment">
+<div class="fields">
+  <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required class="big"></div>
+  <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+  <div><label>How</label><select name="pay_mode">{% for m, help in PAY_MODES.items() %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+  <div><label>UTR / cheque no.</label><input name="reference"></div>
+  <div class="wide"><label>Remarks</label><input name="remarks"></div>
+</div><p class="hint">Every payment gets a receipt number. Cash and UPI at the pump go into that day’s cash calculation.</p>
+<p style="margin-top:10px" class="btnrow"><button class="btn go">Save payment</button><label class="check"><input type="checkbox" name="print_receipt" value="1" checked> Show receipt</label></p></form>
+{% if can('manager') %}<details class="add" style="margin:12px -16px -14px"><summary>Discount{% if user.role=='owner' %} or adjustment{% endif %}</summary><div class="body">
+<form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}">{{ hidden() }}<div class="fields">
+  <div><label>Type</label><select name="kind"><option value="discount">Discount (reduces dues)</option>{% if user.role=='owner' %}<option value="adjustment">Adjustment</option>{% endif %}</select></div>
+  {% if user.role=='owner' %}<div><label>Direction (adjustment)</label><select name="direction"><option value="decrease">Reduce dues</option><option value="increase">Increase dues</option></select></div>{% endif %}
+  <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required></div>
+  <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+  <div class="wide"><label>Reason (required)</label><input name="remarks" required></div>
+</div><p style="margin-top:10px"><button class="btn secondary">Save</button></p></form></div></details>{% endif %}
+</div></section></div>
+
+<section class="section"><header><h2>Statement</h2>
+<form class="formrow noprint" method="get" style="flex:0 1 auto">
+  <div><label>From</label><input type="date" name="from" value="{{ start.isoformat() }}"></div>
+  <div><label>To</label><input type="date" name="to" value="{{ end.isoformat() }}"></div>
+  <div style="flex:0"><button class="btn secondary">Show</button></div></form>
+<div class="btnrow noprint"><a class="btn small secondary" href="{{ url_for('parties.bill', pid=p.id, fmt='pdf', **{'from':start.isoformat(),'to':end.isoformat()}) }}">PDF bill</a>
+<a class="btn small secondary" href="{{ url_for('parties.bill', pid=p.id, fmt='xlsx', **{'from':start.isoformat(),'to':end.isoformat()}) }}">Excel</a></div></header>
+<div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Entry</th><th>Vehicle / Challan / Slip</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th><th></th></tr></thead><tbody>
+<tr><td>{{ start|d }}</td><td colspan="4"><i>Opening balance</i></td><td class="num"><b>{{ stmt.opening|inr }}</b></td><td></td></tr>
+{% for r in stmt.rows %}<tr class="{% if r.voided %}void{% endif %}">
+  <td>{{ r.business_date|d }}</td>
+  <td>{{ KIND[r.kind] }}{% if r.kind=='fuel' %} – {{ r.qty }} {{ r.fuel_code }} @ ₹{{ r.rate }}{% elif r.kind=='lube' %} – {{ r.lube_name or r.remarks }} × {{ r.qty }}{% endif %}
+    {% if r.kind=='payment' %} – {{ r.pay_mode }}{% if r.reference %} ({{ r.reference }}){% endif %} <small>{{ r.receipt_no }}</small>{% endif %}
+    {% if r.remarks and r.kind not in ('lube',) %}<br><small>{{ r.remarks }}</small>{% endif %}
+    {% if r.voided %}<br><small class="keep">Cancelled by {{ r.voided_by }}: {{ r.void_reason }}</small>{% endif %}
+    {% if r.is_legacy %} <span class="badge legacy">old system</span>{% endif %}</td>
+  <td><small>{{ r.vehicle_no }}{% if r.challan_no %} · Ch {{ r.challan_no }}{% endif %}{% if r.slip_no %} · Slip {{ r.slip_no }}{% endif %}</small></td>
+  <td class="num">{{ r.debit|inr if r.debit else '' }}</td><td class="num">{{ r.credit|inr if r.credit else '' }}</td>
+  <td class="num">{% if not r.voided %}{{ r.running|inr }}{% endif %}</td>
+  <td class="actions keep">{% if r.kind=='payment' %}<a class="btn small secondary" href="{{ url_for('parties.receipt', tid=r.id) }}">Receipt</a>{% endif %}
+  {% if can('manager') and not r.voided %}
+    {% if r.kind in ('fuel','cash_advance','payment') %}<details class="void"><summary style="color:inherit">Edit</summary>
+      <form method="post" action="{{ url_for('parties.edit_txn_details', tid=r.id) }}">{{ csrf() }}
+      <label>Vehicle</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Challan</label><input name="challan_no" value="{{ r.challan_no }}">
+      <label>Slip</label><input name="slip_no" value="{{ r.slip_no }}"><label>Reference</label><input name="reference" value="{{ r.reference }}">
+      <label>Remarks</label><input name="remarks" value="{{ r.remarks }}"><button class="btn small">Save details</button>
+      <p class="hint">Wrong amount? Cancel the entry and enter it again.</p></form></details>{% endif %}
+    {{ void(url_for('parties.void_txn', tid=r.id), back=here) }}{% endif %}</td>
+</tr>{% endfor %}</tbody>
+<tfoot><tr><td colspan="3">Closing balance on {{ end|d }}</td><td class="num">{{ stmt.totals.debit|inr }}</td><td class="num">{{ stmt.totals.credit|inr }}</td><td class="num">{{ stmt.closing|inr }}</td><td></td></tr></tfoot></table></div></section>
+
+{% if can('manager') %}<section class="section"><details class="add" style="border-top:0"><summary>Edit party details</summary><div class="body">
+<form method="post" action="{{ url_for('parties.edit', pid=p.id) }}">{{ csrf() }}<div class="fields">
+  <div><label>Name</label><input name="name" value="{{ p.name }}" required></div>
+  <div><label>Mobile</label><input name="mobile" value="{{ p.mobile }}"></div>
+  <div><label>Credit limit (₹)</label><input name="credit_limit" value="{{ p.credit_limit }}"></div>
+  <div><label>GSTIN</label><input name="gstin" value="{{ p.gstin }}"></div>
+  <div class="wide"><label>Vehicles</label><input name="vehicles" value="{{ p.vehicles }}"></div>
+  <div class="wide"><label>Address</label><input name="address" value="{{ p.address }}"></div>
+  <div><label>Status</label><select name="active"><option value="1" {% if p.active %}selected{% endif %}>Active</option><option value="0" {% if not p.active %}selected{% endif %}>Inactive (no new credit)</option></select></div>
+</div><p style="margin-top:10px"><button class="btn secondary">Save details</button></p></form></div></details></section>{% endif %}
+{% endblock %}

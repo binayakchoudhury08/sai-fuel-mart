@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% block title %}Import old data{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Import data from the old app</h1>
+<p>Copies your old records into the new system once. The old tables are only read, never changed.</p></div></div>
+{% if info.done %}<div class="flash info">Already imported on {{ info.done }}. It cannot run twice.</div>{% else %}
+<section class="section"><header><h2>Found in the old database</h2></header><div class="body flush"><table><tbody>
+{% for t, n in info.tables.items() %}<tr><td>{{ t }}</td><td class="num">{{ n }} rows</td></tr>{% else %}<tr><td class="empty">No old tables found.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if info.new_entries %}<div class="notice">{{ info.new_entries }} entries were already made in the new app. Importing will add old history alongside them.</div>{% endif %}
+<section class="section"><div class="body stack">
+<p><b>What happens:</b> nozzles, tanks, rates, transporters with full history, lube products with current stock, staff, attendance, salary, tank dips, tanker receipts, photos and the old activity log are copied. Every day before today becomes read-only history.</p>
+<p><b>Balances:</b> each transporter’s balance is rebuilt from their old entries and compared with what the old app showed. Any difference is added as one clearly labelled adjustment, and you get a list to check.</p>
+<p><b>Do this first:</b> download a backup of the old app (old Settings → Full system export).</p>
+<form method="post">{{ csrf() }}<label>Type IMPORT to confirm</label><div class="formrow"><div><input name="confirm" required autocomplete="off"></div><div style="flex:0"><button class="btn">Import now</button></div></div></form>
+</div></section>{% endif %}
+{% endblock %}

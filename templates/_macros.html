@@ -1,0 +1,29 @@
+{% macro hidden(back=None) -%}
+<input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+<input type="hidden" name="_ft" value="{{ form_token() }}">
+{%- if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
+{%- endmacro %}
+
+{% macro csrf() -%}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{%- endmacro %}
+
+{% macro void(action, label="Cancel", back=None, what="entry") -%}
+<details class="void"><summary>{{ label }}</summary>
+<form method="post" action="{{ action }}">
+  {{ csrf() }}{% if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
+  <label>Why cancel this {{ what }}?</label>
+  <input name="reason" required maxlength="200" placeholder="e.g. typed wrong amount">
+  <button class="btn danger small" type="submit">Cancel {{ what }}</button>
+  <p class="hint">It stays on record, struck through.</p>
+</form></details>
+{%- endmacro %}
+
+{% macro status_badge(s) -%}
+{% set lbl = {'open':'Open','submitted':'Submitted','locked':'Locked','legacy':'Old system'} %}
+<span class="badge {{ s }}">{{ lbl.get(s, s) }}</span>
+{%- endmacro %}
+
+{% macro money(v, signed=False) -%}
+{%- if v is none -%}–{%- else -%}
+<span class="{% if signed and v < 0 %}neg{% elif signed and v > 0 %}pos{% endif %}">{% if signed and v > 0 %}+{% endif %}{{ v|inr }}</span>
+{%- endif -%}
+{%- endmacro %}

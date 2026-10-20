@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Credit register{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Credit register</h1><p>Every party entry, including cancelled ones, {{ start|d }} to {{ end|d }}.</p></div></div>
+{% include "reports/_tabs.html" %}
+{% set extra %}<div><label>Type</label><select name="kind"><option value="">All</option>{% for k, l in KIND.items() %}<option value="{{ k }}" {% if k==kind %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>{% endset %}
+{% include "reports/_range.html" %}
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Party</th><th>Type</th><th>Details</th><th class="num">Debit</th><th class="num">Credit</th><th>By</th></tr></thead><tbody>
+{% for r in rows %}<tr class="{% if r.voided %}void{% endif %}"><td>{{ r.business_date.strftime('%d %b') }}</td><td><a href="{{ url_for('parties.detail', pid=r.party_id) }}">{{ r.party_name }}</a></td><td>{{ KIND[r.kind] }}</td>
+<td><small>{% if r.kind=='fuel' %}{{ r.qty }} {{ r.fuel_code }} @ {{ r.rate }}{% endif %}{% if r.kind=='lube' %}{{ r.lube_name }} × {{ r.qty }}{% endif %}{% if r.receipt_no %}{{ r.pay_mode }} {{ r.receipt_no }}{% endif %} {{ r.vehicle_no }} {{ r.challan_no }} {{ r.slip_no }}{% if r.voided %} · cancelled: {{ r.void_reason }}{% endif %}</small></td>
+<td class="num">{{ r.debit|inr if r.debit else '' }}</td><td class="num">{{ r.credit|inr if r.credit else '' }}</td><td><small>{{ r.created_by }}</small></td></tr>
+{% else %}<tr><td colspan="7" class="empty">No entries in this range.</td></tr>{% endfor %}</tbody>
+<tfoot><tr><td colspan="4">Total (not counting cancelled)</td><td class="num">{{ tot.debit|inr }}</td><td class="num">{{ tot.credit|inr }}</td><td></td></tr></tfoot></table></div></section>
+{% endblock %}

@@ -1,0 +1,6 @@
+<div class="btnrow noprint" style="margin-bottom:14px">
+<a class="btn {{ 'secondary' if request.endpoint!='reports.index' }}" href="{{ url_for('reports.index') }}">Daily sales &amp; cash</a>
+<a class="btn {{ 'secondary' if request.endpoint!='reports.outstanding' }}" href="{{ url_for('reports.outstanding') }}">Outstanding</a>
+<a class="btn {{ 'secondary' if request.endpoint!='reports.credit_register' }}" href="{{ url_for('reports.credit_register') }}">Credit register</a>
+<a class="btn secondary" href="{{ url_for('reports.lube_xlsx') }}">Lube Excel</a>
+{% if can('owner') %}<a class="btn secondary" href="{{ url_for('reports.backup') }}">Full backup (Excel)</a>{% endif %}</div>

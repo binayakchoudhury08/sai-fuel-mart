@@ -1,0 +1,126 @@
+/* Sai Fuel Mart v2. Everything here is a convenience preview: the server
+   recalculates and validates every figure before saving. */
+(function(){
+  "use strict";
+  function num(v){ v = String(v||"").replace(/,/g,"").trim(); var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function inr(n){
+    var neg = n < 0; n = Math.abs(n);
+    var s = n.toFixed(2), parts = s.split("."), w = parts[0];
+    if (w.length > 3){ var head = w.slice(0,-3), tail = w.slice(-3);
+      head = head.replace(/\B(?=(\d{2})+(?!\d))/g, ","); w = head + "," + tail; }
+    return (neg ? "−" : "") + "₹" + w + "." + parts[1];
+  }
+
+  // 1. One tap = one save. Disable the button and show progress.
+  document.addEventListener("submit", function(e){
+    var f = e.target;
+    if (f.dataset.confirm && !window.confirm(f.dataset.confirm)) { e.preventDefault(); return; }
+    if (f.dataset.busy === "1") { e.preventDefault(); return; }
+    f.dataset.busy = "1";
+    var b = e.submitter || f.querySelector("button[type=submit],button:not([type])");
+    if (b && !f.hasAttribute("data-download")) { b.dataset.label = b.textContent; b.disabled = true; b.textContent = "Saving…"; }
+    if (f.hasAttribute("data-download")) setTimeout(function(){ f.dataset.busy = ""; }, 3000);
+  }, true);
+  window.addEventListener("pageshow", function(){
+    document.querySelectorAll("form[data-busy='1']").forEach(function(f){
+      f.dataset.busy = ""; f.querySelectorAll("button[disabled]").forEach(function(b){ b.disabled=false; if(b.dataset.label) b.textContent=b.dataset.label; });
+    });
+  });
+
+  // 2. Scrolling over a focused number box must never change the number.
+  document.addEventListener("wheel", function(e){
+    if (document.activeElement && document.activeElement.type === "number" && document.activeElement === e.target) e.target.blur();
+  }, {passive:true});
+
+  // 3. Meter reading preview
+  function meterRow(tr){
+    var o = tr.querySelector("[data-open]"), c = tr.querySelector("[data-close]"), t = tr.querySelector("[data-test]");
+    var out = tr.querySelector("[data-sale]"), amt = tr.querySelector("[data-amount]");
+    if (!c || !out) return;
+    var rate = num(tr.dataset.rate);
+    var open = o ? num(o.value || o.dataset.value) : 0;
+    if (c.value === "") { out.textContent = "–"; if (amt) amt.textContent = "–"; tr.classList.add("missing"); return; }
+    tr.classList.remove("missing");
+    var s = num(c.value) - open - num(t && t.value);
+    out.textContent = s.toFixed(2);
+    out.classList.toggle("neg", s < 0);
+    if (amt) amt.textContent = s < 0 ? "Check reading" : inr(s * rate);
+  }
+  document.querySelectorAll("tr[data-meter]").forEach(function(tr){
+    tr.addEventListener("input", function(){ meterRow(tr); }); meterRow(tr);
+  });
+  document.querySelectorAll("[data-override]").forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var tr = cb.closest("tr"), box = tr.querySelector("[data-open]"), why = tr.querySelector("[data-reason]");
+      box.readOnly = !cb.checked; if (why) why.hidden = !cb.checked; if (!cb.checked) box.value = box.dataset.value; meterRow(tr);
+    });
+  });
+
+  // 4. Note counter
+  var den = document.querySelector("[data-denoms]");
+  if (den){
+    var calc = function(){
+      var total = 0;
+      den.querySelectorAll("[data-den]").forEach(function(i){ total += num(i.value) * num(i.dataset.den); });
+      var coins = den.querySelector("[data-coins]"); total += num(coins && coins.value);
+      var out = den.querySelector("[data-den-total]"); if (out) out.textContent = inr(total);
+    };
+    den.addEventListener("input", calc); calc();
+  }
+
+  // 5. Credit entry: litres <-> amount preview
+  document.querySelectorAll("[data-fuelform]").forEach(function(f){
+    var sel = f.querySelector("[name=fuel_code]"), q = f.querySelector("[name=qty]"), a = f.querySelector("[name=amount]"),
+        r = f.querySelector("[name=rate]"), out = f.querySelector("[data-preview]");
+    function rate(){ var o = sel && sel.options[sel.selectedIndex]; return num((r && r.value) || (o && o.dataset.rate)); }
+    function upd(){
+      if (r && sel && !r.dataset.touched) r.placeholder = (sel.options[sel.selectedIndex].dataset.rate || "");
+      var rt = rate(); if (!out) return;
+      if (num(q.value) > 0) out.textContent = num(q.value).toFixed(2) + " × " + rt.toFixed(2) + " = " + inr(num(q.value)*rt);
+      else if (num(a.value) > 0 && rt > 0) out.textContent = inr(num(a.value)) + " ÷ " + rt.toFixed(2) + " = " + (num(a.value)/rt).toFixed(2) + " L";
+      else out.textContent = "";
+    }
+    if (r) r.addEventListener("input", function(){ r.dataset.touched = "1"; });
+    f.addEventListener("input", upd); f.addEventListener("change", upd); upd();
+  });
+
+  // 6. Lube sale: show party chooser for credit; preview amount
+  document.querySelectorAll("[data-lubeform]").forEach(function(f){
+    var mode = f.querySelector("[name=pay_mode]"), party = f.querySelector("[data-party]"),
+        prod = f.querySelector("[name=product_id]"), q = f.querySelector("[name=qty]"), out = f.querySelector("[data-preview]");
+    function upd(){
+      if (party) party.hidden = mode.value !== "Credit";
+      var o = prod.options[prod.selectedIndex], rate = num(o && o.dataset.rate), stock = o && o.dataset.stock;
+      if (out) out.textContent = prod.value ? (inr(num(q.value) * rate) + (stock !== undefined ? "  ·  in stock: " + stock : "")) : "";
+    }
+    f.addEventListener("change", upd); f.addEventListener("input", upd); upd();
+  });
+
+  // 7. Instant filter for long lists
+  document.querySelectorAll("[data-filter]").forEach(function(inp){
+    var target = document.querySelector(inp.dataset.filter);
+    inp.addEventListener("input", function(){
+      var q = inp.value.toLowerCase();
+      target.querySelectorAll("tbody tr").forEach(function(tr){ tr.hidden = q && tr.textContent.toLowerCase().indexOf(q) < 0; });
+    });
+  });
+
+  // 8. Date pickers that navigate
+  document.querySelectorAll("[data-gotodate]").forEach(function(inp){
+    inp.addEventListener("change", function(){ if (inp.value) location.href = inp.dataset.gotodate.replace("__D__", inp.value); });
+  });
+
+  // 9. Location for photo proofs
+  var geo = document.querySelector("[data-geo]");
+  if (geo && navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(p){
+      geo.querySelector("[name=lat]").value = p.coords.latitude.toFixed(6);
+      geo.querySelector("[name=lng]").value = p.coords.longitude.toFixed(6);
+    }, function(){}, {timeout:8000});
+  }
+
+  // 10. Close the mobile menu after choosing
+  document.querySelectorAll(".rail a").forEach(function(a){ a.addEventListener("click", function(){ var m=document.getElementById("more"); if(m) m.checked=false; }); });
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js").catch(function(){});
+})();
