@@ -329,52 +329,108 @@ def product_stock(cur, product_id):
 
 
 # ------------------------------------------------------------------ tanks
-def tank_reconciliation(cur, d):
-    """Book stock vs dip for each tank on date d."""
+def _dec(v):
+    try:
+        return Decimal(str(v).replace(",", "").strip()) if v not in (None, "") else None
+    except Exception:
+        return None
+
+
+def tank_series(cur, start, end):
+    """Book stock vs actual stock per tank per day, with a handful of queries.
+
+    Manual dip day: opening = last dip before the day; + tanker receipts entered; − meter sale.
+    ATG-synced day (same as the old app): opening = ATG stock − ATG 'received today' + ATG 'sold today';
+    sale = meter sale once the day's readings are in, otherwise the ATG's own sale (so a midday sync
+    shows 'balanced' instead of a fake loss). Also flags ATG receipts with no tanker receipt entered."""
     cur.execute("""SELECT t.*, f.name AS fuel_name, f.unit FROM tanks t JOIN fuels f ON f.code=t.fuel_code
                    WHERE t.active ORDER BY f.sort, t.name""")
     tanks = cur.fetchall()
-    cur.execute("SELECT * FROM tank_dips WHERE business_date=%s", (d,))
-    dips = {r["tank_id"]: r for r in cur.fetchall()}
+    if not tanks:
+        return []
     cur.execute("""SELECT DISTINCT ON (tank_id) * FROM tank_dips WHERE business_date < %s
-                   ORDER BY tank_id, business_date DESC""", (d,))
-    prev = {r["tank_id"]: r for r in cur.fetchall()}
-    cur.execute("""SELECT tank_id, SUM(received_qty_l) AS q FROM fuel_receipts
-                   WHERE business_date=%s AND NOT voided GROUP BY tank_id""", (d,))
-    recv = {r["tank_id"]: Decimal(r["q"]) for r in cur.fetchall()}
-    # meter sales per tank: by explicit nozzle→tank link, else by fuel when that fuel has one tank
-    tanks_per_fuel = {}
+                   ORDER BY tank_id, business_date DESC""", (start,))
+    last = {r["tank_id"]: r for r in cur.fetchall()}
+    cur.execute("SELECT * FROM tank_dips WHERE business_date BETWEEN %s AND %s ORDER BY business_date", (start, end))
+    dips = {(r["business_date"], r["tank_id"]): r for r in cur.fetchall()}
+    cur.execute("""SELECT business_date, tank_id, SUM(received_qty_l) AS q FROM fuel_receipts
+                   WHERE NOT voided AND business_date BETWEEN %s AND %s GROUP BY business_date, tank_id""", (start, end))
+    recv = {(r["business_date"], r["tank_id"]): Decimal(r["q"]) for r in cur.fetchall()}
+    per_fuel = {}
     for t in tanks:
-        tanks_per_fuel.setdefault(t["fuel_code"], []).append(t["id"])
-    cur.execute("""
-        SELECT n.tank_id, n.fuel_code, SUM(r.closing - r.opening - r.testing) AS q
-        FROM nozzle_readings r JOIN nozzles n ON n.id = r.nozzle_id
-        WHERE r.business_date=%s GROUP BY n.tank_id, n.fuel_code
-    """, (d,))
+        per_fuel.setdefault(t["fuel_code"], []).append(t["id"])
+    cur.execute("""SELECT r.business_date, n.tank_id, n.fuel_code, SUM(r.closing-r.opening-r.testing) AS q
+                   FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
+                   WHERE r.business_date BETWEEN %s AND %s GROUP BY r.business_date, n.tank_id, n.fuel_code""",
+                (start, end))
     sales = {}
     for r in cur.fetchall():
         tid = r["tank_id"]
-        if tid is None and len(tanks_per_fuel.get(r["fuel_code"], [])) == 1:
-            tid = tanks_per_fuel[r["fuel_code"]][0]
+        if tid is None and len(per_fuel.get(r["fuel_code"], [])) == 1:
+            tid = per_fuel[r["fuel_code"]][0]
         if tid is not None:
-            sales[tid] = sales.get(tid, ZERO) + Decimal(r["q"])
+            sales[(r["business_date"], tid)] = sales.get((r["business_date"], tid), ZERO) + Decimal(r["q"])
+    cur.execute("""SELECT fuel_code, effective_from, rate FROM fuel_rates WHERE effective_from <= %s
+                   ORDER BY fuel_code, effective_from""", (end,))
+    rate_hist = {}
+    for r in cur.fetchall():
+        rate_hist.setdefault(r["fuel_code"], []).append((r["effective_from"], Decimal(r["rate"])))
+
+    def rate_on(code, d):
+        rt = None
+        for eff, val in rate_hist.get(code, []):
+            if eff <= d:
+                rt = val
+        return rt
+
     out = []
-    for t in tanks:
-        p = prev.get(t["id"])
-        dip = dips.get(t["id"])
-        opening = Decimal(p["volume_l"]) if p else None
-        received = recv.get(t["id"], ZERO)
-        sold = sales.get(t["id"], ZERO)
-        book = (opening + received - sold) if opening is not None else None
-        actual = Decimal(dip["volume_l"]) if dip else None
-        variance = (actual - book) if (actual is not None and book is not None) else None
-        pct = (variance / sold * 100).quantize(Decimal("0.01"), ROUND_HALF_UP) if (variance is not None and sold) else None
-        out.append({"tank": t, "opening": opening, "opening_date": p["business_date"] if p else None,
-                    "received": received, "sold": sold, "book": book, "dip": dip, "actual": actual,
-                    "variance": variance, "variance_pct": pct,
-                    "fill_pct": (actual / Decimal(t["capacity_l"]) * 100).quantize(Decimal("1"))
-                    if (actual is not None and t["capacity_l"]) else None})
+    d = start
+    while d <= end:
+        for t in tanks:
+            dip = dips.get((d, t["id"]))
+            meter = sales.get((d, t["id"]))
+            entered = recv.get((d, t["id"]), ZERO)
+            atg = (dip.get("atg") or {}) if dip and dip["source"] == "atg" else {}
+            atg_sale, atg_recv = _dec(atg.get("today_sale_ltr")), _dec(atg.get("today_receipt_ltr"))
+            actual = Decimal(dip["volume_l"]) if dip else None
+            prev = last.get(t["id"])
+            row = {"tank": t, "date": d, "dip": dip, "actual": actual, "atg": atg, "mode": "manual",
+                   "meter_sold": meter, "atg_sale": atg_sale, "atg_receipt": atg_recv, "entered_receipt": entered,
+                   "opening_date": prev["business_date"] if prev else None}
+            if dip is not None and atg_sale is not None:
+                row["mode"] = "atg"
+                received = atg_recv if atg_recv is not None else entered
+                opening = actual - received + atg_sale
+                sold = meter if meter is not None else atg_sale
+                row["sale_source"] = "meter" if meter is not None else "ATG"
+            else:
+                opening = Decimal(prev["volume_l"]) if prev else None
+                received = entered
+                sold = meter or ZERO
+                row["sale_source"] = "meter"
+            book = (opening + received - sold) if opening is not None else None
+            variance = (actual - book) if (actual is not None and book is not None) else None
+            rt = rate_on(t["fuel_code"], d)
+            row.update({
+                "opening": opening, "received": received, "sold": sold, "book": book, "variance": variance,
+                "variance_pct": (variance / sold * 100).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                if (variance is not None and sold) else None,
+                "value": money(variance * rt) if (variance is not None and rt) else None,
+                "fill_pct": (actual / Decimal(t["capacity_l"]) * 100).quantize(Decimal("1"))
+                if (actual is not None and t["capacity_l"]) else None,
+                # ATG says a tanker was unloaded but nobody recorded the receipt (or quantities differ)
+                "receipt_mismatch": bool(atg_recv is not None and abs(atg_recv - entered) > Decimal("50")),
+            })
+            out.append(row)
+            if dip:
+                last[t["id"]] = dip
+        d += timedelta(days=1)
     return out
+
+
+def tank_reconciliation(cur, d):
+    """Book stock vs dip for each tank on date d (see tank_series)."""
+    return tank_series(cur, d, d)
 
 
 def avg_daily_sale(cur, fuel_code, upto, days=7):

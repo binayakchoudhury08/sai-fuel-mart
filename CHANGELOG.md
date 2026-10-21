@@ -29,6 +29,26 @@ Reports (every report has PDF and Excel)
   daily sale chart, top transporters, top lube products, expenses by category, staff today.
 - Business Excel with charts (monthly trend line chart, outstanding pie chart, daily sale bar chart) plus all data.
 
+Old-data import fixed (was loading forever)
+- Cause: it sent every old row to the database one at a time — about 40,000 trips for a year of data, which
+  takes 3–100 minutes from Render to Supabase, but Render stops a request after 2 minutes.
+- Now rows go in batches of 500 (≈500 trips for a year of data; about 15 s at typical latency) and the import
+  runs in the background with a live progress bar. A failed or interrupted import saves nothing and can be retried.
+
+ATG automation (checked against the old app and fixed)
+- Same address /api/tank-sync, same secret (TANK_SYNC_SECRET), same JSON from the HP Smart Connect bookmarklet,
+  same CORS rules and response — the bookmarklet needs no change if your Render address stays the same.
+- Gain/shortage uses the old ATG logic: opening = ATG stock − ATG received today + ATG sold today; sale = meter
+  readings once entered, otherwise the ATG's own sale, so a midday sync shows "Balanced", not a false loss.
+- Live tank cards are back: stock, fill %, days left, gain/short in L and ₹, temperature, water-in-tank warning,
+  "synced X min ago" badge (green < 30 min, amber, red after 2 h), refreshing every 30 seconds via /api/tank-status.
+- Detailed live readings table: capacity, net/gross volume, ullage, product and water dip, water litres,
+  temperature, density, density at 15 °C, float height, density and decantation status, ATG received/sold today.
+- Monthly gain and shortage totals in litres and ₹ on the tank page.
+- New safeguards: "ATG shows a tanker unloaded but no tanker receipt was recorded" warning (tank page + dashboard);
+  values like "12,345.60" are read correctly (the old code crashed on them); unreadable values are skipped,
+  never saved as 0; "Petrol"/"Diesel" accepted as MS/HSD; one audit line per sync; a locked day refuses syncs.
+
 Other restored features
 - Proofs: MS/HSD dip check, MS/HSD nozzle testing, stock check with Available / No stock, photo + video, time and
   GPS; "PDF with photos" report for a date and type.

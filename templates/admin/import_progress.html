@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% block title %}Importing old data{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Importing old data…</h1>
+<p>This runs on the server. You can keep this page open or come back later; closing it does not stop the import.</p></div></div>
+<section class="board" aria-live="polite">
+  <h2 id="step">{{ st.step or 'Starting' }}</h2>
+  <div class="meterbar" style="height:14px;background:#1F304C"><i id="bar" style="width:{{ st.pct or 1 }}%;background:var(--amber)"></i></div>
+  <div class="lines" style="margin-top:12px"><span>Progress</span><span class="v" id="pct">{{ st.pct or 1 }}%</span>
+  <span>Time</span><span class="v" id="el">–</span></div>
+  <p id="err" style="color:#FF7A6B;margin-top:10px" hidden></p>
+</section>
+<p class="hint">Nothing is saved until the very end, so if it stops for any reason your data stays exactly as it was and you can start again.</p>
+<script>
+(function(){
+  function tick(){
+    fetch("{{ url_for('admin.import_status') }}", {credentials:"same-origin"}).then(function(r){return r.json();}).then(function(s){
+      document.getElementById("step").textContent = s.step || "Working";
+      document.getElementById("bar").style.width = (s.pct||1) + "%";
+      document.getElementById("pct").textContent = (s.pct||1) + "%";
+      document.getElementById("el").textContent = Math.floor((s.elapsed||0)/60) + " min " + ((s.elapsed||0)%60) + " s";
+      if (s.state === "done") { location.reload(); return; }
+      if (s.state === "failed") { var e=document.getElementById("err"); e.hidden=false; e.textContent = (s.error||"Stopped") + " — reloading…"; setTimeout(function(){location.reload();}, 3000); return; }
+      setTimeout(tick, 2000);
+    }).catch(function(){ setTimeout(tick, 4000); });
+  }
+  tick();
+})();
+</script>
+{% endblock %}

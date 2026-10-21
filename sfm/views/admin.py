@@ -254,11 +254,40 @@ def audit_log():
 @bp.route("/admin/import-legacy", methods=["GET", "POST"])
 @login_required("owner")
 def import_legacy():
-    from ..migrate_legacy import inspect_legacy, run_import
+    from flask import current_app
+    from ..migrate_legacy import inspect_legacy, is_running, read_state, start_background
     if request.method == "POST":
         if request.form.get("confirm") != "IMPORT":
             raise UserError("Type IMPORT in capitals to confirm.")
-        report = run_import(current_user()["username"])
-        return render_template("admin/import_done.html", report=report)
+        start_background(current_app._get_current_object(), current_user()["username"])
+        return redirect(url_for("admin.import_legacy"))
+    st = read_state() or {}
+    if is_running(st):
+        return render_template("admin/import_progress.html", st=st)
+    if st.get("state") == "done" and st.get("report"):
+        return render_template("admin/import_done.html", report=_decimalize(st["report"]))
     info = inspect_legacy()
-    return render_template("admin/import.html", info=info)
+    return render_template("admin/import.html", info=info, failed=st if st.get("state") in ("failed", "running") else None)
+
+
+@bp.route("/admin/import-legacy/status")
+@login_required("owner")
+def import_status():
+    from flask import jsonify
+    from ..migrate_legacy import is_running, read_state
+    st = read_state() or {}
+    return jsonify({"state": st.get("state") if (st.get("state") != "running" or is_running(st)) else "failed",
+                    "step": st.get("step"), "pct": st.get("pct"), "error": st.get("error") or
+                    ("The import stopped (server restarted). Nothing was saved — start it again." if st.get("state") == "running" and not is_running(st) else None),
+                    "elapsed": round(__import__("time").time() - float(st.get("started_at") or 0)) if st.get("started_at") else 0})
+
+
+def _decimalize(rep):
+    from decimal import Decimal as D
+    for b in rep.get("balances", []):
+        for k in ("old", "computed", "diff"):
+            try:
+                b[k] = D(str(b[k]))
+            except Exception:
+                b[k] = D(0)
+    return rep

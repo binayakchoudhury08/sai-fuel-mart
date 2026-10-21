@@ -65,6 +65,11 @@ cl.post("/setup", data={"_csrf": "t", "setup_code": "x", "username": "boss", "pa
 with cl.session_transaction() as s: s["_csrf"] = "t"
 r = cl.get("/admin/import-legacy"); print("inspect page", r.status_code)
 r = cl.post("/admin/import-legacy", data={"_csrf": "t", "confirm": "IMPORT"})
+import time as _t
+while cl.get("/admin/import-legacy/status").json["state"] == "running":
+    _t.sleep(0.3)
+print("import state:", cl.get("/admin/import-legacy/status").json)
+r = cl.get("/admin/import-legacy")
 html = r.get_data(as_text=True)
 print("import page", r.status_code)
 for m in re.findall(r"<b>(\d+)</b><span>([^<]+)</span>", html): print("  ", m[1], m[0])

@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import wraps
 
-from flask import abort, flash, g, redirect, request, session, url_for
+from flask import abort, flash, g, has_request_context, redirect, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .util import UserError, now_ist, today
@@ -134,7 +134,7 @@ def audit(cur, action, entity, entity_id=None, summary="", before=None, after=No
         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (u.get("username", "system"), u.get("role", "-"),
           (request.headers.get("X-Forwarded-For", request.remote_addr or "") or "").split(",")[0][:60]
-          if request else "",
+          if has_request_context() else "",
           action, entity, str(entity_id) if entity_id is not None else None,
           business_date, summary[:500], _dump(before), _dump(after)))
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Import finished{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>Import finished</h1><p>Check the balance comparison below. Differences come from bugs in the old app’s running totals.</p></div></div>
+<div class="pagehead"><div class="grow"><h1>Import finished</h1><p>{% if report.seconds %}Finished in {{ report.seconds }} seconds. {% endif %}Check the balance comparison below. Differences come from bugs in the old app’s running totals.</p></div></div>
 <div class="stats">{% for k, v in report.counts.items() %}<div><b>{{ v }}</b><span>{{ k }}</span></div>{% endfor %}</div>
 <section class="section"><header><h2>Transporter balances: old app vs rebuilt from entries</h2></header><div class="body flush tablewrap"><table>
 <thead><tr><th>Party</th><th class="num">Old app showed</th><th class="num">Old entries add up to</th><th class="num">Difference (added as adjustment)</th></tr></thead><tbody>

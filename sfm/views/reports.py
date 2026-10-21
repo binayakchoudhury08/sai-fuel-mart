@@ -265,31 +265,19 @@ def digital():
 
 
 def tank_range(cur, start, end):
-    """Day-by-day book stock vs dip per tank, with ₹ value of gain/loss."""
-    out = []
-    d = end
-    rates_cache = {}
-    while d >= start and len(out) < 2000:
-        for r in tank_reconciliation(cur, d):
-            if r["actual"] is None and not r["received"] and not r["sold"]:
-                continue
-            code = r["tank"]["fuel_code"]
-            if d not in rates_cache:
-                rates_cache[d] = rates_for(cur, d)
-            rate = rates_cache[d].get(code, _Z)
-            r["value"] = money(r["variance"] * rate) if r["variance"] is not None else None
-            r["date"] = d
-            out.append(r)
-        d = d - timedelta(days=1)
-    return out
+    """Day-by-day book stock vs dip per tank, newest first, with ₹ value of gain/loss."""
+    from ..services import tank_series
+    rows = [r for r in tank_series(cur, start, end)
+            if r["actual"] is not None or r["received"] or r["sold"]]
+    return sorted(rows, key=lambda r: (r["date"], r["tank"]["name"]), reverse=True)
 
 
 @bp.route("/reports/tanks")
 @login_required("manager")
 def tanks():
     start, end = _range(default_days=13) if not request.args.get("from") else _range()
-    if (end - start).days > 62:
-        raise UserError("Tank report: choose 62 days or less.")
+    if (end - start).days > 186:
+        raise UserError("Tank report: choose 6 months or less.")
     with db.tx() as cur:
         rows = tank_range(cur, start, end)
         cur.execute("""SELECT r.*, t.name AS tank_name FROM fuel_receipts r JOIN tanks t ON t.id=r.tank_id

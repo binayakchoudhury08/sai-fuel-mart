@@ -33,7 +33,7 @@
   <section class="section"><header><h2>Tanks</h2><a class="btn small secondary" href="{{ url_for('tanks.index') }}">Dip &amp; tankers</a></header>
   <div class="body">{% for r in tanks %}<div style="margin-bottom:12px">
     <div class="formrow" style="justify-content:space-between"><b>{{ r.tank.name }}</b>
-      <span>{% if r.actual is not none %}{{ r.actual|qty }} L{% if r.fill_pct is not none %} · {{ r.fill_pct }}%{% endif %}{% if days_left.get(r.tank.id) %} · about {{ days_left[r.tank.id] }} days left{% endif %}{% else %}<span class="muted">No dip today</span>{% endif %}</span></div>
+      <span>{% if r.actual is not none %}{{ r.actual|qty }} L{% if r.fill_pct is not none %} · {{ r.fill_pct }}%{% endif %}{% if days_left.get(r.tank.id) %} · about {{ days_left[r.tank.id] }} days left{% endif %}{% if r.dip and r.dip.source=='atg' %} · <span class="badge locked">ATG {{ r.dip.updated_at.strftime('%I:%M %p') }}</span>{% endif %}{% if r.receipt_mismatch %} · <span class="badge stop">tanker not recorded</span>{% endif %}{% else %}<span class="muted">No dip today</span>{% endif %}</span></div>
     {% if r.fill_pct is not none %}<div class="meterbar {% if r.fill_pct < 20 %}low{% endif %}"><i style="width:{{ [r.fill_pct,100]|min }}%"></i></div>{% endif %}
   </div>{% else %}<p class="muted">No tanks set up.</p>{% endfor %}</div></section>
 

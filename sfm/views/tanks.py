@@ -9,7 +9,7 @@ from flask import Blueprint, g, jsonify, redirect, render_template, request, fla
 from .. import db
 from ..security import assert_writable, audit, claim_form_token, current_user, login_required
 from ..services import avg_daily_sale, tank_reconciliation
-from ..util import UserError, clean, parse_date, to_dec, today
+from ..util import UserError, clean, now_ist, parse_date, to_dec, today
 
 bp = Blueprint("tanks", __name__)
 api = Blueprint("api", __name__)
@@ -31,6 +31,12 @@ def index():
                     (d - timedelta(days=13), d))
         history = cur.fetchall()
         stats = month_receipt_stats(cur, d)
+        from ..services import tank_series
+        month = tank_series(cur, d.replace(day=1), d)
+        mt = {"gain": sum((r["variance"] for r in month if r["variance"] and r["variance"] > 0), Decimal(0)),
+              "short": sum((-r["variance"] for r in month if r["variance"] and r["variance"] < 0), Decimal(0)),
+              "gain_value": sum((r["value"] for r in month if r["value"] and r["value"] > 0), Decimal(0)),
+              "short_value": sum((-r["value"] for r in month if r["value"] and r["value"] < 0), Decimal(0))}
         from ..services import rates_for
         rates = rates_for(cur, d)
         for r in rec:
@@ -42,7 +48,8 @@ def index():
             if r["actual"] is not None and avg > 0:
                 days_left[r["tank"]["id"]] = (r["actual"] / avg).quantize(Decimal("0.1"))
     return render_template("tanks/index.html", d=d, rec=rec, receipts=receipts, history=history,
-                           days_left=days_left, stats=stats, prev_day=d - timedelta(days=1),
+                           days_left=days_left, stats=stats, mt=mt, now=now_ist(),
+                           prev_day=d - timedelta(days=1),
                            next_day=d + timedelta(days=1) if d < today() else None)
 
 
@@ -231,8 +238,27 @@ def _cors(resp, code=200):
     return resp, code
 
 
+FUEL_ALIASES = {"MS": "MS", "PETROL": "MS", "HSD": "HSD", "DIESEL": "HSD", "CNG": "CNG"}
+ATG_EXTRA = ("capacity", "water_ltr", "gross_volume", "ullage_ltr", "today_receipt_ltr", "today_sale_ltr",
+             "decantation_status", "density_status", "density_at_15", "den_float_height", "water_dip_mm",
+             "net_volume", "temperature_c", "density_kg_m3", "dip_mm", "product", "tank_no")
+
+
+def _num(v):
+    """ATG pages sometimes send '12,345.60' or ' 812.4 L'. Never turn junk into a silent 0."""
+    if v is None or v == "":
+        return None
+    try:
+        s = "".join(ch for ch in str(v) if ch.isdigit() or ch in ".-")
+        return Decimal(s).quantize(Decimal("0.01")) if s not in ("", ".", "-") else None
+    except Exception:
+        return None
+
+
 @api.route("/api/tank-sync", methods=["POST", "OPTIONS"])
 def api_tank_sync():
+    """Receives live readings from the HP Smart Connect ATG bookmarklet. Same URL, secret and
+    JSON as the old app: {"secret": "...", "tanks": [{"fuel_type": "MS", "net_volume": ..., ...}]}."""
     if request.method == "OPTIONS":
         return _cors(jsonify({"status": "ok"}))
     payload = request.get_json(force=True, silent=True) or {}
@@ -247,24 +273,22 @@ def api_tank_sync():
             cur.execute("SELECT status FROM days WHERE business_date=%s", (d,))
             st = cur.fetchone()
             if st and st["status"] == "locked":
-                return _cors(jsonify({"status": "error", "message": f"{d} is locked"}), 409)
+                return _cors(jsonify({"status": "error", "message": f"{d} is locked; reading not saved"}), 409)
             for t in payload.get("tanks", []) or []:
-                code = str(t.get("fuel_type") or "").upper().strip()
+                code = FUEL_ALIASES.get(str(t.get("fuel_type") or t.get("product") or "").upper().strip())
+                vol = _num(t.get("net_volume"))
+                if not code or vol is None or vol < 0:
+                    skipped.append(str(t.get("fuel_type") or "?"))
+                    continue
                 cur.execute("SELECT * FROM tanks WHERE fuel_code=%s AND active ORDER BY id LIMIT 1", (code,))
                 tank = cur.fetchone()
                 if not tank:
                     skipped.append(code)
                     continue
-                def num(k):
-                    try:
-                        return Decimal(str(t.get(k) or 0)).quantize(Decimal("0.01"))
-                    except Exception:
-                        return Decimal(0)
-                vol = num("net_volume")
-                extra = {k: t.get(k) for k in ("capacity", "water_ltr", "gross_volume", "ullage_ltr",
-                                               "today_receipt_ltr", "today_sale_ltr", "decantation_status",
-                                               "density_status", "density_at_15", "den_float_height",
-                                               "water_dip_mm")}
+                extra = {k: (str(_num(t.get(k))) if _num(t.get(k)) is not None else t.get(k))
+                         if k not in ("decantation_status", "density_status", "product") else str(t.get(k) or "")[:50]
+                         for k in ATG_EXTRA if t.get(k) not in (None, "")}
+                extra["synced_at"] = now_ist().isoformat(timespec="seconds")
                 cur.execute("""
                     INSERT INTO tank_dips (business_date, tank_id, dip_mm, volume_l, water_mm, temperature_c,
                                            density, source, atg, updated_by)
@@ -273,12 +297,51 @@ def api_tank_sync():
                         volume_l=EXCLUDED.volume_l, water_mm=EXCLUDED.water_mm, temperature_c=EXCLUDED.temperature_c,
                         density=EXCLUDED.density, source='atg', atg=EXCLUDED.atg, updated_by='ATG sync',
                         updated_at=NOW()
-                """, (d, tank["id"], num("dip_mm"), vol, num("water_dip_mm"), num("temperature_c"),
-                      num("density_kg_m3") or None, json.dumps(extra, default=str)))
-                if tank["capacity_l"] in (None, 0) and num("capacity"):
-                    cur.execute("UPDATE tanks SET capacity_l=%s WHERE id=%s", (num("capacity"), tank["id"]))
-                audit(cur, "sync", "tank_dip", tank["id"], f"ATG sync {code}: {vol} L", business_date=d)
-                synced.append(code)
+                """, (d, tank["id"], _num(t.get("dip_mm")) or 0, vol, _num(t.get("water_dip_mm")) or 0,
+                      _num(t.get("temperature_c")), _num(t.get("density_kg_m3")), json.dumps(extra)))
+                cap = _num(t.get("capacity"))
+                if cap and (not tank["capacity_l"] or Decimal(tank["capacity_l"]) == 0):
+                    cur.execute("UPDATE tanks SET capacity_l=%s WHERE id=%s", (cap, tank["id"]))
+                synced.append(f"{code} {vol} L")
+            if synced:
+                audit(cur, "sync", "tank_dip", None, "ATG sync: " + ", ".join(synced), business_date=d)
     except Exception as e:
         return _cors(jsonify({"status": "error", "message": str(e)[:200]}), 500)
-    return _cors(jsonify({"status": "success", "synced": synced, "skipped": skipped, "date": d.isoformat()}))
+    return _cors(jsonify({"status": "success", "synced": [s.split()[0] for s in synced], "skipped": skipped,
+                          "date": d.isoformat(), "server_time": now_ist().strftime("%Y-%m-%d %H:%M:%S")}))
+
+
+@bp.route("/api/tank-status")
+def api_tank_status():
+    """Live feed for the tank cards (old app polled this every 30 s). Needs a signed-in user."""
+    from flask import g as _g
+    if not _g.get("user"):
+        return jsonify({"status": "error", "message": "Not logged in"}), 401
+    t0 = today()
+    with db.tx() as cur:
+        rows = tank_reconciliation(cur, t0)
+        cur.execute("""SELECT DISTINCT ON (tank_id) tank_id, business_date, volume_l, source, updated_at, atg,
+                              temperature_c, density, dip_mm
+                       FROM tank_dips ORDER BY tank_id, business_date DESC, updated_at DESC""")
+        latest = {r["tank_id"]: r for r in cur.fetchall()}
+        out = []
+        for r in rows:
+            t = r["tank"]
+            lt = latest.get(t["id"])
+            avg = avg_daily_sale(cur, t["fuel_code"], t0)
+            stock = Decimal(lt["volume_l"]) if lt else None
+            atg = (lt["atg"] or {}) if lt else {}
+            out.append({
+                "tank_id": t["id"], "name": t["name"], "fuel": t["fuel_code"],
+                "capacity": float(t["capacity_l"] or 0), "stock": float(stock) if stock is not None else None,
+                "fill_pct": float(stock / Decimal(t["capacity_l"]) * 100) if (stock is not None and t["capacity_l"]) else None,
+                "days_left": float((stock / avg).quantize(Decimal("0.1"))) if (stock is not None and avg > 0) else None,
+                "variance": float(r["variance"]) if r["variance"] is not None else None,
+                "variance_value": float(r["value"]) if r["value"] is not None else None,
+                "temperature_c": float(lt["temperature_c"]) if lt and lt["temperature_c"] is not None else None,
+                "water_ltr": float(_num(atg.get("water_ltr")) or 0),
+                "source": lt["source"] if lt else None, "reading_date": lt["business_date"].isoformat() if lt else None,
+                "updated_at": lt["updated_at"].isoformat() if lt else None,
+                "receipt_mismatch": r["receipt_mismatch"],
+            })
+    return jsonify({"status": "success", "tanks": out, "server_time": now_ist().isoformat(timespec="seconds")})

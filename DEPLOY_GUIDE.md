@@ -95,6 +95,23 @@ Push the new code; Render redeploys. The database upgrades itself on start (new 
 nothing is removed). If you already ran "Import old data" on 2.0, old transport entries stay as they are
 (fuel and cash as separate lines) — balances are unaffected. The Android app does not need reinstalling.
 
+## If the old-data import seems stuck
+
+Version 2.1 runs the import in the background with a progress bar (a year of data takes well under a minute).
+You can close the page; open Settings → Import old data again to see progress or the result. If the server
+restarts during the import, nothing is saved and the page lets you start again. (Earlier builds ran it inside
+the web request and Render cut it off after 2 minutes, leaving the page loading forever.)
+
+## ATG automation (HP Smart Connect bookmarklet)
+
+1. Render → Environment → `TANK_SYNC_SECRET` = exactly the same secret your bookmarklet already sends
+   (it was in the old `.env` under the same name). If you change it, change it in the bookmarklet too.
+2. Keep the same Render service/address. The bookmarklet posts to `https://<your-site>/api/tank-sync`; the
+   address, the secret and the data format are unchanged, so the bookmarklet itself needs no edit.
+3. Settings → Tanks: one active tank per fuel (MS, HSD). Each nozzle should point to its tank.
+4. Click the bookmarklet on the ATG computer. On Tanks & tankers the cards should show "ATG · synced just now".
+   If the bookmarklet shows "Invalid or missing secret", the secret on Render doesn't match.
+
 ## 6. Roles
 
 | | Operator | Manager | Owner |

@@ -152,3 +152,45 @@
     fillVehicles(); f.addEventListener("input", upd); f.addEventListener("change", upd); upd();
   });
 })();
+
+/* Tank page: "synced X min ago" badges ticking every second + refresh from /api/tank-status every 30 s (old behaviour) */
+(function(){
+  var box = document.querySelector("[data-tanklive]");
+  if (!box) return;
+  function ago(iso){
+    if (!iso) return null;
+    var mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return {t:"synced just now", cls:"locked"};
+    if (mins < 60) return {t:"synced " + mins + " min ago", cls: mins < 30 ? "locked" : "open"};
+    var h = Math.floor(mins/60);
+    if (h < 24) return {t:"synced " + h + " h ago", cls: h < 2 ? "open" : "stop"};
+    return {t:"synced " + Math.floor(h/24) + " d ago", cls:"stop"};
+  }
+  function badges(){
+    box.querySelectorAll("[data-sync]").forEach(function(b){
+      if (b.dataset.src !== "atg") return;
+      var a = ago(b.dataset.at); if (!a) return;
+      b.textContent = "ATG · " + a.t; b.className = "badge " + a.cls;
+    });
+  }
+  function fmt(n, d){ return n == null ? "—" : Number(n).toLocaleString("en-IN", {minimumFractionDigits:d, maximumFractionDigits:d}); }
+  function poll(){
+    if (document.hidden) return;
+    fetch("/api/tank-status", {credentials:"same-origin"}).then(function(r){ return r.ok ? r.json() : null; }).then(function(data){
+      if (!data || data.status !== "success") return;
+      data.tanks.forEach(function(t){
+        var card = box.querySelector('[data-tank="' + t.tank_id + '"]'); if (!card) return;
+        var set = function(k, v){ var el = card.querySelector('[data-v="' + k + '"]'); if (el) el.textContent = v; };
+        if (t.reading_date === new Date(Date.now() + 19800000).toISOString().slice(0,10)) {
+          set("stock", fmt(t.stock, 0)); set("variance", t.variance == null ? "—" : fmt(t.variance, 2));
+          set("fill", t.fill_pct == null ? "—" : Math.round(t.fill_pct) + "% of " + fmt(t.capacity, 0) + " L");
+          var bar = card.querySelector('[data-v="fillbar"]'); if (bar && t.fill_pct != null) bar.style.width = Math.min(t.fill_pct, 100) + "%";
+          var b = card.querySelector("[data-sync]"); if (b){ b.dataset.at = t.updated_at; b.dataset.src = t.source; }
+        }
+        if (t.days_left != null) set("days", t.days_left);
+      });
+      badges();
+    }).catch(function(){});
+  }
+  badges(); setInterval(badges, 1000); setInterval(poll, 30000);
+})();

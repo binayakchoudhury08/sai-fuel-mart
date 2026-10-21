@@ -1,10 +1,14 @@
 """One-time import from the old app's tables (schema public) into pump.*.
 Reads only; never changes or deletes old tables. Runs in ONE transaction."""
 import json
+import os
+import threading
+import time
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import g
+from psycopg2.extras import execute_values
 
 from . import db
 from .security import audit
@@ -59,6 +63,23 @@ def _s(v, lim=200):
     return ("" if v is None else str(v)).strip()[:lim]
 
 
+class Batch:
+    """Collects rows and sends them in pages of 500 — one network trip per page
+    instead of one per row (the old way took 40,000 trips for a year of data)."""
+    def __init__(self, cur, sql, template=None, page=500):
+        self.cur, self.sql, self.template, self.page, self.rows = cur, sql, template, page, []
+
+    def add(self, row):
+        self.rows.append(row)
+        if len(self.rows) >= self.page:
+            self.flush()
+
+    def flush(self):
+        if self.rows:
+            execute_values(self.cur, self.sql, self.rows, template=self.template, page_size=self.page)
+            self.rows = []
+
+
 def inspect_legacy():
     info = {"tables": {}, "done": None}
     with db.tx() as cur:
@@ -74,7 +95,7 @@ def inspect_legacy():
     return info
 
 
-def run_import(username):
+def run_import(username, progress=lambda step, pct: None):
     rep = {"counts": {}, "issues": [], "balances": []}
     T = today()
 
@@ -82,7 +103,9 @@ def run_import(username):
         rep["counts"][k] = rep["counts"].get(k, 0) + n
 
     with db.tx() as cur:
+        cur.execute("SET LOCAL statement_timeout = 0")
         cur.execute("SELECT pg_advisory_xact_lock(990011)")
+        progress("Reading old tables", 5)
         cur.execute("SELECT value FROM settings WHERE key='legacy_imported_at'")
         if cur.fetchone():
             raise UserError("Old data was already imported once. It cannot be imported twice.")
@@ -160,6 +183,10 @@ def run_import(username):
             d = _d(r.get("entry_date"))
             if d and r.get("nozzle_id") in nozzle_map:
                 latest[(d, r["nozzle_id"])] = r
+        progress("Meter readings", 15)
+        readings = Batch(cur, """INSERT INTO nozzle_readings (business_date, nozzle_id, opening, closing, testing, rate,
+                                 opening_override_reason, updated_by) VALUES %s""",
+                         "(%s,%s,%s,%s,%s,%s,'Imported from old system','import')")
         for (d, old_nid), r in sorted(latest.items(), key=lambda x: x[0][0]):
             nid, fuel = nozzle_map[old_nid]
             op, cl, te = _n(r.get("opening_reading")), _n(r.get("closing_reading")), _n(r.get("testing_qty"))
@@ -169,12 +196,10 @@ def run_import(username):
             if te > cl - op:
                 rep["issues"].append(f"Reading {d} nozzle {old_nid}: testing {te} > sale; testing set to 0")
                 te = ZERO
-            cur.execute("""INSERT INTO nozzle_readings (business_date, nozzle_id, opening, closing, testing, rate,
-                                                        opening_override_reason, updated_by)
-                           VALUES (%s,%s,%s,%s,%s,%s,'Imported from old system','import')""",
-                        (d, nid, op, cl, te, old_rates.get(fuel, ZERO)))
+            readings.add((d, nid, op, cl, te, old_rates.get(fuel, ZERO)))
             legacy_dates.add(d)
             count("meter readings")
+        readings.flush()
 
         # ---------------- daily closing totals
         modes = {}
@@ -183,6 +208,8 @@ def run_import(username):
             modes[m["name"]] = m["id"]
         mode_cols = {"phonepe": "PhonePe", "card_swipe": "Card swipe", "hp_pay": "HP Pay",
                      "hpcl_otp": "HPCL OTP / Fleet card", "upi_other": "Other UPI"}
+        progress("Daily closings", 25)
+        collections = {}
         rows, cols = _rows(cur, "daily_closing")
         for r in rows:
             d = _d(r.get("date"))
@@ -195,10 +222,14 @@ def run_import(username):
             legacy_dates.add(d)
             for col, name in mode_cols.items():
                 if col in cols and _n(r.get(col)) > 0 and name in modes:
-                    cur.execute("""INSERT INTO day_collections (business_date, mode_id, amount, updated_by)
-                                   VALUES (%s,%s,%s,'import') ON CONFLICT (business_date, mode_id)
-                                   DO UPDATE SET amount=EXCLUDED.amount""", (d, modes[name], _n(r[col])))
+                    collections[(d, modes[name])] = _n(r[col])
             count("daily closings")
+        b = Batch(cur, """INSERT INTO day_collections (business_date, mode_id, amount, updated_by) VALUES %s
+                          ON CONFLICT (business_date, mode_id) DO UPDATE SET amount=EXCLUDED.amount""",
+                  "(%s,%s,%s,'import')")
+        for (d, mid), amt in collections.items():
+            b.add((d, mid, amt))
+        b.flush()
 
         # ---------------- parties
         party_map, party_by_name, old_balance = {}, {}, {}
@@ -236,17 +267,19 @@ def run_import(username):
                 return party_map[r["transporter_id"]]
             return party_by_name.get(_s(r.get("transporter_name")).lower())
 
+        txns = Batch(cur, """INSERT INTO party_txns (party_id, business_date, kind, fuel_code, qty, rate, debit, credit,
+                             pay_mode, vehicle_no, challan_no, slip_no, remarks, created_by, is_legacy,
+                             cash_taken, sl_no, pay_for) VALUES %s""",
+                     "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'import',TRUE,%s,%s,%s)")
+
         def add_txn(pid, d, kind, debit=ZERO, credit=ZERO, **kw):
             legacy_dates.add(d)
-            cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, fuel_code, qty, rate, debit, credit,
-                             pay_mode, vehicle_no, challan_no, slip_no, remarks, created_by, is_legacy,
-                             cash_taken, sl_no, pay_for)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'import',TRUE,%s,%s,%s)""",
-                        (pid, d, kind, kw.get("fuel_code"), kw.get("qty", ZERO), kw.get("rate", ZERO), debit, credit,
+            txns.add((pid, d, kind, kw.get("fuel_code"), kw.get("qty", ZERO), kw.get("rate", ZERO), debit, credit,
                          kw.get("pay_mode"), _s(kw.get("vehicle_no"), 20).upper(), _s(kw.get("challan_no"), 30),
                          _s(kw.get("slip_no"), 30), _s(kw.get("remarks"), 200), kw.get("cash_taken", ZERO),
                          kw.get("sl_no"), kw.get("pay_for")))
 
+        progress("Transport entries", 35)
         rows, cols = _rows(cur, "transport_entries")
         for r in rows:
             pid, d = pid_for(r), _d(r.get("entry_date"))
@@ -268,6 +301,7 @@ def run_import(username):
                         challan_no=r.get("challan_no"), slip_no=r.get("slip_no"), remarks=f"Cash taken, old entry #{r['id']}")
                 count("transport register entries")
 
+        progress("Transporter ledger", 50)
         rows, cols = _rows(cur, "transporter_ledger")
         for r in rows:
             et = _s(r.get("entry_type"))
@@ -290,15 +324,18 @@ def run_import(username):
                 if et != "Entry Deleted":
                     rep["issues"].append(f"Skipped ledger row #{r['id']} ({et}) with negative amount")
 
+        txns.flush()
+        progress("Checking balances", 60)
+        cur.execute("SELECT party_id, COALESCE(SUM(debit-credit),0) AS b FROM party_txns WHERE NOT voided GROUP BY party_id")
+        sums = {r["party_id"]: Decimal(r["b"]) for r in cur.fetchall()}
         for pid, (name, oldbal) in old_balance.items():
-            cur.execute("SELECT COALESCE(SUM(debit-credit),0) AS b FROM party_txns WHERE party_id=%s AND NOT voided",
-                        (pid,))
-            computed = Decimal(cur.fetchone()["b"])
+            computed = sums.get(pid, ZERO)
             diff = money(oldbal - computed)
             rep["balances"].append({"name": name, "old": oldbal, "computed": computed, "diff": diff})
             if diff != 0:
                 add_txn(pid, T, "adjustment", debit=max(diff, ZERO), credit=max(-diff, ZERO),
                         remarks="Difference between old-system balance and its own entries, at import")
+        txns.flush()
 
         # ---------------- lube
         rows, cols = _rows(cur, "lube_stock")
@@ -356,10 +393,14 @@ def run_import(username):
             st = status_map.get(_s(r.get("attendance_status")).lower())
             if sid and d and st:
                 att[(sid, d)] = st
+        progress("Attendance and salary", 70)
+        b = Batch(cur, "INSERT INTO attendance (staff_id, work_date, status, updated_by) VALUES %s", "(%s,%s,%s,'import')")
         for (sid, d), st in att.items():
-            cur.execute("INSERT INTO attendance (staff_id, work_date, status, updated_by) VALUES (%s,%s,%s,'import')",
-                        (sid, d, st))
+            b.add((sid, d, st))
+        b.flush()
         count("attendance marks", len(att))
+        salaries = Batch(cur, """INSERT INTO staff_payments (staff_id, business_date, for_month, kind, amount, pay_mode,
+                                 remarks, created_by) VALUES %s""", "(%s,%s,%s,'salary',%s,'Cash by owner',%s,'import')")
         rows, cols = _rows(cur, "salary_payments")
         for r in rows:
             sid = staff_by_code.get(_s(r.get("emp_id")).upper()) or staff_by_name.get(_s(r.get("employee_name")).lower())
@@ -377,11 +418,9 @@ def run_import(username):
                 except ValueError:
                     pass
             legacy_dates.add(d)
-            cur.execute("""INSERT INTO staff_payments (staff_id, business_date, for_month, kind, amount, pay_mode,
-                                                       remarks, created_by)
-                           VALUES (%s,%s,%s,'salary',%s,'Cash by owner',%s,'import')""",
-                        (sid, d, ym, amt, f"Old system: {_s(r.get('payment_mode'))} {_s(r.get('remarks'))}".strip()))
+            salaries.add((sid, d, ym, amt, f"Old system: {_s(r.get('payment_mode'))} {_s(r.get('remarks'))}".strip()))
             count("salary payments")
+        salaries.flush()
 
         # ---------------- tank dips + receipts
         dips = {}
@@ -390,17 +429,23 @@ def run_import(username):
             tid = tank_by_fuel.get(_s(r.get("fuel_type")).upper())
             if d and tid:
                 dips[(d, tid)] = r
+        progress("Tank dips and tanker receipts", 80)
+        b = Batch(cur, """INSERT INTO tank_dips (business_date, tank_id, dip_mm, volume_l, water_mm, temperature_c,
+                          density, source, updated_by) VALUES %s""", "(%s,%s,%s,%s,%s,%s,%s,'legacy','import')")
         for (d, tid), r in dips.items():
             vol = _n(r.get("current_stock"))
             if vol < 0:
                 continue
-            cur.execute("""INSERT INTO tank_dips (business_date, tank_id, dip_mm, volume_l, water_mm, temperature_c,
-                                                  density, source, updated_by)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,'legacy','import')""",
-                        (d, tid, _n(r.get("dip_mm")), vol, _n(r.get("water_dip_mm")),
-                         _n(r.get("temperature_c")) or None, _n(r.get("density_kg_m3")) or None))
+            b.add((d, tid, _n(r.get("dip_mm")), vol, _n(r.get("water_dip_mm")),
+                   _n(r.get("temperature_c")) or None, _n(r.get("density_kg_m3")) or None))
             legacy_dates.add(d)
             count("tank dips")
+        b.flush()
+        receipts = Batch(cur, """INSERT INTO fuel_receipts (business_date, tank_id, invoice_no, vehicle_no,
+                             received_qty_l, dip_before_mm, dip_after_mm, challan_density, observed_density,
+                             temperature_c, remarks, created_by, order_no, carrier_no, carrier_name, po_no, po_date,
+                             water_checked, compartments, receipt_group, dip_variance_mm) VALUES %s""",
+                         "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Imported from old system','import',%s,%s,%s,%s,%s,%s,%s,%s,%s)")
         rows, cols = _rows(cur, "fuel_receipts")
         for r in rows:
             d = _d(r.get("receipt_date"))
@@ -417,13 +462,7 @@ def run_import(username):
             for code, col in (("MS", "total_ms_vol"), ("HSD", "total_hsd_vol")):
                 vol = _n(r.get(col))
                 if vol > 0:
-                    cur.execute("""INSERT INTO fuel_receipts (business_date, tank_id, invoice_no, vehicle_no,
-                                     received_qty_l, dip_before_mm, dip_after_mm, challan_density, observed_density,
-                                     temperature_c, remarks, created_by, order_no, carrier_no, carrier_name, po_no, po_date,
-                                     water_checked, compartments, receipt_group, dip_variance_mm)
-                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Imported from old system','import',
-                                           %s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                                (d, tank_by_fuel[code], _s(r.get("invoice_no"), 40), _s(r.get("vehicle_no"), 20),
+                    receipts.add((d, tank_by_fuel[code], _s(r.get("invoice_no"), 40), _s(r.get("vehicle_no"), 20),
                                  vol, _n(r.get("dip_before")) or None, _n(r.get("dip_after")) or None,
                                  _n(r.get("challan_density")) or None, _n(r.get("density")) or None,
                                  _n(r.get("temperature_c")) or None, _s(r.get("order_no"), 40), _s(r.get("carrier_no"), 40),
@@ -433,47 +472,137 @@ def run_import(username):
                                  _n(r.get("total_dip_variance")) if r.get("total_dip_variance") not in (None, "") else None))
                     legacy_dates.add(d)
                     count("tanker receipts")
+        receipts.flush()
 
         # ---------------- proofs + old activity log
+        proofs = Batch(cur, """INSERT INTO proofs (business_date, category, note, file_url, latitude, longitude, created_by,
+                               video_url, fuel_code, stock_status, proof_time) VALUES %s""",
+                       "(%s,%s,%s,%s,%s,%s,'import',%s,%s,%s,%s)")
         rows, cols = _rows(cur, "proof_register")
         for r in rows:
             d = _d(r.get("proof_date"))
             url = _s(r.get("photo_url"), 500)
             vurl = _s(r.get("video_url"), 500)
             if d and (url or vurl):
-                cur.execute("""INSERT INTO proofs (business_date, category, note, file_url, latitude, longitude, created_by,
-                                                   video_url, fuel_code, stock_status, proof_time)
-                               VALUES (%s,%s,%s,%s,%s,%s,'import',%s,%s,%s,%s)""",
-                            (d, _s(r.get("proof_category"), 40) or "General",
+                proofs.add((d, _s(r.get("proof_category"), 40) or "General",
                              " ".join(x for x in [_s(r.get("item_name")), _s(r.get("fuel_type")), _s(r.get("stock_status")),
                                                   _s(r.get("remarks"))] if x)[:300],
                              url, _s(r.get("latitude"), 20) or None, _s(r.get("longitude"), 20) or None,
                              vurl, _s(r.get("fuel_type"), 8).upper() or None, _s(r.get("stock_status"), 20),
                              _s(r.get("proof_time"), 20) or _s(r.get("client_time"), 20)))
                 count("proof photos")
+        proofs.flush()
+        progress("Old activity log", 90)
         rows, cols = _rows(cur, "activity_log")
+        logs = Batch(cur, "INSERT INTO audit_log (at, username, role, action, entity, summary) VALUES %s",
+                     "(%s,%s,%s,'legacy',%s,%s)", page=1000)
         for r in rows:
-            cur.execute("""INSERT INTO audit_log (at, username, role, action, entity, summary)
-                           VALUES (%s,%s,%s,'legacy',%s,%s)""",
-                        (r.get("logged_at") or datetime.now(), _s(r.get("username"), 40), _s(r.get("role"), 20),
+            logs.add((r.get("logged_at") or datetime.now(), _s(r.get("username"), 40), _s(r.get("role"), 20),
                          _s(r.get("module"), 40) or "old system",
                          f"[old system] {_s(r.get('action'))}: {_s(r.get('description'), 450)}"))
+        logs.flush()
         count("old activity log rows", len(rows))
 
         # ---------------- days: everything before today becomes read-only history
+        progress("Locking old days as history", 96)
+        days_b = Batch(cur, """INSERT INTO days (business_date, status, is_legacy, legacy_totals, locked_by, locked_at)
+                               VALUES %s ON CONFLICT (business_date) DO UPDATE SET status=EXCLUDED.status,
+                               is_legacy=EXCLUDED.is_legacy, legacy_totals=EXCLUDED.legacy_totals""")
         for d in sorted(legacy_dates):
             locked = d != T
-            cur.execute("""INSERT INTO days (business_date, status, is_legacy, legacy_totals, locked_by, locked_at)
-                           VALUES (%s,%s,%s,%s,%s,%s)
-                           ON CONFLICT (business_date) DO UPDATE SET status=EXCLUDED.status,
-                             is_legacy=EXCLUDED.is_legacy, legacy_totals=EXCLUDED.legacy_totals""",
-                        (d, "locked" if locked else "open", locked,
+            days_b.add((d, "locked" if locked else "open", locked,
                          json.dumps(legacy_totals.get(d)) if d in legacy_totals else None,
                          "import" if locked else None, datetime.now() if locked else None))
+        days_b.flush()
         count("days of history", len(legacy_dates))
 
         cur.execute("INSERT INTO settings (key, value) VALUES ('legacy_imported_at', %s)",
                     (datetime.now().strftime("%d %b %Y %I:%M %p"),))
+        progress("Saving", 99)
         audit(cur, "import", "legacy", None,
               "Imported old data: " + ", ".join(f"{v} {k}" for k, v in rep["counts"].items()))
     return rep
+
+
+# ====================================================================== background run with live progress
+STATE_KEY = "legacy_import_state"
+_start_lock = threading.Lock()
+
+
+def _state_conn():
+    import psycopg2
+    dsn = os.environ["DATABASE_URL"]
+    kw = {} if ("sslmode" in dsn or "/tmp" in dsn or "localhost" in dsn) else {"sslmode": "require"}
+    c = psycopg2.connect(dsn, connect_timeout=15, **kw)
+    c.autocommit = True
+    return c
+
+
+def _json_default(v):
+    if isinstance(v, (Decimal, date, datetime)):
+        return str(v)
+    return str(v)
+
+
+def write_state(**kw):
+    """Progress lives in its own committed row (the import itself is one big transaction
+    that nobody can see until it finishes)."""
+    st = read_state() or {}
+    st.update(kw)
+    st["heartbeat"] = time.time()
+    c = _state_conn()
+    try:
+        with c.cursor() as cur:
+            cur.execute("""INSERT INTO pump.settings (key, value) VALUES (%s, %s)
+                           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""",
+                        (STATE_KEY, json.dumps(st, default=_json_default)))
+    finally:
+        c.close()
+
+
+def read_state():
+    c = _state_conn()
+    try:
+        with c.cursor() as cur:
+            cur.execute("SELECT value FROM pump.settings WHERE key=%s", (STATE_KEY,))
+            r = cur.fetchone()
+            return json.loads(r[0]) if r and r[0] else None
+    finally:
+        c.close()
+
+
+def is_running(st=None):
+    st = st if st is not None else read_state()
+    # a worker restart kills the thread; after 5 minutes without a heartbeat we know it died
+    return bool(st and st.get("state") == "running" and time.time() - float(st.get("heartbeat") or 0) < 300)
+
+
+def start_background(app, username):
+    with _start_lock:
+        st = read_state()
+        if is_running(st):
+            raise UserError("The import is already running. Please wait for it to finish.")
+        with db.tx() as cur:
+            cur.execute("SELECT value FROM settings WHERE key='legacy_imported_at'")
+            if cur.fetchone():
+                raise UserError("Old data was already imported once. It cannot be imported twice.")
+        write_state(state="running", step="Starting", pct=1, started_at=time.time(), error=None, report=None,
+                    by=username)
+        threading.Thread(target=_worker, args=(app, username), daemon=True, name="legacy-import").start()
+
+
+def _worker(app, username):
+    t0 = time.time()
+    with app.app_context():
+        try:
+            def progress(step, pct):
+                write_state(state="running", step=step, pct=pct)
+            rep = run_import(username, progress=progress)
+            rep["seconds"] = round(time.time() - t0, 1)
+            write_state(state="done", step="Finished", pct=100, report=rep)
+        except UserError as e:
+            write_state(state="failed", step="Stopped", error=str(e))
+        except Exception as e:  # nothing was saved: the whole import is one transaction
+            import logging
+            logging.getLogger("sfm").exception("Legacy import failed")
+            write_state(state="failed", step="Stopped", error=f"{type(e).__name__}: {str(e)[:400]}")
