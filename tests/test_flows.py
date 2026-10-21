@@ -123,7 +123,7 @@ owner.post(f"{D}/cash", {f"mode_{modes['PhonePe']}": "20000", f"mode_{modes['Car
 # credit: 100 L HSD = 9,000 ; driver cash 2,000 ; payment cash 5,000 ; bank payment 3,000 (no drawer effect)
 r = owner.post("/parties/txn", {"party": pid, "business_date": Y.isoformat(), "kind": "fuel", "fuel_code": "HSD", "qty": "100",
                                 "vehicle_no": "wb 23 a 1234", "challan_no": "C1"})
-check(has(r, "Fuel on credit"), "fuel credit via day-page quick form (no JS)")
+check(has(r, "Entry SL 1 saved"), "fuel credit via day-page quick form gets SL 1 (no JS)")
 owner.post(f"/parties/{pid}/txn", {"business_date": Y.isoformat(), "kind": "cash_advance", "amount": "2000"})
 ft = uuid.uuid4().hex
 owner.post(f"/parties/{pid}/txn", {"business_date": Y.isoformat(), "kind": "payment", "amount": "5000", "pay_mode": "Cash"}, ft=ft)
@@ -287,6 +287,89 @@ owner.post("/settings/rates", {"effective_from": T.isoformat(), "rate_MS": "101"
 r1 = sql("SELECT rate FROM pump.nozzle_readings WHERE business_date=%s AND nozzle_id=%s", (T, noz["MS-1"]))[0][0]
 r0 = sql("SELECT rate FROM pump.nozzle_readings WHERE business_date=%s AND nozzle_id=%s", (Y, noz["MS-1"]))[0][0]
 check(r1 == Decimal("101.00") and r0 == Decimal("100.00"), "rate change re-prices today only; yesterday keeps old rate")
+
+print("Credit transport register (restored v1 features)")
+r = owner.post("/parties/new", {"name": "SVT Logistics", "mobile": "9830011111", "vehicles": "WB23A1111", "opening_balance": "0"})
+svt = sql("SELECT id FROM pump.parties WHERE name='SVT Logistics'")[0][0]
+r = owner.post("/transport/entry", {"business_date": T.isoformat(), "party": svt, "fuel_code": "HSD", "qty": "100",
+                                    "cash_taken": "500", "challan_no": "C9", "vehicle_no": "WB23A1111", "slip_no": "S1"})
+first = sql("SELECT sl_no, debit, cash_taken, qty FROM pump.party_txns WHERE party_id=%s AND NOT voided ORDER BY id", (svt,))
+check(first and first[0][1] == Decimal("9500.00") and first[0][2] == Decimal("500.00"),
+      f"one register row = 100 L x 90 + cash 500 = 9,500 (got {first})")
+r = owner.post("/transport/entry", {"business_date": T.isoformat(), "party": svt, "fuel_code": "HSD", "qty": "10", "slip_no": "S1"})
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='S1' AND NOT voided")[0][0] == 2, "same slip allowed for many entries")
+sid_extra = sql("SELECT id FROM pump.party_txns WHERE slip_no='S1' AND qty=10")[0][0]
+owner.post(f"/party-txn/{sid_extra}/void", {"reason": "test entry"})
+owner.post("/transport/entry", {"business_date": T.isoformat(), "party": svt, "fuel_code": "HSD", "qty": "50", "slip_no": "S2"})
+owner.post("/transport/entry", {"business_date": T.isoformat(), "party": svt, "cash_taken": "300", "slip_no": "S3"})
+sls = [x[0] for x in sql("SELECT sl_no FROM pump.party_txns WHERE business_date=%s AND kind IN ('fuel','cash_advance') ORDER BY sl_no", (T,))]
+check(sls == sorted(set(sls)) and len(sls) >= 3, f"per-day SL numbers are unique and ordered {sls}")
+with app.app_context():
+    with db.tx() as cur:
+        t3 = compute_day(cur, T)
+check(t3["cash_advance"] == 0, "no separate 'cash given to drivers' line in daily closing")
+check(t3["credit_fuel"] == Decimal("14300.00"), f"credit given = full slip totals 9,500 + 4,500 + 300 (got {t3['credit_fuel']})")
+tid2 = sql("SELECT id FROM pump.party_txns WHERE slip_no='S2' AND NOT voided")[0][0]
+sl2 = sql("SELECT sl_no FROM pump.party_txns WHERE id=%s", (tid2,))[0][0]
+owner.post(f"/transport/entry/{tid2}/correct", {"qty": "60", "fuel_code": "HSD", "slip_no": "S2", "reason": "meter slip said 60"})
+newr = sql("SELECT sl_no, qty, corrected_from FROM pump.party_txns WHERE slip_no='S2' AND NOT voided")
+check(newr[0][0] == sl2 and newr[0][1] == Decimal("60.00") and newr[0][2] == tid2, "correction keeps the same SL No and links to the old entry")
+check(sql("SELECT voided FROM pump.party_txns WHERE id=%s", (tid2,))[0][0], "corrected entry stays visible as cancelled")
+owner.post("/transport/discounts", {f"disc_{svt}": "1.50"})
+check(sql("SELECT discount_per_litre FROM pump.parties WHERE id=%s", (svt,))[0][0] == Decimal("1.50"), "per-litre discount saved")
+q = f"party={svt}&from={T.isoformat()}&to={T.isoformat()}"
+r = owner.get(f"/transport/bill?{q}")
+check(has(r, "Net payable") and has(r, "₹14,960.00") and has(r, "₹240.00"), "bill page: 160 L, ₹15,200 − ₹240 discount = net ₹14,960")
+r = owner.get(f"/transport/bill.xlsx?{q}")
+import openpyxl, io, zipfile
+wbx = openpyxl.load_workbook(io.BytesIO(r.data)); vals = [c.value for row in wbx.active.iter_rows() for c in row if c.value is not None]
+check("Net Payable" in vals and "SL No" in vals, "Excel bill has SL No and Net Payable rows (old format)")
+net = [vals[i + 1] for i, v in enumerate(vals) if v == "Net Payable"][0]
+check(abs(net - (9500 + 5400 + 300 - 1.5 * 160)) < 0.01, f"net payable = 15,200 − 240 = 14,960 (got {net})")
+r = owner.get(f"/transport/bill.pdf?{q}")
+check(r.status_code == 200 and r.data[:4] == b"%PDF" and "Bill" in r.headers.get("Content-Disposition", ""), "PDF bill downloads with old file name")
+open("/tmp/transport_bill.pdf", "wb").write(r.data)
+r = owner.get(f"/transport/bills.zip?{q}")
+names = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
+check(any("/PDF/" in n for n in names) and any("/Excel/" in n for n in names) and T.strftime("%B %Y") in names[0],
+      f"daily bills ZIP has Month/PDF and Month/Excel folders {names[:2]}")
+r = owner.get(f"/transport/bills.zip?from={Y.isoformat()}&to={T.isoformat()}")
+check(r.mimetype == "application/zip" and len(zipfile.ZipFile(io.BytesIO(r.data)).namelist()) >= 4, "all-transporters ZIP works")
+owner.post("/transport/bill/post-discount", {"party": svt, "from": T.isoformat(), "to": T.isoformat()})
+r = owner.post("/transport/bill/post-discount", {"party": svt, "from": T.isoformat(), "to": T.isoformat()})
+check(has(r, "already in the account"), "bill discount can be posted only once")
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE party_id=%s AND kind='discount' AND NOT voided", (svt,))[0][0] == 1, "exactly one discount entry")
+r = owner.post("/parties/txn", {"party": svt, "kind": "payment", "amount": "1000", "pay_mode": "Cash", "pay_for": "Lube"})
+check(sql("SELECT pay_for FROM pump.party_txns WHERE party_id=%s AND kind='payment'", (svt,))[0][0] == "Lube", "payment remembers Fuel/Lube")
+
+print("Restored reports")
+for url in ["/transport", f"/transport?{q}&q=WB23", "/transport/bill", "/transport/discounts", "/reports/nozzles", "/reports/digital",
+            "/reports/tanks", "/analytics", "/proofs", f"/proofs?d={T.isoformat()}"]:
+    check(owner.get(url).status_code == 200, f"GET {url}")
+for url in ["/reports?format=pdf", "/reports/sales.pdf", "/reports/nozzles?format=pdf", "/reports/nozzles?format=xlsx",
+            "/reports/digital?format=pdf", "/reports/digital?format=xlsx", "/reports/tanks?format=pdf", "/reports/tanks?format=xlsx",
+            "/reports/outstanding?format=pdf", "/reports/credit-register?format=pdf", f"/transport/register.pdf?{q}",
+            f"/transport/register.xlsx?{q}", "/reports/attendance.xlsx", "/reports/business.xlsx",
+            f"/proofs/report.pdf?d={T.isoformat()}"]:
+    r = owner.get(url)
+    check(r.status_code == 200 and len(r.data) > 900, f"download {url} ({len(r.data)} bytes)")
+wbb = openpyxl.load_workbook(io.BytesIO(owner.get("/reports/business.xlsx").data))
+check(len(wbb["Dashboard"]._charts) >= 1 and len(wbb["Transport summary"]._charts) == 1, "business Excel has line + pie charts")
+wba = openpyxl.load_workbook(io.BytesIO(owner.get("/reports/attendance.xlsx").data))
+check("Summary" in wba.sheetnames and any("Raju" in n for n in wba.sheetnames), f"attendance Excel has summary + per-staff sheets {wba.sheetnames[:4]}")
+
+print("Tanker receipt with compartments")
+r = owner.post("/tanks/receipt", {"business_date": T.isoformat(), "invoice_no": "INV77", "order_no": "OR1", "carrier_name": "IOC Tptr",
+                                  "challan_density": "835", "observed_density": "830.5", "invoice_HSD": "4000", "invoice_MS": "8000",
+                                  "c1_fuel": "MS", "c1_cdip": "1200", "c1_odip": "1195", "c1_vol": "4000",
+                                  "c2_fuel": "MS", "c2_cdip": "1200", "c2_odip": "1202", "c2_vol": "3990",
+                                  "c3_fuel": "HSD", "c3_cdip": "1100", "c3_odip": "1100", "c3_vol": "4000"})
+rr = sql("SELECT t.fuel_code, r.received_qty_l, r.dip_variance_mm, r.receipt_group FROM pump.fuel_receipts r JOIN pump.tanks t ON t.id=r.tank_id WHERE invoice_no='INV77' ORDER BY 1")
+check(len(rr) == 2 and rr[1][1] == Decimal("7990.00") and rr[1][2] == Decimal("-3.00") and rr[0][3] == rr[1][3],
+      f"one tanker → MS 7,990 L (dip var −3 mm) + HSD 4,000 L, linked {rr}")
+check(sql("SELECT COUNT(*) FROM pump.audit_log WHERE summary LIKE %s", ("%INV77%DENSITY ALERT%",))[0][0] >= 1, "density difference > 3 flagged")
+r = owner.get(f"/tanks?d={T.isoformat()}")
+check(has(r, "Density alerts") and has(r, "Tankers this month"), "tank page shows month tanker stats")
 
 print()
 print("FAILED:" if FAILS else "ALL CHECKS PASSED", len(FAILS) or "")

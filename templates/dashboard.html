@@ -2,8 +2,9 @@
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>{{ today.strftime('%A, %d %B') }}</h1>
 <p>Today’s closing is {{ status_badge(td.status) }} · readings {{ td.readings_done }} of {{ td.readings_needed }} nozzles</p></div>
-<a class="btn" href="{{ url_for('day.day_view', d=today.isoformat()) }}">Open today’s closing</a></div>
+<div class="btnrow"><a class="btn secondary" href="{{ url_for('transport.index') }}#entry">Transport entry</a><a class="btn" href="{{ url_for('day.day_view', d=today.isoformat()) }}">Open today’s closing</a></div></div>
 
+{% if can('owner') and today.day <= 3 %}<div class="notice"><b>Start of the month:</b> download a full backup and keep it safe. <a href="{{ url_for('reports.business_xlsx') }}">Business Excel with charts</a> · <a href="{{ url_for('reports.backup') }}">Full backup</a></div>{% endif %}
 {% if needs_setup %}<div class="notice"><b>Finish setup first.</b> {% if can('owner') %}Add fuel rates, tanks and nozzles in <a href="{{ url_for('admin.settings') }}">Settings</a>, or import your old data there.{% else %}Ask the owner to set fuel rates and nozzles in Settings.{% endif %}</div>{% endif %}
 {% if pending and can('owner') %}<div class="notice"><b>{{ pending|length }} earlier day(s) not verified yet:</b>
 {% for p in pending %}<a href="{{ url_for('day.day_view', d=p.business_date.isoformat()) }}">{{ p.business_date.strftime('%d %b') }}</a> ({{ p.status }}){{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}

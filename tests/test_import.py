@@ -17,10 +17,11 @@ INSERT INTO nozzle_master (nozzle_name, machine_no, fuel_type, status) VALUES ('
 CREATE TABLE nozzle_entries (id SERIAL PRIMARY KEY, entry_date DATE, nozzle_id INT, opening_reading REAL, closing_reading REAL, testing_qty REAL, total_sale REAL, created_at TEXT);
 CREATE TABLE daily_closing (id SERIAL PRIMARY KEY, date DATE, ms_litres REAL, hsd_litres REAL, cng_sale REAL, total_fuel_sale REAL, lube_sale REAL, digital_collection REAL, phonepe REAL, card_swipe REAL, hp_pay REAL, hpcl_otp REAL, upi_other REAL, credit_given REAL, transport_received REAL, net_credit_due REAL, total_expense REAL, cash_in_hand REAL);
 CREATE TABLE credit_transporters (id SERIAL PRIMARY KEY, party_name TEXT, mobile TEXT, vehicle_no TEXT, opening_balance REAL, credit_given REAL, payment_received REAL, balance_due REAL, status TEXT, fuel_credit REAL, lube_credit REAL, discount REAL);
-INSERT INTO credit_transporters (party_name, mobile, vehicle_no, opening_balance, balance_due, status) VALUES
- ('SVT Logistics','98300 11111','WB23A1111',5000, 31872, 'Active'),
- ('Maa Tara Carriers','9830022222','',0, 9372, 'Active'),
- ('maa tara carriers ','','',0, 0, 'Active');
+CREATE TABLE fuel_receipts (id SERIAL PRIMARY KEY, receipt_date TEXT, invoice_no TEXT, vehicle_no TEXT, order_no TEXT, carrier_no TEXT, carrier_name TEXT, po_no TEXT, po_date TEXT, water_checked TEXT, comp1_fuel TEXT, comp1_vol REAL, comp1_challan_dip REAL, comp1_dip REAL, comp2_fuel TEXT, comp2_vol REAL, comp2_challan_dip REAL, comp2_dip REAL, total_ms_vol REAL, total_hsd_vol REAL, density REAL, challan_density REAL, temperature_c REAL, dip_before REAL, dip_after REAL, total_dip_variance REAL);
+INSERT INTO credit_transporters (party_name, mobile, vehicle_no, opening_balance, balance_due, status, discount) VALUES
+ ('SVT Logistics','98300 11111','WB23A1111',5000, 31872, 'Active', 1.25),
+ ('Maa Tara Carriers','9830022222','',0, 9372, 'Active', 0),
+ ('maa tara carriers ','','',0, 0, 'Active', 0);
 CREATE TABLE transport_entries (id SERIAL PRIMARY KEY, entry_date DATE, sl_no INT, transporter_id INT, transporter_name TEXT, challan_no TEXT, vehicle_no TEXT, slip_no TEXT, hsd_qty REAL, rate REAL, hsd_amount REAL, cash_taken REAL, total_amount REAL);
 CREATE TABLE transporter_ledger (id SERIAL PRIMARY KEY, date DATE, transporter_id INT, transporter_name TEXT, entry_type TEXT, fuel_credit REAL, lube_credit REAL, received_amount REAL, balance_after REAL, remarks TEXT);
 CREATE TABLE lube_stock (id SERIAL PRIMARY KEY, product_name TEXT, selling_rate REAL, opening_stock REAL, purchase_qty REAL, sale_qty REAL, closing_stock REAL);
@@ -45,7 +46,8 @@ for i in range(3, 0, -1):
     k.execute("INSERT INTO attendance (date, staff_name, attendance_status) VALUES (%s,'Raju Das','Present'),(%s,'bapi','Absent')", (d, d))
     k.execute("INSERT INTO tank_level (date, fuel_type, current_stock, capacity) VALUES (%s,'MS',8000,15000),(%s,'HSD',12000,20000)", (d, d))
 d1 = T - timedelta(days=2)
-k.execute("INSERT INTO transport_entries (entry_date,transporter_id,transporter_name,challan_no,vehicle_no,slip_no,hsd_qty,rate,hsd_amount,cash_taken,total_amount) VALUES (%s,1,'SVT Logistics','C77','WB23A1111','S1',200,93.72,18744,1000,19744)", (d1,))
+k.execute("INSERT INTO transport_entries (entry_date,sl_no,transporter_id,transporter_name,challan_no,vehicle_no,slip_no,hsd_qty,rate,hsd_amount,cash_taken,total_amount) VALUES (%s,3,1,'SVT Logistics','C77','WB23A1111','S1',200,93.72,18744,1000,19744)", (d1,))
+k.execute("INSERT INTO fuel_receipts (receipt_date, invoice_no, vehicle_no, order_no, carrier_name, comp1_fuel, comp1_vol, comp1_challan_dip, comp1_dip, comp2_fuel, comp2_vol, total_ms_vol, total_hsd_vol, challan_density, density, total_dip_variance) VALUES (%s,'INV1','WB11T','O1','IOC','MS',4000,1200,1196,'HSD',8000,4000,8000,835,836,-4)", (d1.isoformat(),))
 k.execute("""INSERT INTO transporter_ledger (date,transporter_id,transporter_name,entry_type,fuel_credit,lube_credit,received_amount) VALUES
  (%s,1,'SVT Logistics','Transport Entry',19744,0,0),
  (%s,1,'SVT Logistics','Fuel Credit',9372,0,0),
@@ -74,6 +76,9 @@ print("nozzle readings:", q("SELECT COUNT(*) FROM pump.nozzle_readings")[0][0], 
 print("days:", q("SELECT business_date, status, is_legacy FROM pump.days ORDER BY 1"))
 print("lube stock:", q("SELECT p.name, SUM(m.qty) FROM pump.lube_products p LEFT JOIN pump.lube_moves m ON m.product_id=p.id GROUP BY p.name"))
 print("staff:", q("SELECT emp_code, name FROM pump.staff"), "attendance", q("SELECT COUNT(*) FROM pump.attendance")[0][0])
+print("register row:", q("SELECT sl_no, debit, cash_taken, qty FROM pump.party_txns WHERE kind='fuel' AND sl_no IS NOT NULL"))
+print("discount/L:", q("SELECT name, discount_per_litre FROM pump.parties WHERE discount_per_litre>0"))
+print("receipts:", q("SELECT t.fuel_code, received_qty_l, order_no, carrier_name, compartments IS NOT NULL FROM pump.fuel_receipts r JOIN pump.tanks t ON t.id=r.tank_id ORDER BY 1"))
 print("issues listed:", html.count("<li>"))
 r = cl.post("/admin/import-legacy", data={"_csrf": "t", "confirm": "IMPORT"}); print("second import blocked:", "already imported" in r.get_data(as_text=True).lower() or r.status_code)
 # continue today's closing after import: opening must carry from old data

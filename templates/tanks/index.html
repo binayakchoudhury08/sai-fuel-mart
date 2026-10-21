@@ -2,6 +2,10 @@
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Tanks &amp; tankers</h1><p>Book stock (yesterday’s dip + tanker − meter sale) against today’s dip.</p></div>
 <div class="datenav"><a class="btn secondary small" href="?d={{ prev_day.isoformat() }}">‹</a><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/tanks?d=__D__">{% if next_day %}<a class="btn secondary small" href="?d={{ next_day.isoformat() }}">›</a>{% endif %}</div></div>
+<div class="stats"><div><b>{{ stats.receipts }}</b><span>Tankers this month</span></div><div><b>{{ stats.ms|qty }} L</b><span>MS received this month</span></div>
+<div><b>{{ stats.hsd|qty }} L</b><span>HSD received this month</span></div><div><b class="pos">+{{ stats.gain_mm|qty }} mm</b><span>Dip gain this month</span></div>
+<div><b class="neg">−{{ stats.short_mm|qty }} mm</b><span>Dip shortage this month</span></div><div><b class="{% if stats.density_alerts %}neg{% endif %}">{{ stats.density_alerts }}</b><span>Density alerts (&gt;3 kg/m³)</span></div>
+<div><b class="{% if stats.short_challans %}neg{% endif %}">{{ stats.short_challans }}</b><span>Challans with shortage</span></div><div><b>{{ stats.last|d if stats.last else '—' }}</b><span>Last delivery</span></div></div>
 <section class="section"><header><h2>Stock check for {{ d|d }}</h2></header>
 <form method="post" action="{{ url_for('tanks.save_dip') }}">{{ hidden() }}<input type="hidden" name="business_date" value="{{ d.isoformat() }}">
 <div class="body flush tablewrap"><table><thead><tr><th>Tank</th><th class="num">Opening (last dip)</th><th class="num">+ Tanker</th><th class="num">− Meter sale</th><th class="num">= Book stock</th><th>Dip stock (L)</th><th>Dip mm</th><th>Water mm</th><th class="num">Gain / loss</th></tr></thead><tbody>
@@ -11,27 +15,43 @@
 <td><input name="volume_{{ r.tank.id }}" inputmode="decimal" value="{{ r.dip.volume_l if r.dip else '' }}" style="max-width:120px"></td>
 <td><input name="dip_{{ r.tank.id }}" inputmode="decimal" value="{{ r.dip.dip_mm if r.dip and r.dip.dip_mm else '' }}" style="max-width:90px"></td>
 <td><input name="water_{{ r.tank.id }}" inputmode="decimal" value="{{ r.dip.water_mm if r.dip and r.dip.water_mm else '' }}" style="max-width:80px"></td>
-<td class="num {% if r.variance is not none and r.variance < 0 %}neg{% elif r.variance %}pos{% endif %}">{% if r.variance is not none %}<b>{{ r.variance|qty }} L</b>{% if r.variance_pct is not none %}<br><small>{{ r.variance_pct }}% of sale</small>{% endif %}{% else %}—{% endif %}</td></tr>
+<td class="num {% if r.variance is not none and r.variance < 0 %}neg{% elif r.variance %}pos{% endif %}">{% if r.variance is not none %}<b>{{ r.variance|qty }} L</b>{% if r.variance_pct is not none %}<br><small>{{ r.variance_pct }}% of sale</small>{% endif %}{% if r.value is not none %}<br><small>{{ r.value|inr }}</small>{% endif %}{% else %}—{% endif %}</td></tr>
+{% if r.dip and r.dip.atg %}<tr><td colspan="9"><small class="muted">ATG {{ r.tank.name }}: water {{ r.dip.atg.water_ltr or 0 }} L · temp {{ r.dip.temperature_c or '–' }}°C · density {{ r.dip.density or '–' }} · gross {{ r.dip.atg.gross_volume or '–' }} L · ullage {{ r.dip.atg.ullage_ltr or '–' }} L · today receipt {{ r.dip.atg.today_receipt_ltr or 0 }} L / sale {{ r.dip.atg.today_sale_ltr or 0 }} L · synced {{ r.dip.updated_at.strftime('%I:%M %p') }}</small></td></tr>{% endif %}
 {% else %}<tr><td colspan="9" class="empty">No tanks. {% if can('owner') %}<a href="{{ url_for('admin.settings') }}#tanks">Add tanks in Settings.</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% if rec %}<div class="body"><button class="btn">Save dip readings</button> <span class="hint">Sale is linked to tanks through each nozzle’s tank in Settings.</span></div>{% endif %}</form></section>
 
 <section class="section"><header><h2>Tanker receipts (last 30 days)</h2></header>
-<div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th>Invoice</th><th>Vehicle</th><th class="num">Invoice L</th><th class="num">Received L</th><th class="num">Short</th><th>Density ch / obs</th><th></th></tr></thead><tbody>
+<div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th>Invoice</th><th>Vehicle</th><th class="num">Invoice L</th><th class="num">Received L</th><th class="num">Short</th><th>Density ch / obs</th><th class="num">Dip var</th><th></th></tr></thead><tbody>
 {% for r in receipts %}<tr class="{% if r.voided %}void{% endif %}"><td>{{ r.business_date|d }}</td><td>{{ r.tank_name }}</td><td>{{ r.invoice_no }}</td><td>{{ r.vehicle_no }}</td>
 <td class="num">{{ r.invoice_qty_l|qty if r.invoice_qty_l else '' }}</td><td class="num">{{ r.received_qty_l|qty }}</td>
 <td class="num {% if r.invoice_qty_l and r.invoice_qty_l > r.received_qty_l %}neg{% endif %}">{{ (r.invoice_qty_l - r.received_qty_l)|qty if r.invoice_qty_l else '' }}</td>
-<td>{{ r.challan_density or '' }} / {{ r.observed_density or '' }}</td>
+<td class="{% if r.challan_density and r.observed_density and ((r.challan_density - r.observed_density)|abs) > 3 %}neg{% endif %}">{{ r.challan_density or '' }} / {{ r.observed_density or '' }}</td>
+<td class="num {% if r.dip_variance_mm and r.dip_variance_mm < 0 %}neg{% endif %}">{{ r.dip_variance_mm if r.dip_variance_mm is not none else '' }}</td>
 <td class="actions keep">{% if can('manager') and not r.voided %}{{ void(url_for('tanks.void_receipt', rid=r.id), what='receipt') }}{% endif %}</td></tr>
-{% else %}<tr><td colspan="9" class="empty">No tanker receipts in the last 30 days.</td></tr>{% endfor %}</tbody></table></div>
-<details class="add"><summary>Record a tanker receipt</summary><div class="body"><form method="post" action="{{ url_for('tanks.add_receipt') }}">{{ hidden() }}<div class="fields">
-<div><label>Date</label><input type="date" name="business_date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}"></div>
-<div><label>Tank</label><select name="tank_id" required>{% for r in rec %}<option value="{{ r.tank.id }}">{{ r.tank.name }}</option>{% endfor %}</select></div>
-<div><label>Invoice / challan no.</label><input name="invoice_no" required></div><div><label>Tanker vehicle</label><input name="vehicle_no"></div>
-<div><label>Invoice quantity (L)</label><input name="invoice_qty_l" inputmode="decimal"></div><div><label>Received by dip (L)</label><input name="received_qty_l" inputmode="decimal" required></div>
-<div><label>Dip before (mm)</label><input name="dip_before_mm" inputmode="decimal"></div><div><label>Dip after (mm)</label><input name="dip_after_mm" inputmode="decimal"></div>
-<div><label>Challan density</label><input name="challan_density" inputmode="decimal"></div><div><label>Observed density</label><input name="observed_density" inputmode="decimal"></div>
-<div><label>Temperature °C</label><input name="temperature_c" inputmode="decimal"></div><div><label>Invoice amount (₹)</label><input name="invoice_amount" inputmode="decimal"></div>
-<div class="wide"><label>Remarks</label><input name="remarks"></div></div><p style="margin-top:10px"><button class="btn">Save receipt</button></p></form></div></details></section>
+{% else %}<tr><td colspan="10" class="empty">No tanker receipts in the last 30 days.</td></tr>{% endfor %}</tbody></table></div>
+<details class="add"><summary>Record a tanker receipt</summary><div class="body"><form method="post" action="{{ url_for('tanks.add_receipt') }}">{{ hidden() }}
+<div class="fields">
+<div><label>Receipt date</label><input type="date" name="business_date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}"></div>
+<div><label>Invoice no.</label><input name="invoice_no" required></div><div><label>Order no.</label><input name="order_no"></div>
+<div><label>PO no.</label><input name="po_no"></div><div><label>PO date</label><input type="date" name="po_date"></div>
+<div><label>Vehicle no.</label><input name="vehicle_no"></div><div><label>Carrier no.</label><input name="carrier_no"></div>
+<div><label>Carrier name</label><input name="carrier_name"></div>
+<div><label>Water checked</label><select name="water_checked"><option value="">—</option><option>No water</option><option>Water found</option></select></div>
+<div><label>Challan density (kg/m³)</label><input name="challan_density" inputmode="decimal"></div>
+<div><label>Density at receipt (kg/m³)</label><input name="observed_density" inputmode="decimal"></div>
+<div><label>Temperature °C</label><input name="temperature_c" inputmode="decimal"></div>
+<div><label>Tank dip before unloading (mm)</label><input name="dip_before_mm" inputmode="decimal"></div>
+<div><label>Tank dip after unloading (mm)</label><input name="dip_after_mm" inputmode="decimal"></div>
+<div><label>Invoice MS (L)</label><input name="invoice_MS" inputmode="decimal"></div><div><label>Invoice HSD (L)</label><input name="invoice_HSD" inputmode="decimal"></div>
+<div><label>Invoice amount (₹)</label><input name="invoice_amount" inputmode="decimal"></div>
+</div>
+<h3 style="margin:16px 0 8px">Compartments</h3>
+<div class="tablewrap"><table><thead><tr><th>#</th><th>Fuel</th><th>Challan dip (mm)</th><th>Observed dip (mm)</th><th>Volume (L)</th></tr></thead><tbody>
+{% for i in range(1,6) %}<tr><td>{{ i }}</td><td><select name="c{{ i }}_fuel"><option>HSD</option><option>MS</option></select></td>
+<td><input name="c{{ i }}_cdip" inputmode="decimal"></td><td><input name="c{{ i }}_odip" inputmode="decimal"></td><td><input name="c{{ i }}_vol" inputmode="decimal"></td></tr>{% endfor %}</tbody></table></div>
+<div class="fields" style="margin-top:12px"><div class="wide"><label>Remarks</label><input name="remarks"></div></div>
+<p class="hint">Fill only the compartments the tanker had. Received quantity per tank = sum of its compartment volumes. Density differing by more than 3 kg/m³ is flagged.</p>
+<p style="margin-top:10px"><button class="btn">Save tanker receipt</button></p></form></div></details></section>
 
 <section class="section"><header><h2>Dip history (14 days)</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th class="num">Stock L</th><th class="num">Dip mm</th><th class="num">Water mm</th><th>Source</th></tr></thead><tbody>
 {% for h in history %}<tr><td>{{ h.business_date|d }}</td><td>{{ h.tank_name }}</td><td class="num">{{ h.volume_l|qty }}</td><td class="num">{{ h.dip_mm|qty }}</td><td class="num">{{ h.water_mm|qty }}</td><td>{{ h.source }} · {{ h.updated_by }}</td></tr>

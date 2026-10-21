@@ -124,3 +124,31 @@
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js").catch(function(){});
 })();
+
+/* Transport entry: fill vehicles for the chosen transporter, preview diesel + cash = total */
+(function(){
+  function num(v){ v=String(v||"").replace(/,/g,""); var n=parseFloat(v); return isFinite(n)?n:0; }
+  function inr(n){ var s=Math.abs(n).toFixed(2).split("."), w=s[0];
+    if(w.length>3){ w=w.slice(0,-3).replace(/\B(?=(\d{2})+(?!\d))/g,",")+","+w.slice(-3); } return (n<0?"−":"")+"₹"+w+"."+s[1]; }
+  document.querySelectorAll("[data-transport]").forEach(function(f){
+    var party=f.querySelector("[name=party]"), veh=f.querySelector("[data-vehicle]"), fuel=f.querySelector("[name=fuel_code]"),
+        q=f.querySelector("[name=qty]"), amt=f.querySelector("[name=amount]"), rate=f.querySelector("[name=rate]"),
+        cash=f.querySelector("[name=cash_taken]"), out=f.querySelector("[data-tpreview]");
+    var list = veh && veh.getAttribute("list") ? document.getElementById(veh.getAttribute("list")) : null;
+    function fillVehicles(){
+      if (!party || !party.options || party.selectedIndex < 0) return;
+      var o=party.options[party.selectedIndex], vs=((o && o.dataset.vehicles)||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+      if (list){ list.innerHTML = vs.map(function(v){return '<option value="'+v+'">';}).join(""); }
+      if (veh && !veh.value && vs.length===1) veh.value = vs[0];
+    }
+    function upd(){
+      var fo = fuel && fuel.options[fuel.selectedIndex], r = num(rate && rate.value) || num(fo && fo.dataset.rate);
+      if (rate && !rate.value && fo) rate.placeholder = fo.dataset.rate || "";
+      var qty = num(q && q.value); if (!qty && amt && num(amt.value) && r) qty = num(amt.value)/r;
+      var fa = Math.round(qty*r*100)/100, c = num(cash && cash.value);
+      if (out) out.textContent = (qty||c) ? (qty ? qty.toFixed(2)+" L × "+r.toFixed(2)+" = "+inr(fa) : "") + (c ? (qty?"  + cash ":"Cash ")+inr(c) : "") + "  =  Total "+inr(fa+c) : "";
+    }
+    if (party && party.tagName === "SELECT") party.addEventListener("change", function(){ if(veh) veh.value=""; fillVehicles(); });
+    fillVehicles(); f.addEventListener("input", upd); f.addEventListener("change", upd); upd();
+  });
+})();

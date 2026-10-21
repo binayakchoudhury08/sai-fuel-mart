@@ -387,3 +387,40 @@ BEGIN
                         FOR EACH ROW EXECUTE FUNCTION pump.guard_locked_day()', t || '_lockguard', t);
     END LOOP;
 END $$;
+
+-- ================================================================ v2.1 additions (restored v1 features)
+-- One credit-transport register row = diesel + cash taken by the driver, with a per-day SL No.
+ALTER TABLE pump.party_txns ADD COLUMN IF NOT EXISTS cash_taken NUMERIC(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE pump.party_txns ADD COLUMN IF NOT EXISTS sl_no INTEGER;
+ALTER TABLE pump.party_txns ADD COLUMN IF NOT EXISTS pay_for TEXT;
+ALTER TABLE pump.party_txns ADD COLUMN IF NOT EXISTS corrected_from INTEGER;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'party_txns_cash_taken_chk') THEN
+        ALTER TABLE pump.party_txns ADD CONSTRAINT party_txns_cash_taken_chk
+            CHECK (cash_taken >= 0 AND cash_taken <= debit);
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS party_txns_sl_idx ON pump.party_txns (business_date, sl_no);
+
+-- per-litre discount printed on the transport bill (old Settings → Transporter discounts)
+ALTER TABLE pump.parties ADD COLUMN IF NOT EXISTS discount_per_litre NUMERIC(8,2) NOT NULL DEFAULT 0;
+
+-- detailed tanker receipt (old Fuel Receipts page)
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS order_no TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS carrier_no TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS carrier_name TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS po_no TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS po_date DATE;
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS water_checked TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS compartments JSONB;
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS receipt_group TEXT;
+ALTER TABLE pump.fuel_receipts ADD COLUMN IF NOT EXISTS dip_variance_mm NUMERIC(10,2);
+
+-- structured proofs (dip check / nozzle testing / stock status, photo + video)
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS fuel_code TEXT;
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS stock_status TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS proof_time TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE pump.staff ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.staff ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT '';

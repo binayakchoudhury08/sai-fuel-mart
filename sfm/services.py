@@ -150,13 +150,14 @@ def compute_day(cur, d):
         SELECT t.*, p.name AS party_name
         FROM party_txns t JOIN parties p ON p.id = t.party_id
         WHERE t.business_date=%s AND t.kind <> 'opening'
-        ORDER BY t.id
+        ORDER BY t.sl_no NULLS LAST, t.id
     """, (d,))
     party_rows = cur.fetchall()
     live = [t for t in party_rows if not t["voided"]]
-    credit_fuel = sum((Decimal(t["debit"]) for t in live if t["kind"] == "fuel"), ZERO)
+    # transport credit = full slip total (diesel + cash taken), exactly like the old daily closing credit figure
+    credit_fuel = sum((Decimal(t["debit"]) for t in live if t["kind"] in ("fuel", "cash_advance")), ZERO)
     credit_lube = sum((Decimal(t["debit"]) for t in live if t["kind"] == "lube"), ZERO)
-    cash_advance = sum((Decimal(t["debit"]) for t in live if t["kind"] == "cash_advance"), ZERO)
+    cash_advance = ZERO  # cash taken is already inside credit_fuel (one line, as before)
     pay_by_mode = OrderedDict((m, ZERO) for m in PAY_MODES)
     for t in live:
         if t["kind"] == "payment":
@@ -250,6 +251,12 @@ def party_balances(cur, active_only=False):
                COALESCE(SUM(t.debit)  FILTER (WHERE NOT t.voided), 0) AS total_debit,
                COALESCE(SUM(t.credit) FILTER (WHERE NOT t.voided), 0) AS total_credit,
                COALESCE(SUM(t.debit - t.credit) FILTER (WHERE NOT t.voided), 0) AS balance,
+               COALESCE(SUM(t.debit) FILTER (WHERE NOT t.voided AND t.kind IN ('fuel','cash_advance')), 0) AS fuel_credit,
+               COALESCE(SUM(t.debit) FILTER (WHERE NOT t.voided AND t.kind='lube'), 0) AS lube_credit,
+               COALESCE(SUM(t.credit) FILTER (WHERE NOT t.voided AND t.kind='payment'), 0) AS received,
+               COALESCE(SUM(t.credit) FILTER (WHERE NOT t.voided AND t.kind='discount'), 0) AS discounts,
+               COALESCE(SUM(t.debit) FILTER (WHERE NOT t.voided AND t.kind='opening'), 0)
+                 - COALESCE(SUM(t.credit) FILTER (WHERE NOT t.voided AND t.kind='opening'), 0) AS opening_bal,
                MAX(t.business_date) FILTER (WHERE NOT t.voided AND t.kind='payment') AS last_payment,
                MAX(t.business_date) FILTER (WHERE NOT t.voided AND t.kind IN ('fuel','lube','cash_advance')) AS last_credit
         FROM parties p LEFT JOIN party_txns t ON t.party_id = p.id
@@ -404,9 +411,9 @@ def range_summary(cur, start, end):
     digital = by_date("""SELECT business_date AS d, SUM(amount) AS a FROM day_collections
                          WHERE business_date BETWEEN %s AND %s GROUP BY business_date""")
     party = by_date("""SELECT business_date AS d,
-            COALESCE(SUM(debit) FILTER (WHERE kind='fuel'),0) AS credit_fuel,
+            COALESCE(SUM(debit) FILTER (WHERE kind IN ('fuel','cash_advance')),0) AS credit_fuel,
             COALESCE(SUM(debit) FILTER (WHERE kind='lube'),0) AS credit_lube,
-            COALESCE(SUM(debit) FILTER (WHERE kind='cash_advance'),0) AS cash_advance,
+            0 AS cash_advance,
             COALESCE(SUM(credit) FILTER (WHERE kind='payment'),0) AS payments,
             COALESCE(SUM(credit) FILTER (WHERE kind='payment' AND pay_mode IN ('Cash','UPI at pump')),0) AS pay_drawer
             FROM party_txns WHERE NOT voided AND NOT is_legacy AND business_date BETWEEN %s AND %s
@@ -467,3 +474,51 @@ def range_summary(cur, start, end):
                     "expected_cash": money(expected), "counted": counted,
                     "difference": money(counted - expected) if counted is not None else None})
     return out
+
+
+# ------------------------------------------------------------------ credit transport register
+def transport_register(cur, start, end, party_id=None, search=None, include_voided=True):
+    """Rows exactly like the old Credit Transport register: one row per entry,
+    diesel + cash taken together, numbered per day (SL No)."""
+    sql = """SELECT t.*, p.name AS party_name, p.discount_per_litre,
+                    (t.debit - t.cash_taken) AS fuel_amount, f.unit
+             FROM party_txns t JOIN parties p ON p.id=t.party_id LEFT JOIN fuels f ON f.code=t.fuel_code
+             WHERE t.kind IN ('fuel','cash_advance') AND t.business_date BETWEEN %s AND %s"""
+    params = [start, end]
+    if party_id:
+        sql += " AND t.party_id=%s"; params.append(party_id)
+    if not include_voided:
+        sql += " AND NOT t.voided"
+    if search:
+        sql += """ AND (p.name ILIKE %s OR t.vehicle_no ILIKE %s OR t.challan_no ILIKE %s OR t.slip_no ILIKE %s
+                   OR t.remarks ILIKE %s)"""
+        params += [f"%{search}%"] * 5
+    sql += " ORDER BY t.business_date, t.sl_no NULLS LAST, t.id"
+    cur.execute(sql, params)
+    rows = []
+    for r in cur.fetchall():
+        r = dict(r)
+        if r["kind"] == "cash_advance":
+            r["fuel_amount"] = ZERO
+            r["cash"] = Decimal(r["debit"])
+        else:
+            r["cash"] = Decimal(r["cash_taken"])
+        rows.append(r)
+    return rows
+
+
+def register_totals(rows):
+    live = [r for r in rows if not r["voided"]]
+    t = {"qty": sum((Decimal(r["qty"]) for r in live if r["kind"] == "fuel"), ZERO),
+         "fuel_amount": sum((Decimal(r["fuel_amount"]) for r in live), ZERO),
+         "cash": sum((r["cash"] for r in live), ZERO),
+         "total": sum((Decimal(r["debit"]) for r in live), ZERO), "count": len(live)}
+    return t
+
+
+def next_sl_no(cur, d):
+    """Per-day serial across all transporters, like the old register. Cancelled
+    entries keep their number (a visible gap is part of the audit trail)."""
+    cur.execute("""SELECT COALESCE(MAX(sl_no),0)+1 AS n FROM party_txns
+                   WHERE business_date=%s AND kind IN ('fuel','cash_advance')""", (d,))
+    return cur.fetchone()["n"]

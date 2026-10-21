@@ -215,10 +215,10 @@ def run_import(username):
             if name != base:
                 rep["issues"].append(f"Duplicate party name '{base}' imported as '{name}'")
             mobile = "".join(c for c in _s(r.get("mobile")) if c.isdigit())[-10:]
-            cur.execute("""INSERT INTO parties (name, mobile, vehicles, active, legacy_id) VALUES (%s,%s,%s,%s,%s)
-                           RETURNING id""",
+            cur.execute("""INSERT INTO parties (name, mobile, vehicles, active, legacy_id, discount_per_litre)
+                           VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
                         (name, mobile, _s(r.get("vehicle_no"), 400).upper(),
-                         _s(r.get("status")).lower() != "inactive", r["id"]))
+                         _s(r.get("status")).lower() != "inactive", r["id"], max(_n(r.get("discount")), ZERO)))
             pid = cur.fetchone()["id"]
             party_map[r["id"]] = pid
             party_by_name[base.lower()] = pid
@@ -239,11 +239,13 @@ def run_import(username):
         def add_txn(pid, d, kind, debit=ZERO, credit=ZERO, **kw):
             legacy_dates.add(d)
             cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, fuel_code, qty, rate, debit, credit,
-                             pay_mode, vehicle_no, challan_no, slip_no, remarks, created_by, is_legacy)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'import',TRUE)""",
+                             pay_mode, vehicle_no, challan_no, slip_no, remarks, created_by, is_legacy,
+                             cash_taken, sl_no, pay_for)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'import',TRUE,%s,%s,%s)""",
                         (pid, d, kind, kw.get("fuel_code"), kw.get("qty", ZERO), kw.get("rate", ZERO), debit, credit,
                          kw.get("pay_mode"), _s(kw.get("vehicle_no"), 20).upper(), _s(kw.get("challan_no"), 30),
-                         _s(kw.get("slip_no"), 30), _s(kw.get("remarks"), 200)))
+                         _s(kw.get("slip_no"), 30), _s(kw.get("remarks"), 200), kw.get("cash_taken", ZERO),
+                         kw.get("sl_no"), kw.get("pay_for")))
 
         rows, cols = _rows(cur, "transport_entries")
         for r in rows:
@@ -255,15 +257,16 @@ def run_import(username):
             rate = _n(r.get("rate"))
             cash = _n(r.get("cash_taken"))
             fuel_amt = _n(r.get("hsd_amount")) or _n(r.get("fuel_amount")) or (_n(r.get("total_amount")) - cash)
+            sl = int(r["sl_no"]) if str(r.get("sl_no") or "").isdigit() else None
             if fuel_amt > 0:
-                add_txn(pid, d, "fuel", debit=fuel_amt, fuel_code="HSD", qty=q, rate=rate,
+                add_txn(pid, d, "fuel", debit=fuel_amt + cash, cash_taken=cash, fuel_code="HSD", qty=q, rate=rate,
                         vehicle_no=r.get("vehicle_no"), challan_no=r.get("challan_no"), slip_no=r.get("slip_no"),
-                        remarks=f"Old entry #{r['id']}")
-                count("credit entries")
-            if cash > 0:
-                add_txn(pid, d, "cash_advance", debit=cash, vehicle_no=r.get("vehicle_no"),
+                        sl_no=sl, remarks=f"Old entry #{r['id']}")
+                count("transport register entries")
+            elif cash > 0:
+                add_txn(pid, d, "cash_advance", debit=cash, vehicle_no=r.get("vehicle_no"), sl_no=sl,
                         challan_no=r.get("challan_no"), slip_no=r.get("slip_no"), remarks=f"Cash taken, old entry #{r['id']}")
-                count("cash given to drivers")
+                count("transport register entries")
 
         rows, cols = _rows(cur, "transporter_ledger")
         for r in rows:
@@ -280,6 +283,7 @@ def run_import(username):
                 count("credit entries")
             elif rec > 0 and "Received" in et:
                 add_txn(pid, d, "payment", credit=rec, pay_mode="Cash",
+                        pay_for="Lube" if "Lube" in et else ("Fuel" if "Fuel" in et else None),
                         remarks=f"{et} (old system; mode not recorded)")
                 count("payments")
             elif rec < 0 or fc < 0 or lc < 0:
@@ -333,10 +337,10 @@ def run_import(username):
             if not code or cur.fetchone():
                 n += 1
                 code = f"OLD{n:03d}"
-            cur.execute("""INSERT INTO staff (emp_code, name, designation, joined_on, bank_account, active)
-                           VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+            cur.execute("""INSERT INTO staff (emp_code, name, designation, joined_on, bank_account, active, department, shift)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                         (code, name, _s(r.get("role"), 40), _d(r.get("joined_date")), _s(r.get("bank_account"), 40),
-                         _s(r.get("status")).lower() != "inactive"))
+                         _s(r.get("status")).lower() != "inactive", _s(r.get("department"), 40), _s(r.get("shift"), 20)))
             sid = cur.fetchone()["id"]
             staff_by_name[name.lower()] = sid
             if _s(r.get("emp_id")):
@@ -402,17 +406,31 @@ def run_import(username):
             d = _d(r.get("receipt_date"))
             if not d:
                 continue
+            comps = []
+            for i in range(1, 6):
+                if _n(r.get(f"comp{i}_vol")) > 0:
+                    comps.append({"no": i, "fuel": _s(r.get(f"comp{i}_fuel")).upper() or "HSD",
+                                  "volume_l": str(_n(r.get(f"comp{i}_vol"))),
+                                  "challan_dip_mm": str(_n(r.get(f"comp{i}_challan_dip")) or ""),
+                                  "observed_dip_mm": str(_n(r.get(f"comp{i}_dip")) or "")})
+            group = f"old{r['id']}"
             for code, col in (("MS", "total_ms_vol"), ("HSD", "total_hsd_vol")):
                 vol = _n(r.get(col))
                 if vol > 0:
                     cur.execute("""INSERT INTO fuel_receipts (business_date, tank_id, invoice_no, vehicle_no,
                                      received_qty_l, dip_before_mm, dip_after_mm, challan_density, observed_density,
-                                     temperature_c, remarks, created_by)
-                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Imported from old system','import')""",
+                                     temperature_c, remarks, created_by, order_no, carrier_no, carrier_name, po_no, po_date,
+                                     water_checked, compartments, receipt_group, dip_variance_mm)
+                                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Imported from old system','import',
+                                           %s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                                 (d, tank_by_fuel[code], _s(r.get("invoice_no"), 40), _s(r.get("vehicle_no"), 20),
                                  vol, _n(r.get("dip_before")) or None, _n(r.get("dip_after")) or None,
                                  _n(r.get("challan_density")) or None, _n(r.get("density")) or None,
-                                 _n(r.get("temperature_c")) or None))
+                                 _n(r.get("temperature_c")) or None, _s(r.get("order_no"), 40), _s(r.get("carrier_no"), 40),
+                                 _s(r.get("carrier_name"), 80), _s(r.get("po_no"), 40), _d(r.get("po_date")),
+                                 _s(r.get("water_checked"), 20),
+                                 json.dumps([c for c in comps if c["fuel"] == code]) if comps else None, group,
+                                 _n(r.get("total_dip_variance")) if r.get("total_dip_variance") not in (None, "") else None))
                     legacy_dates.add(d)
                     count("tanker receipts")
 
@@ -420,14 +438,18 @@ def run_import(username):
         rows, cols = _rows(cur, "proof_register")
         for r in rows:
             d = _d(r.get("proof_date"))
-            url = _s(r.get("photo_url"), 500) or _s(r.get("video_url"), 500)
-            if d and url:
-                cur.execute("""INSERT INTO proofs (business_date, category, note, file_url, latitude, longitude, created_by)
-                               VALUES (%s,%s,%s,%s,%s,%s,'import')""",
+            url = _s(r.get("photo_url"), 500)
+            vurl = _s(r.get("video_url"), 500)
+            if d and (url or vurl):
+                cur.execute("""INSERT INTO proofs (business_date, category, note, file_url, latitude, longitude, created_by,
+                                                   video_url, fuel_code, stock_status, proof_time)
+                               VALUES (%s,%s,%s,%s,%s,%s,'import',%s,%s,%s,%s)""",
                             (d, _s(r.get("proof_category"), 40) or "General",
                              " ".join(x for x in [_s(r.get("item_name")), _s(r.get("fuel_type")), _s(r.get("stock_status")),
                                                   _s(r.get("remarks"))] if x)[:300],
-                             url, _s(r.get("latitude"), 20) or None, _s(r.get("longitude"), 20) or None))
+                             url, _s(r.get("latitude"), 20) or None, _s(r.get("longitude"), 20) or None,
+                             vurl, _s(r.get("fuel_type"), 8).upper() or None, _s(r.get("stock_status"), 20),
+                             _s(r.get("proof_time"), 20) or _s(r.get("client_time"), 20)))
                 count("proof photos")
         rows, cols = _rows(cur, "activity_log")
         for r in rows:

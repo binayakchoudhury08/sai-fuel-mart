@@ -30,13 +30,19 @@ def index():
                        WHERE dp.business_date BETWEEN %s AND %s ORDER BY dp.business_date DESC, t.name""",
                     (d - timedelta(days=13), d))
         history = cur.fetchall()
+        stats = month_receipt_stats(cur, d)
+        from ..services import rates_for
+        rates = rates_for(cur, d)
+        for r in rec:
+            rt = rates.get(r["tank"]["fuel_code"])
+            r["value"] = (r["variance"] * rt).quantize(Decimal("0.01")) if (r["variance"] is not None and rt) else None
         days_left = {}
         for r in rec:
             avg = avg_daily_sale(cur, r["tank"]["fuel_code"], d)
             if r["actual"] is not None and avg > 0:
                 days_left[r["tank"]["id"]] = (r["actual"] / avg).quantize(Decimal("0.1"))
     return render_template("tanks/index.html", d=d, rec=rec, receipts=receipts, history=history,
-                           days_left=days_left, prev_day=d - timedelta(days=1),
+                           days_left=days_left, stats=stats, prev_day=d - timedelta(days=1),
                            next_day=d + timedelta(days=1) if d < today() else None)
 
 
@@ -85,50 +91,116 @@ def save_dip():
 @bp.route("/tanks/receipt", methods=["POST"])
 @login_required()
 def add_receipt():
+    """Tanker receipt like the old Fuel Receipt page: one tanker, up to 5 compartments.
+    Saved as one row per fuel/tank (so stock maths stays per tank), linked by receipt_group."""
+    import uuid
     d = parse_date(request.form.get("business_date"))
     def opt(name, label, neg=False):
         v = request.form.get(name, "").strip()
         return to_dec(v, label, allow_negative=neg) if v else None
-    f = {"business_date": d, "tank_id": int(request.form.get("tank_id") or 0),
-         "invoice_no": clean(request.form.get("invoice_no"), 40),
-         "vehicle_no": clean(request.form.get("vehicle_no"), 20).upper().replace(" ", ""),
-         "invoice_qty_l": to_dec(request.form.get("invoice_qty_l"), "Invoice quantity"),
-         "received_qty_l": to_dec(request.form.get("received_qty_l"), "Received quantity", allow_blank=False),
-         "dip_before_mm": opt("dip_before_mm", "Dip before"), "dip_after_mm": opt("dip_after_mm", "Dip after"),
-         "challan_density": opt("challan_density", "Challan density"),
-         "observed_density": opt("observed_density", "Observed density"),
-         "temperature_c": opt("temperature_c", "Temperature", True),
-         "invoice_amount": to_dec(request.form.get("invoice_amount"), "Invoice amount"),
-         "remarks": clean(request.form.get("remarks"), 300), "created_by": current_user()["username"]}
-    if not f["invoice_no"]:
+    head = {"invoice_no": clean(request.form.get("invoice_no"), 40),
+            "vehicle_no": clean(request.form.get("vehicle_no"), 20).upper().replace(" ", ""),
+            "order_no": clean(request.form.get("order_no"), 40), "carrier_no": clean(request.form.get("carrier_no"), 40),
+            "carrier_name": clean(request.form.get("carrier_name"), 80), "po_no": clean(request.form.get("po_no"), 40),
+            "po_date": parse_date(request.form["po_date"], "PO date") if request.form.get("po_date") else None,
+            "water_checked": clean(request.form.get("water_checked"), 20),
+            "challan_density": opt("challan_density", "Challan density"),
+            "observed_density": opt("observed_density", "Density at receipt"),
+            "temperature_c": opt("temperature_c", "Temperature", True),
+            "dip_before_mm": opt("dip_before_mm", "Dip before"), "dip_after_mm": opt("dip_after_mm", "Dip after"),
+            "remarks": clean(request.form.get("remarks"), 300)}
+    if not head["invoice_no"]:
         raise UserError("Enter the invoice / challan number.")
-    if f["received_qty_l"] <= 0:
-        raise UserError("Received quantity must be more than zero.")
+    comps = []
+    for i in range(1, 6):
+        vol = request.form.get(f"c{i}_vol", "").strip()
+        if not vol:
+            continue
+        fuel = request.form.get(f"c{i}_fuel")
+        comps.append({"no": i, "fuel": fuel, "volume_l": str(to_dec(vol, f"Compartment {i} volume")),
+                      "challan_dip_mm": str(opt(f"c{i}_cdip", f"Compartment {i} challan dip") or ""),
+                      "observed_dip_mm": str(opt(f"c{i}_odip", f"Compartment {i} observed dip") or "")})
+    if not comps and request.form.get("received_qty_l"):
+        cur_tank = int(request.form.get("tank_id") or 0)
+        comps = [{"no": 1, "tank_id": cur_tank, "volume_l": str(to_dec(request.form.get("received_qty_l"), "Received")),
+                  "challan_dip_mm": "", "observed_dip_mm": ""}]
+    if not comps:
+        raise UserError("Enter at least one compartment volume.")
+    group = uuid.uuid4().hex[:12]
+    saved = []
     with db.tx() as cur:
         claim_form_token(cur)
         assert_writable(cur, d)
-        cur.execute("SELECT * FROM tanks WHERE id=%s AND active", (f["tank_id"],))
-        t = cur.fetchone()
-        if not t:
-            raise UserError("Choose the tank.")
-        cur.execute("SELECT id FROM fuel_receipts WHERE invoice_no=%s AND tank_id=%s AND NOT voided",
-                    (f["invoice_no"], f["tank_id"]))
-        if cur.fetchone():
-            raise UserError(f"Invoice {f['invoice_no']} is already recorded for {t['name']}.")
-        cur.execute("""INSERT INTO fuel_receipts (business_date, tank_id, invoice_no, vehicle_no, invoice_qty_l,
-                         received_qty_l, dip_before_mm, dip_after_mm, challan_density, observed_density,
-                         temperature_c, invoice_amount, remarks, created_by)
-                       VALUES (%(business_date)s,%(tank_id)s,%(invoice_no)s,%(vehicle_no)s,%(invoice_qty_l)s,
-                         %(received_qty_l)s,%(dip_before_mm)s,%(dip_after_mm)s,%(challan_density)s,
-                         %(observed_density)s,%(temperature_c)s,%(invoice_amount)s,%(remarks)s,%(created_by)s)
-                       RETURNING *""", f)
-        r = cur.fetchone()
-        short = (f["invoice_qty_l"] - f["received_qty_l"]) if f["invoice_qty_l"] else None
-        audit(cur, "create", "fuel_receipt", r["id"],
-              f"Tanker {f['invoice_no']} into {t['name']}: received {f['received_qty_l']} L"
-              + (f" (invoice {f['invoice_qty_l']} L, short {short} L)" if short else ""), after=r, business_date=d)
-    flash("Tanker receipt saved.", "success")
+        by_tank = {}
+        for c in comps:
+            if c.get("tank_id"):
+                cur.execute("SELECT * FROM tanks WHERE id=%s AND active", (c["tank_id"],))
+            else:
+                cur.execute("SELECT * FROM tanks WHERE fuel_code=%s AND active ORDER BY id LIMIT 1", (c["fuel"],))
+            t = cur.fetchone()
+            if not t:
+                raise UserError(f"No active tank for {c.get('fuel') or 'that fuel'}. Add it in Settings → Tanks.")
+            by_tank.setdefault(t["id"], {"tank": t, "comps": []})["comps"].append(c)
+        for tid, g in by_tank.items():
+            t = g["tank"]
+            cur.execute("SELECT id FROM fuel_receipts WHERE invoice_no=%s AND tank_id=%s AND NOT voided",
+                        (head["invoice_no"], tid))
+            if cur.fetchone():
+                raise UserError(f"Invoice {head['invoice_no']} is already recorded for {t['name']}.")
+            vol = sum((Decimal(c["volume_l"]) for c in g["comps"]), Decimal(0))
+            dv = [Decimal(c["observed_dip_mm"]) - Decimal(c["challan_dip_mm"]) for c in g["comps"]
+                  if c["observed_dip_mm"] and c["challan_dip_mm"]]
+            inv = to_dec(request.form.get(f"invoice_{t['fuel_code']}") or request.form.get("invoice_qty_l"),
+                         "Invoice quantity")
+            cur.execute("""INSERT INTO fuel_receipts (business_date, tank_id, invoice_no, vehicle_no, invoice_qty_l,
+                             received_qty_l, dip_before_mm, dip_after_mm, challan_density, observed_density, temperature_c,
+                             invoice_amount, remarks, created_by, order_no, carrier_no, carrier_name, po_no, po_date,
+                             water_checked, compartments, receipt_group, dip_variance_mm)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                        (d, tid, head["invoice_no"], head["vehicle_no"], inv, vol, head["dip_before_mm"],
+                         head["dip_after_mm"], head["challan_density"], head["observed_density"], head["temperature_c"],
+                         to_dec(request.form.get("invoice_amount"), "Invoice amount") if len(by_tank) == 1 else 0,
+                         head["remarks"], current_user()["username"], head["order_no"], head["carrier_no"],
+                         head["carrier_name"], head["po_no"], head["po_date"], head["water_checked"],
+                         json.dumps(g["comps"]), group, sum(dv, Decimal(0)) if dv else None))
+            r = cur.fetchone()
+            saved.append(f"{t['name']} {vol} L")
+            alert = ""
+            if head["challan_density"] and head["observed_density"] and \
+                    abs(head["challan_density"] - head["observed_density"]) > 3:
+                alert = " | DENSITY ALERT"
+            audit(cur, "create", "fuel_receipt", r["id"],
+                  f"Tanker {head['invoice_no']} → {t['name']}: {vol} L" + (f" (invoice {inv} L)" if inv else "") + alert,
+                  after=r, business_date=d)
+    flash("Tanker receipt saved: " + ", ".join(saved) + ".", "success")
     return redirect(url_for("tanks.index", d=d.isoformat()))
+
+
+def month_receipt_stats(cur, d):
+    first = d.replace(day=1)
+    cur.execute("""SELECT r.*, t.fuel_code FROM fuel_receipts r JOIN tanks t ON t.id=r.tank_id
+                   WHERE NOT r.voided AND r.business_date BETWEEN %s AND %s""", (first, d))
+    rows = cur.fetchall()
+    st = {"receipts": len({r["receipt_group"] or r["id"] for r in rows}), "ms": Decimal(0), "hsd": Decimal(0),
+          "gain_mm": Decimal(0), "short_mm": Decimal(0), "density_alerts": 0, "short_challans": 0}
+    for r in rows:
+        if r["fuel_code"] == "MS":
+            st["ms"] += Decimal(r["received_qty_l"])
+        elif r["fuel_code"] == "HSD":
+            st["hsd"] += Decimal(r["received_qty_l"])
+        dv = r["dip_variance_mm"]
+        if dv is not None:
+            if dv > 0:
+                st["gain_mm"] += Decimal(dv)
+            elif dv < 0:
+                st["short_mm"] += -Decimal(dv)
+        if r["challan_density"] and r["observed_density"] and abs(Decimal(r["challan_density"]) - Decimal(r["observed_density"])) > 3:
+            st["density_alerts"] += 1
+        if (r["invoice_qty_l"] and Decimal(r["invoice_qty_l"]) > Decimal(r["received_qty_l"])) or (dv is not None and dv < 0):
+            st["short_challans"] += 1
+    cur.execute("SELECT MAX(business_date) AS m FROM fuel_receipts WHERE NOT voided")
+    st["last"] = cur.fetchone()["m"]
+    return st
 
 
 @bp.route("/tanks/receipt/<int:rid>/void", methods=["POST"])

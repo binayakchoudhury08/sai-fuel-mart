@@ -72,6 +72,10 @@ def edit(pid):
     f = _party_form()
     f["active"] = request.form.get("active") == "1"
     f["id"] = pid
+    if "discount_per_litre" in request.form and role() == "owner":
+        f["dpl"] = to_dec(request.form.get("discount_per_litre"), "Discount per litre")
+    else:
+        f["dpl"] = None
     with db.tx() as cur:
         cur.execute("SELECT * FROM parties WHERE id=%s FOR UPDATE", (pid,))
         old = cur.fetchone()
@@ -81,7 +85,8 @@ def edit(pid):
         if cur.fetchone():
             raise UserError(f"Another party is already named '{f['name']}'.")
         cur.execute("""UPDATE parties SET name=%(name)s, mobile=%(mobile)s, vehicles=%(vehicles)s,
-                       address=%(address)s, gstin=%(gstin)s, credit_limit=%(credit_limit)s, active=%(active)s
+                       address=%(address)s, gstin=%(gstin)s, credit_limit=%(credit_limit)s, active=%(active)s,
+                       discount_per_litre=COALESCE(%(dpl)s, discount_per_litre)
                        WHERE id=%(id)s RETURNING *""", f)
         audit(cur, "update", "party", pid, f"Edited party '{f['name']}'", before=old, after=cur.fetchone())
     flash("Party details saved.", "success")
@@ -131,6 +136,9 @@ def _whatsapp_link(p, balance, st):
 @login_required()
 def add_txn(pid):
     kind = request.form.get("kind")
+    if kind in ("fuel", "cash_advance"):
+        from .transport import add_entry
+        return add_entry.__wrapped__(party_id=pid)
     if kind not in ("fuel", "cash_advance", "payment", "discount", "adjustment"):
         raise UserError("Unknown entry type.")
     if kind in ("discount", "adjustment") and not can("manager"):
@@ -156,7 +164,7 @@ def add_txn(pid):
                "vehicle_no": clean(request.form.get("vehicle_no"), 20).upper().replace(" ", ""),
                "challan_no": clean(request.form.get("challan_no"), 30),
                "slip_no": clean(request.form.get("slip_no"), 30),
-               "remarks": clean(request.form.get("remarks"), 200), "receipt_no": None,
+               "remarks": clean(request.form.get("remarks"), 200), "receipt_no": None, "pay_for": None,
                "created_by": user}
 
         if kind == "fuel":
@@ -195,7 +203,8 @@ def add_txn(pid):
             if mode in ("Bank transfer", "Cheque") and not row["reference"]:
                 raise UserError("Enter the UTR / cheque number for bank and cheque payments.")
             receipt = next_receipt_no(cur, d)
-            row.update(credit=amt, pay_mode=mode, receipt_no=receipt)
+            pay_for = request.form.get("pay_for") if request.form.get("pay_for") in ("Fuel", "Lube", "Fuel + Lube") else None
+            row.update(credit=amt, pay_mode=mode, receipt_no=receipt, pay_for=pay_for)
         elif kind == "discount":
             amt = to_dec(request.form.get("amount"), "Discount", allow_blank=False)
             if amt <= 0:
@@ -222,10 +231,10 @@ def add_txn(pid):
 
         cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, fuel_code, qty, rate, debit, credit,
                                                pay_mode, reference, vehicle_no, challan_no, slip_no, remarks,
-                                               receipt_no, created_by)
+                                               receipt_no, pay_for, created_by)
                        VALUES (%(party_id)s,%(business_date)s,%(kind)s,%(fuel_code)s,%(qty)s,%(rate)s,%(debit)s,
                                %(credit)s,%(pay_mode)s,%(reference)s,%(vehicle_no)s,%(challan_no)s,%(slip_no)s,
-                               %(remarks)s,%(receipt_no)s,%(created_by)s) RETURNING *""", row)
+                               %(remarks)s,%(receipt_no)s,%(pay_for)s,%(created_by)s) RETURNING *""", row)
         t = cur.fetchone()
         amount = t["debit"] or t["credit"]
         audit(cur, "create", "party_txn", t["id"],
@@ -255,6 +264,9 @@ def add_txn_any():
         pid = 0
     if not pid:
         raise UserError("Choose the party.")
+    if request.form.get("kind") in ("fuel", "cash_advance"):
+        from .transport import add_entry
+        return add_entry.__wrapped__()
     return add_txn.__wrapped__(pid)
 
 

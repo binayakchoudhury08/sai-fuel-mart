@@ -14,20 +14,20 @@
 </div>
 
 <div class="grid2" style="margin-bottom:16px">
-<section class="section"><header><h2>Give fuel on credit</h2></header><div class="body">
-<form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}" data-fuelform>{{ hidden() }}
+<section class="section"><header><h2>Transport entry (diesel / cash taken)</h2></header><div class="body">
+<form method="post" action="{{ url_for('transport.add_entry') }}" data-transport>{{ hidden(request.full_path) }}<input type="hidden" name="party" value="{{ p.id }}">
 <div class="fields">
-  <div><label>Type</label><select name="kind"><option value="fuel">Fuel on credit</option><option value="cash_advance">Cash given to driver</option></select></div>
   <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
   <div><label>Fuel</label><select name="fuel_code">{% for f in fuels %}<option value="{{ f.code }}" data-rate="{{ rates.get(f.code,'') }}" {% if f.code=='HSD' %}selected{% endif %}>{{ f.code }} – ₹{{ rates.get(f.code,'–') }}</option>{% endfor %}</select></div>
   <div><label>Litres</label><input name="qty" inputmode="decimal"></div>
   <div><label>or Amount (₹)</label><input name="amount" inputmode="decimal"></div>
   {% if can('manager') %}<div><label>Rate (if different)</label><input name="rate" inputmode="decimal"></div>{% endif %}
+  <div><label>Cash taken (₹)</label><input name="cash_taken" inputmode="decimal" placeholder="0"></div>
   <div><label>Vehicle</label><input name="vehicle_no" autocapitalize="characters" list="veh"></div>
   <div><label>Challan</label><input name="challan_no"></div><div><label>Slip</label><input name="slip_no"></div>
   <div class="wide"><label>Remarks</label><input name="remarks"></div>
 </div><datalist id="veh">{% for v in p.vehicles.split(',') if v.strip() %}<option value="{{ v.strip() }}">{% endfor %}</datalist>
-<p class="hint" data-preview></p><p style="margin-top:10px"><button class="btn">Save credit</button></p></form></div></section>
+<p class="hint" data-tpreview></p><p style="margin-top:10px"><button class="btn">Save transport entry</button></p></form></div></section>
 
 <section class="section"><header><h2>Receive payment</h2></header><div class="body">
 <form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}">{{ hidden() }}<input type="hidden" name="kind" value="payment">
@@ -35,6 +35,7 @@
   <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required class="big"></div>
   <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
   <div><label>How</label><select name="pay_mode">{% for m, help in PAY_MODES.items() %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+  <div><label>For</label><select name="pay_for"><option>Fuel</option><option>Lube</option><option>Fuel + Lube</option></select></div>
   <div><label>UTR / cheque no.</label><input name="reference"></div>
   <div class="wide"><label>Remarks</label><input name="remarks"></div>
 </div><p class="hint">Every payment gets a receipt number. Cash and UPI at the pump go into that day’s cash calculation.</p>
@@ -60,8 +61,8 @@
 <tr><td>{{ start|d }}</td><td colspan="4"><i>Opening balance</i></td><td class="num"><b>{{ stmt.opening|inr }}</b></td><td></td></tr>
 {% for r in stmt.rows %}<tr class="{% if r.voided %}void{% endif %}">
   <td>{{ r.business_date|d }}</td>
-  <td>{{ KIND[r.kind] }}{% if r.kind=='fuel' %} – {{ r.qty }} {{ r.fuel_code }} @ ₹{{ r.rate }}{% elif r.kind=='lube' %} – {{ r.lube_name or r.remarks }} × {{ r.qty }}{% endif %}
-    {% if r.kind=='payment' %} – {{ r.pay_mode }}{% if r.reference %} ({{ r.reference }}){% endif %} <small>{{ r.receipt_no }}</small>{% endif %}
+  <td>{% if r.sl_no %}<small>SL {{ r.sl_no }}</small> {% endif %}{{ KIND[r.kind] }}{% if r.kind=='fuel' %} – {{ r.qty }} {{ r.fuel_code }} @ ₹{{ r.rate }}{% if r.cash_taken %} + cash ₹{{ r.cash_taken }}{% endif %}{% elif r.kind=='lube' %} – {{ r.lube_name or r.remarks }} × {{ r.qty }}{% endif %}
+    {% if r.kind=='payment' %}{% if r.pay_for %} ({{ r.pay_for }}){% endif %} – {{ r.pay_mode }}{% if r.reference %} ({{ r.reference }}){% endif %} <small>{{ r.receipt_no }}</small>{% endif %}
     {% if r.remarks and r.kind not in ('lube',) %}<br><small>{{ r.remarks }}</small>{% endif %}
     {% if r.voided %}<br><small class="keep">Cancelled by {{ r.voided_by }}: {{ r.void_reason }}</small>{% endif %}
     {% if r.is_legacy %} <span class="badge legacy">old system</span>{% endif %}</td>
@@ -70,7 +71,7 @@
   <td class="num">{% if not r.voided %}{{ r.running|inr }}{% endif %}</td>
   <td class="actions keep">{% if r.kind=='payment' %}<a class="btn small secondary" href="{{ url_for('parties.receipt', tid=r.id) }}">Receipt</a>{% endif %}
   {% if can('manager') and not r.voided %}
-    {% if r.kind in ('fuel','cash_advance','payment') %}<details class="void"><summary style="color:inherit">Edit</summary>
+    {% if r.kind in ('fuel','cash_advance','payment') %}<details class="void"><summary style="color:inherit">Edit details</summary>
       <form method="post" action="{{ url_for('parties.edit_txn_details', tid=r.id) }}">{{ csrf() }}
       <label>Vehicle</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Challan</label><input name="challan_no" value="{{ r.challan_no }}">
       <label>Slip</label><input name="slip_no" value="{{ r.slip_no }}"><label>Reference</label><input name="reference" value="{{ r.reference }}">
@@ -85,6 +86,7 @@
   <div><label>Name</label><input name="name" value="{{ p.name }}" required></div>
   <div><label>Mobile</label><input name="mobile" value="{{ p.mobile }}"></div>
   <div><label>Credit limit (₹)</label><input name="credit_limit" value="{{ p.credit_limit }}"></div>
+  <div><label>Bill discount ₹ per litre</label><input name="discount_per_litre" value="{{ p.discount_per_litre }}" {% if not can('owner') %}readonly{% endif %}></div>
   <div><label>GSTIN</label><input name="gstin" value="{{ p.gstin }}"></div>
   <div class="wide"><label>Vehicles</label><input name="vehicles" value="{{ p.vehicles }}"></div>
   <div class="wide"><label>Address</label><input name="address" value="{{ p.address }}"></div>

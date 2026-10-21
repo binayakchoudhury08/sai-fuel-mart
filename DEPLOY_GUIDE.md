@@ -1,4 +1,6 @@
-# Sai Fuel Mart v2 — setup guide
+# Sai Fuel Mart v2.1 — setup guide
+
+See CHANGELOG.md for everything restored from the old app in 2.1.
 
 ## 0. Before anything: secure your database (do this today)
 
@@ -59,8 +61,9 @@ opening reading once.
 1. Operator/manager opens **Daily closing** for today.
 2. Meter readings: type closings and testing. Openings come from yesterday automatically.
 3. Digital collections: PhonePe, card, HP Pay, etc. from the settlement reports.
-4. Credit given, payments received and cash given to drivers: on the same page or on the party page.
-   (There is now ONE place for credit, so nothing can be billed twice.)
+4. **Credit transport** page (or the same form on Daily closing): one entry per slip — diesel litres and
+   cash taken together. Each gets the day's SL No. Payments: "Receive amount" on the same page.
+   Bills: Credit transport → Bills & daily ZIP (PDF, Excel, or a ZIP with one bill per day).
 5. Lube sales and expenses.
 6. Count cash with the note counter. The board shows expected cash, counted cash and short/excess.
 7. **Submit day**. Owner checks and taps **Verify & lock**. A locked day cannot be changed by anyone,
@@ -85,6 +88,12 @@ passwords are in `keystore.properties`.
 
 **Keep `saifuelmart-release.jks` and its passwords safe and backed up in two places.** Every future
 update must be signed with this same key, or phones will refuse to install the update.
+
+## Updating from 2.0 to 2.1
+
+Push the new code; Render redeploys. The database upgrades itself on start (new columns are only added,
+nothing is removed). If you already ran "Import old data" on 2.0, old transport entries stay as they are
+(fuel and cash as separate lines) — balances are unaffected. The Android app does not need reinstalling.
 
 ## 6. Roles
 

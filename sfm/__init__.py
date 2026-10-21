@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 
 def _secret_key():
@@ -47,7 +47,7 @@ def create_app():
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=on_https,
         PERMANENT_SESSION_LIFETIME=timedelta(days=14),
-        MAX_CONTENT_LENGTH=12 * 1024 * 1024,
+        MAX_CONTENT_LENGTH=48 * 1024 * 1024,
         SEND_FILE_MAX_AGE_DEFAULT=timedelta(days=7),
     )
     if on_https:
@@ -62,9 +62,9 @@ def create_app():
         except Exception as e:  # keep the app up so the error page can explain
             log.exception("Schema setup failed: %s", e)
 
-    from .views import admin, auth, day, main, parties, lube, reports, staff, tanks
+    from .views import admin, auth, day, main, parties, lube, reports, staff, tanks, transport
     for bp in (auth.bp, main.bp, day.bp, parties.bp, lube.bp, tanks.bp, tanks.api, staff.bp, reports.bp,
-               admin.bp):
+               admin.bp, transport.bp):
         app.register_blueprint(bp)
 
     @app.before_request

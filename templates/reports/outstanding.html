@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block title %}Outstanding{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>Outstanding balances</h1><p>As on {{ today|d }}, from every entry.</p></div><a class="btn secondary" href="?format=xlsx">Excel</a></div>
+<div class="pagehead"><div class="grow"><h1>Outstanding balances</h1><p>As on {{ today|d }}, from every entry.</p></div><div class="btnrow"><a class="btn secondary" href="?format=pdf">PDF</a><a class="btn secondary" href="?format=xlsx">Excel</a></div></div>
 {% include "reports/_tabs.html" %}
 <section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Party</th><th>Mobile</th><th class="num">Balance</th><th class="num">Limit</th><th>Last payment</th><th class="num">Days since</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><a href="{{ url_for('parties.detail', pid=r.id) }}">{{ r.name }}</a>{% if not r.active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ r.mobile }}</td>

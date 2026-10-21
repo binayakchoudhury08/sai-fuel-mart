@@ -2,7 +2,7 @@
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Staff &amp; attendance</h1><p>Mark everyone for the day, then save once.</p></div>
 <div class="datenav"><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/staff?d=__D__">
-{% if can('manager') %}<a class="btn secondary" href="{{ url_for('staff.salary') }}">Salary sheet</a>{% endif %}</div></div>
+{% if can('manager') %}<a class="btn secondary" href="{{ url_for('staff.salary') }}">Salary sheet</a><a class="btn secondary" href="{{ url_for('reports.attendance_xlsx', m=d.strftime('%Y-%m')) }}">Attendance Excel</a>{% endif %}</div></div>
 <div class="stats">{% for k, lbl in STATUS %}<div><b>{{ counts[k] }}</b><span>{{ lbl }}</span></div>{% endfor %}</div>
 <section class="section"><header><h2>Attendance for {{ d|d }}</h2></header>
 <form method="post" action="{{ url_for('staff.save_attendance') }}">{{ hidden() }}<input type="hidden" name="work_date" value="{{ d.isoformat() }}">
@@ -11,16 +11,18 @@
 {% for k, lbl in STATUS %}<td style="text-align:center"><input type="radio" name="st_{{ s.id }}" value="{{ k }}" {% if marks.get(s.id)==k %}checked{% endif %} aria-label="{{ s.name }} {{ lbl }}" style="width:22px;height:22px"></td>{% endfor %}</tr>
 {% else %}<tr><td colspan="6" class="empty">No staff yet.</td></tr>{% endfor %}</tbody></table></div>
 <div class="body"><button class="btn">Save attendance</button></div></form></section>
-<section class="section"><header><h2>Staff list</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Role</th><th>Phone</th>{% if can('manager') %}<th class="num">Monthly salary</th><th></th>{% endif %}</tr></thead><tbody>
-{% for s in staff %}<tr class="{% if not s.active %}void{% endif %}"><td>{{ s.emp_code }}</td><td>{{ s.name }}</td><td>{{ s.designation }}</td><td>{{ s.phone }}</td>
+<section class="section"><header><h2>Staff list</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Role</th><th>Shift</th><th>Phone</th>{% if can('manager') %}<th class="num">Monthly salary</th><th></th>{% endif %}</tr></thead><tbody>
+{% for s in staff %}<tr class="{% if not s.active %}void{% endif %}"><td>{{ s.emp_code }}</td><td>{{ s.name }}</td><td>{{ s.designation }}{% if s.department %} <small>{{ s.department }}</small>{% endif %}</td><td>{{ s.shift }}</td><td>{{ s.phone }}</td>
 {% if can('manager') %}<td class="num">{{ s.monthly_salary|inr }}</td><td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<input type="hidden" name="id" value="{{ s.id }}">
 <label>Code</label><input name="emp_code" value="{{ s.emp_code }}"><label>Name</label><input name="name" value="{{ s.name }}"><label>Role</label><input name="designation" value="{{ s.designation }}">
 <label>Phone</label><input name="phone" value="{{ s.phone }}"><label>Monthly salary</label><input name="monthly_salary" value="{{ s.monthly_salary }}">
+<label>Department</label><input name="department" value="{{ s.department }}"><label>Shift</label><input name="shift" value="{{ s.shift }}">
 <label>Joined</label><input type="date" name="joined_on" value="{{ s.joined_on.isoformat() if s.joined_on else '' }}"><label>Bank account</label><input name="bank_account" value="{{ s.bank_account }}">
 <label>Status</label><select name="active"><option value="1">Working</option><option value="0" {% if not s.active %}selected{% endif %}>Left</option></select><button class="btn small">Save</button></form></details></td>{% endif %}</tr>{% endfor %}</tbody></table></div>
 {% if can('manager') %}<details class="add" {% if not staff %}open{% endif %}><summary>Add staff</summary><div class="body"><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<div class="fields">
 <div><label>Employee code</label><input name="emp_code" value="{{ next_code }}" required></div><div><label>Name</label><input name="name" required></div>
 <div><label>Role</label><input name="designation" placeholder="Pump attendant"></div><div><label>Phone</label><input name="phone" inputmode="tel"></div>
 <div><label>Monthly salary (₹)</label><input name="monthly_salary" inputmode="decimal"></div><div><label>Joined</label><input type="date" name="joined_on"></div>
-<div><label>Bank account</label><input name="bank_account"></div></div><p style="margin-top:10px"><button class="btn">Add staff</button></p></form></div></details>{% endif %}</section>
+<div><label>Bank account</label><input name="bank_account"></div>
+<div><label>Department</label><input name="department" placeholder="Forecourt"></div><div><label>Shift</label><select name="shift"><option value="">—</option><option>Day</option><option>Night</option><option>Rotating</option></select></div></div><p style="margin-top:10px"><button class="btn">Add staff</button></p></form></div></details>{% endif %}</section>
 {% endblock %}

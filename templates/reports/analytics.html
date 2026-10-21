@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% block title %}Analytics {{ month_name }}{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Analytics</h1><p>{{ month_name }}</p></div>
+<div class="datenav"><a class="btn secondary small" href="?m={{ prev_m }}">‹</a><b>{{ month_name }}</b>{% if next_m %}<a class="btn secondary small" href="?m={{ next_m }}">›</a>{% endif %}</div></div>
+{% include "reports/_tabs.html" %}
+<div class="stats">
+  <div><b>{{ k.sale|inr }}</b><span>Total sale</span></div><div><b>{{ k.avg|inr }}</b><span>Average per day ({{ k.days }} days)</span></div>
+  {% for f in fuels if k.qty[f.code] %}<div><b>{{ k.qty[f.code]|qty }}</b><span>{{ f.name }} {{ f.unit }}</span></div>{% endfor %}
+  <div><b>{{ k.lube|inr }}</b><span>Lube sale</span></div>
+</div>
+<div class="stats">
+  <div><b>{{ k.credit|inr }}</b><span>Credit given</span></div><div><b>{{ k.received|inr }}</b><span>Payments received</span></div>
+  <div><b class="neg">{{ outstanding|inr }}</b><span>Outstanding now</span></div><div><b>{{ k.digital|inr }}</b><span>Digital collections</span></div>
+  <div><b>{{ k.expenses|inr }}</b><span>Expenses</span></div><div><b class="{% if k.diff < 0 %}neg{% elif k.diff > 0 %}pos{% endif %}">{{ k.diff|inr }}</b><span>Cash short / excess</span></div>
+</div>
+<section class="section"><header><h2>Daily sale</h2></header><div class="body">
+<div class="bars" style="height:180px">{% for r in rows %}<a class="bar {% if r.difference is not none and r.difference < 0 %}short{% endif %}" href="{{ url_for('day.day_view', d=r.date.isoformat()) }}" title="{{ r.date|d }}: {{ r.gross_sale|inr }}"><i style="height:{{ (r.gross_sale / peak * 100)|round(1) if r.gross_sale else 0 }}%"></i><small class="muted">{{ r.date.day }}</small></a>{% else %}<p class="muted">No sales this month.</p>{% endfor %}</div>
+<div class="legend"><span><i style="background:var(--ink-2)"></i>Sale</span><span><i style="background:var(--stop)"></i>Cash short that day</span></div></div></section>
+<div class="grid2">
+<section class="section"><header><h2>Top transporters this month</h2></header><div class="body flush"><table><thead><tr><th>Party</th><th class="num">Litres</th><th class="num">Credit</th></tr></thead><tbody>
+{% for p in top_parties %}<tr><td>{{ p.name }}</td><td class="num">{{ (p.litres or 0)|qty }}</td><td class="num">{{ p.credit|inr }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No credit this month.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="section"><header><h2>Top lube products</h2></header><div class="body flush"><table><thead><tr><th>Product</th><th class="num">Sold</th><th class="num">Value</th></tr></thead><tbody>
+{% for p in top_lube %}<tr><td>{{ p.name }}</td><td class="num">{{ p.q|qty }}</td><td class="num">{{ p.a|inr }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No lube sold this month.</td></tr>{% endfor %}</tbody>
+<tfoot><tr><td>Stock value {{ stock_value|inr }}</td><td colspan="2" class="num">{{ low }} product(s) to reorder</td></tr></tfoot></table></div></section>
+<section class="section"><header><h2>Expenses by category</h2></header><div class="body flush"><table><tbody>
+{% for e in exp_cat %}<tr><td>{{ e.category }}</td><td class="num">{{ e.a|inr }}</td></tr>{% else %}<tr><td class="empty">No expenses this month.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="section"><header><h2>Staff</h2></header><div class="body flush"><table><tbody>
+<tr><td>Active staff</td><td class="num">{{ staff_n }}</td></tr><tr><td>Present today</td><td class="num">{{ att_today.get('P',0) + att_today.get('H',0) }}</td></tr>
+<tr><td>Absent / leave today</td><td class="num">{{ att_today.get('A',0) + att_today.get('L',0) }}</td></tr><tr><td>Paid for {{ month_name }}</td><td class="num">{{ salary_paid|inr }}</td></tr></tbody></table></div></section>
+</div>
+{% endblock %}

@@ -36,7 +36,8 @@
     <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-mark">S</span><span><b>{{ station_name }}</b><span>Pump ledger</span></span></a>
     {{ nav('main.dashboard','home','Overview','main.dashboard') }}
     {{ nav('day.day_today','day','Daily closing','day.') }}
-    {{ nav('parties.index','party','Credit parties','parties.') }}
+    {{ nav('transport.index','party','Credit transport','transport.') }}
+    {{ nav('parties.index','log','Party accounts','parties.') }}
     <div class="group">Stock</div>
     {{ nav('lube.index','lube','Lube stock','lube.') }}
     {{ nav('tanks.index','tank','Tanks & tankers','tanks.') }}
@@ -47,6 +48,7 @@
     {% if can('manager') %}
     <div class="group">Office</div>
     {{ nav('reports.index','report','Reports','reports.') }}
+    {{ nav('reports.analytics','report','Analytics','reports.analytics') }}
     {{ nav('admin.settings','cog','Settings','admin.settings') }}
     {% endif %}
     {% if can('owner') %}
@@ -76,8 +78,8 @@
 <nav class="tabbar" aria-label="Quick">
   <a href="{{ url_for('main.dashboard') }}" {% if ep=='main.dashboard' %}aria-current="page"{% endif %}><svg><use href="#i-home"/></svg>Overview</a>
   <a href="{{ url_for('day.day_today') }}" {% if ep.startswith('day.') %}aria-current="page"{% endif %}><svg><use href="#i-day"/></svg>Today</a>
-  <a href="{{ url_for('parties.index') }}" {% if ep.startswith('parties.') %}aria-current="page"{% endif %}><svg><use href="#i-party"/></svg>Parties</a>
-  <a href="{{ url_for('lube.index') }}" {% if ep.startswith('lube.') %}aria-current="page"{% endif %}><svg><use href="#i-lube"/></svg>Lube</a>
+  <a href="{{ url_for('transport.index') }}" {% if ep.startswith('transport.') %}aria-current="page"{% endif %}><svg><use href="#i-party"/></svg>Transport</a>
+  <a href="{{ url_for('parties.index') }}" {% if ep.startswith('parties.') %}aria-current="page"{% endif %}><svg><use href="#i-log"/></svg>Accounts</a>
   <label for="more"><svg><use href="#i-menu"/></svg>More</label>
 </nav>
 {% else %}

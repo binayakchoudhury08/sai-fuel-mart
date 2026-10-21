@@ -7,10 +7,10 @@
 {% for c,b in t.by_fuel.items() if b.qty %}<tr><td colspan="4"><b>{{ b.name }}</b></td><td class="num"><b>{{ b.qty }}</b></td><td></td><td class="num"><b>{{ b.amount|inr }}</b></td></tr>{% endfor %}</table>
 <h2>Cash reconciliation</h2><table>
 <tr><td>Fuel sale</td><td class="num">{{ t.fuel_total|inr }}</td></tr><tr><td>Lube sale</td><td class="num">{{ t.lube_total|inr }}</td></tr>
-<tr><td>Less credit sales</td><td class="num">−{{ t.credit_total|inr }}</td></tr>
+<tr><td>Less credit given (transport diesel + cash taken, lube)</td><td class="num">−{{ t.credit_total|inr }}</td></tr>
 {% for c in t.collections if c.amount %}<tr><td>Less {{ c.name }}</td><td class="num">−{{ c.amount|inr }}</td></tr>{% endfor %}
 {% for m, a in t.pay_by_mode.items() if a %}<tr><td>Party payments – {{ m }}{% if m not in ('Cash','UPI at pump') %} (not in drawer){% endif %}</td><td class="num">{% if m in ('Cash','UPI at pump') %}+{% endif %}{{ a|inr }}</td></tr>{% endfor %}
-<tr><td>Less cash given to drivers</td><td class="num">−{{ t.cash_advance|inr }}</td></tr><tr><td>Less expenses from counter</td><td class="num">−{{ t.exp_counter|inr }}</td></tr>
+<tr><td>Less expenses from counter</td><td class="num">−{{ t.exp_counter|inr }}</td></tr>
 <tr><td>Less staff paid from counter</td><td class="num">−{{ t.staff_cash|inr }}</td></tr>
 <tr><td><b>Cash expected</b></td><td class="num"><b>{{ t.expected_cash|inr }}</b></td></tr><tr><td><b>Cash counted</b></td><td class="num"><b>{{ t.counted_cash|inr if t.counted_cash is not none else '—' }}</b></td></tr>
 <tr><td><b>Short (−) / Excess (+)</b></td><td class="num"><b>{{ t.difference|inr if t.difference is not none else '—' }}</b></td></tr></table>

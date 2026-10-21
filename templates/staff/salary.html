@@ -2,7 +2,7 @@
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Salary – {{ month_name }}</h1>
 <p>Earned = monthly salary × (present + half-days ÷ 2 + weekly offs) ÷ {{ sheet.ndays }} days. Leave and absent are unpaid.</p></div>
-<div class="datenav"><a class="btn secondary small" href="?m={{ prev_m }}">‹</a><b>{{ month_name }}</b>{% if next_m %}<a class="btn secondary small" href="?m={{ next_m }}">›</a>{% endif %}</div></div>
+<div class="datenav"><a class="btn secondary small" href="?m={{ prev_m }}">‹</a><b>{{ month_name }}</b>{% if next_m %}<a class="btn secondary small" href="?m={{ next_m }}">›</a>{% endif %}<a class="btn secondary small" href="{{ url_for('reports.attendance_xlsx', m=ym) }}">Excel</a></div></div>
 <section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Staff</th><th class="num">Salary</th><th class="num">P</th><th class="num">½</th><th class="num">Off</th><th class="num">A/L</th><th class="num">Unmarked</th><th class="num">Earned</th><th class="num">Advance</th><th class="num">Paid</th><th class="num">Still to pay</th></tr></thead><tbody>
 {% for r in sheet.rows %}<tr><td><b>{{ r.staff.name }}</b></td><td class="num">{{ r.staff.monthly_salary|inr }}</td><td class="num">{{ r.att.get('P',0) }}</td><td class="num">{{ r.att.get('H',0) }}</td><td class="num">{{ r.att.get('O',0) }}</td>
 <td class="num">{{ r.att.get('A',0) + r.att.get('L',0) }}</td><td class="num {% if sheet.ndays - r.marked > 0 %}neg{% endif %}">{{ sheet.ndays - r.marked }}</td>

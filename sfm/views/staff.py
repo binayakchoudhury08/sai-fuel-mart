@@ -42,6 +42,7 @@ def save():
          "monthly_salary": to_dec(request.form.get("monthly_salary"), "Monthly salary"),
          "joined_on": parse_date(request.form["joined_on"], "Joining date") if request.form.get("joined_on") else None,
          "bank_account": clean(request.form.get("bank_account"), 40),
+         "department": clean(request.form.get("department"), 40), "shift": clean(request.form.get("shift"), 20),
          "active": request.form.get("active", "1") == "1"}
     if not f["name"] or not f["emp_code"]:
         raise UserError("Name and employee code are required.")
@@ -57,13 +58,15 @@ def save():
                 abort(404)
             cur.execute("""UPDATE staff SET emp_code=%(emp_code)s, name=%(name)s, phone=%(phone)s,
                            designation=%(designation)s, monthly_salary=%(monthly_salary)s, joined_on=%(joined_on)s,
-                           bank_account=%(bank_account)s, active=%(active)s WHERE id=%(id)s RETURNING *""",
+                           bank_account=%(bank_account)s, active=%(active)s, department=%(department)s, shift=%(shift)s
+                           WHERE id=%(id)s RETURNING *""",
                         {**f, "id": sid})
             audit(cur, "update", "staff", sid, f"Edited staff {f['name']}", before=old, after=cur.fetchone())
         else:
-            cur.execute("""INSERT INTO staff (emp_code, name, phone, designation, monthly_salary, joined_on, bank_account)
+            cur.execute("""INSERT INTO staff (emp_code, name, phone, designation, monthly_salary, joined_on, bank_account,
+                                              department, shift)
                            VALUES (%(emp_code)s,%(name)s,%(phone)s,%(designation)s,%(monthly_salary)s,%(joined_on)s,
-                                   %(bank_account)s) RETURNING *""", f)
+                                   %(bank_account)s,%(department)s,%(shift)s) RETURNING *""", f)
             s = cur.fetchone()
             audit(cur, "create", "staff", s["id"], f"Added staff {f['name']} ({f['emp_code']})", after=s)
     flash("Staff saved.", "success")
