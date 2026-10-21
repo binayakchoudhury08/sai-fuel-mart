@@ -2,6 +2,7 @@ services:
   - type: web
     name: sai-fuel-mart
     runtime: python
+    region: singapore   # same region as the Supabase database (ap-southeast-1)
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120
     healthCheckPath: /healthz

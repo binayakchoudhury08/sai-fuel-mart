@@ -25,26 +25,36 @@ def home():
 def dashboard():
     t0 = today()
     with db.tx() as cur:
-        td = compute_day(cur, t0)
         span = range_summary(cur, t0 - timedelta(days=13), t0)
+        # today's headline numbers come from the same summary as the chart (same formula as Daily closing)
+        cur.execute("""SELECT (SELECT COUNT(*) FROM nozzles WHERE active) AS needed,
+                              (SELECT COUNT(*) FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
+                               WHERE n.active AND r.business_date=%s) AS done,
+                              (SELECT status FROM days WHERE business_date=%s) AS status""", (t0, t0))
+        rd = cur.fetchone()
+        tr = next((r for r in span if r["date"] == t0), None)
+        td = {"status": rd["status"] or "open", "readings_done": rd["done"], "readings_needed": rd["needed"],
+              "gross_sale": tr["gross_sale"] if tr else ZERO, "expected_cash": tr["expected_cash"] if tr else ZERO}
         parties = party_balances(cur, active_only=False)
         lube = [p for p in lube_stock(cur) if p["active"] and Decimal(p["stock"]) <= Decimal(p["reorder_level"])]
-        tanks = tank_reconciliation(cur, t0)
+        from ..services import tank_series, avg_daily_sales
+        two = tank_series(cur, t0 - timedelta(days=1), t0)      # yesterday + today in one go
+        tanks = [r for r in two if r["date"] == t0]
         if all(r["actual"] is None for r in tanks):
-            tanks = tank_reconciliation(cur, t0 - timedelta(days=1))
+            tanks = [r for r in two if r["date"] != t0]
+        avgs = avg_daily_sales(cur, t0)
         days_left = {}
         for r in tanks:
-            avg = avg_daily_sale(cur, r["tank"]["fuel_code"], t0)
+            avg = avgs.get(r["tank"]["fuel_code"], ZERO)
             if r["actual"] is not None and avg > 0:
                 days_left[r["tank"]["id"]] = (r["actual"] / avg).quantize(Decimal("0.1"))
         cur.execute("""SELECT business_date, status FROM days
                        WHERE business_date BETWEEN %s AND %s AND status <> 'locked' AND NOT is_legacy
                        ORDER BY business_date""", (t0 - timedelta(days=30), t0 - timedelta(days=1)))
         pending = cur.fetchall()
-        cur.execute("SELECT COUNT(*) AS n FROM nozzles WHERE active")
-        setup_nozzles = cur.fetchone()["n"]
-        cur.execute("SELECT COUNT(*) AS n FROM fuel_rates")
-        setup_rates = cur.fetchone()["n"]
+        cur.execute("SELECT (SELECT COUNT(*) FROM nozzles WHERE active) AS nz, (SELECT COUNT(*) FROM fuel_rates) AS fr")
+        cnt = cur.fetchone()
+        setup_nozzles, setup_rates = cnt["nz"], cnt["fr"]
     by_date = {r["date"]: r for r in span}
     chart = []
     for i in range(13, -1, -1):

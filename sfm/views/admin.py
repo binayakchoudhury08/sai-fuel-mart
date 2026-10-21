@@ -255,10 +255,24 @@ def audit_log():
 @login_required("owner")
 def import_legacy():
     from flask import current_app
-    from ..migrate_legacy import inspect_legacy, is_running, read_state, start_background
+    from ..migrate_legacy import (inspect_legacy, is_running, read_state, run_inline, start_background,
+                                  stuck_sessions)
     if request.method == "POST":
         if request.form.get("confirm") != "IMPORT":
             raise UserError("Type IMPORT in capitals to confirm.")
+        st = read_state() or {}
+        if is_running(st):
+            return redirect(url_for("admin.import_legacy"))
+        if request.form.get("mode") == "wait":
+            from ..migrate_legacy import write_state
+            write_state(state="running", step="Importing (while you wait)", pct=50, error=None, report=None,
+                        started_at=__import__("time").time())
+            try:
+                rep = run_inline(current_user()["username"])
+            except Exception as e:
+                write_state(state="failed", step="Stopped", error=f"{type(e).__name__}: {str(e)[:300]}")
+                raise
+            return render_template("admin/import_done.html", report=_decimalize(rep))
         start_background(current_app._get_current_object(), current_user()["username"])
         return redirect(url_for("admin.import_legacy"))
     st = read_state() or {}
@@ -267,7 +281,34 @@ def import_legacy():
     if st.get("state") == "done" and st.get("report"):
         return render_template("admin/import_done.html", report=_decimalize(st["report"]))
     info = inspect_legacy()
-    return render_template("admin/import.html", info=info, failed=st if st.get("state") in ("failed", "running") else None)
+    failed = None
+    if st.get("state") == "failed":
+        failed = st
+    elif st.get("state") == "running":   # went silent: describe where it stopped, don't guess
+        from datetime import datetime as _dt
+        from ..util import IST
+        hb = float(st.get("heartbeat") or 0)
+        failed = dict(st, error=f"it went silent at step '{st.get('step')}' "
+                                f"(last sign of life {_dt.fromtimestamp(hb, IST).strftime('%d %b %I:%M %p') if hb else 'unknown'}"
+                                f"{'; it was ' + st['waiting'] if st.get('waiting') else ''})")
+    stuck = [] if info.get("done") else stuck_sessions()
+    return render_template("admin/import.html", info=info, failed=failed, stuck=stuck)
+
+
+@bp.route("/admin/import-legacy/end-stuck", methods=["POST"])
+@login_required("owner")
+def import_end_stuck():
+    from ..migrate_legacy import end_stuck_sessions, is_running, read_state
+    st = read_state() or {}
+    if is_running(st):
+        raise UserError("An import is running right now; wait for it to finish or stop.")
+    ended = end_stuck_sessions()
+    with db.tx() as cur:
+        audit(cur, "admin", "database", None,
+              f"Ended {len(ended)} stuck database session(s): " + ", ".join(str(r["pid"]) for r in ended))
+    flash(f"Ended {len(ended)} stuck database session(s). You can start the import now." if ended
+          else "No stuck sessions found.", "success" if ended else "info")
+    return redirect(url_for("admin.import_legacy"))
 
 
 @bp.route("/admin/import-legacy/status")
@@ -276,9 +317,11 @@ def import_status():
     from flask import jsonify
     from ..migrate_legacy import is_running, read_state
     st = read_state() or {}
-    return jsonify({"state": st.get("state") if (st.get("state") != "running" or is_running(st)) else "failed",
-                    "step": st.get("step"), "pct": st.get("pct"), "error": st.get("error") or
-                    ("The import stopped (server restarted). Nothing was saved — start it again." if st.get("state") == "running" and not is_running(st) else None),
+    alive = is_running(st)
+    return jsonify({"state": st.get("state") if (st.get("state") != "running" or alive) else "failed",
+                    "step": st.get("step"), "pct": st.get("pct"), "waiting": st.get("waiting"),
+                    "error": st.get("error") or
+                    (f"The import went silent at step '{st.get('step')}'. Nothing was saved." if st.get("state") == "running" and not alive else None),
                     "elapsed": round(__import__("time").time() - float(st.get("started_at") or 0)) if st.get("started_at") else 0})
 
 

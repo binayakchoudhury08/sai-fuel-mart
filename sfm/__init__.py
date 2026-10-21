@@ -74,21 +74,39 @@ def create_app():
             return
         uid = session.get("uid")
         if uid:
-            try:
-                u = db.one("SELECT id, username, full_name, role, active, must_change_pw, password_hash "
-                           "FROM users WHERE id=%s", (uid,))
-            except Exception:
-                u = None
-                raise
+            u = db.one("SELECT id, username, full_name, role, active, must_change_pw, password_hash, "
+                       "(SELECT value FROM settings WHERE key='station_name') AS station_name "
+                       "FROM users WHERE id=%s", (uid,))
+            if u and u.get("station_name"):
+                g.station_name = u["station_name"]
             stamp = hashlib.sha256(u["password_hash"].encode()).hexdigest()[:16] if u else None
             if not u or not u["active"] or session.get("pw") != stamp:
                 session.clear()
             else:
                 u = dict(u)
                 u.pop("password_hash", None)
+                u.pop("station_name", None)
                 g.user = u
         if request.method == "POST" and not (request.endpoint or "").startswith("api."):
             check_csrf()
+
+    @app.after_request
+    def compress(resp):
+        import gzip
+        if (resp.direct_passthrough or resp.status_code < 200 or resp.status_code >= 300
+                or "gzip" not in (request.headers.get("Accept-Encoding") or "")
+                or resp.headers.get("Content-Encoding")
+                or resp.mimetype not in ("text/html", "application/json", "text/css", "application/javascript",
+                                         "image/svg+xml")):
+            return resp
+        data = resp.get_data()
+        if len(data) < 1400:
+            return resp
+        resp.set_data(gzip.compress(data, compresslevel=5))
+        resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Content-Length"] = str(len(resp.get_data()))
+        resp.vary.add("Accept-Encoding")
+        return resp
 
     @app.after_request
     def headers(resp):
@@ -105,13 +123,20 @@ def create_app():
                 "can": can, "today": today(), "ROLE_LABEL": ROLE_LABEL, "VERSION": VERSION,
                 "station_name": _station_name()}
 
+    _name_cache = {"v": None, "t": 0.0}
+
     def _station_name():
         if "station_name" not in g:
-            try:
-                r = db.one("SELECT value FROM settings WHERE key='station_name'")
-                g.station_name = r["value"] if r else "Sai Fuel Mart"
-            except Exception:
-                g.station_name = "Sai Fuel Mart"
+            import time as _t
+            if _name_cache["v"] and _t.time() - _name_cache["t"] < 300:
+                g.station_name = _name_cache["v"]
+            else:
+                try:
+                    r = db.one("SELECT value FROM settings WHERE key='station_name'")
+                    g.station_name = r["value"] if r else "Sai Fuel Mart"
+                    _name_cache.update(v=g.station_name, t=_t.time())
+                except Exception:
+                    g.station_name = "Sai Fuel Mart"
         return g.station_name
 
     app.jinja_env.filters.update(inr=inr, qty=qty, d=fmt_date)

@@ -33,35 +33,38 @@ def _get_pool():
     return _pool
 
 
-def _checkout():
-    pool = _get_pool()
-    conn = pool.getconn()
-    # a pooled connection can die while idle (Supabase/pgbouncer restarts);
-    # test it cheaply and replace it once if needed
-    try:
-        if conn.closed:
-            raise psycopg2.InterfaceError("closed")
-        with conn.cursor() as c:
-            c.execute("SELECT 1")
-        conn.rollback()
-    except Exception:
-        try:
-            pool.putconn(conn, close=True)
-        except Exception:
-            pass
+_PREP = "SET LOCAL search_path TO pump, public; SET LOCAL TIME ZONE 'Asia/Kolkata'"
+
+
+def _begin(pool):
+    """Get a pooled connection and open the transaction with ONE round trip.
+    (Before: a SELECT 1 health check + rollback + two SET statements = 4 trips.)
+    A connection that died while idle fails right here, before any of the
+    caller's work ran, so it is safe to swap it for a fresh one and retry."""
+    for attempt in range(3):
         conn = pool.getconn()
-    return conn
+        try:
+            if conn.closed:
+                raise psycopg2.InterfaceError("closed")
+            cur = conn.cursor()
+            cur.execute(_PREP)
+            return conn, cur
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try:
+                pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            if attempt == 2:
+                raise
 
 
 @contextmanager
 def tx():
     """Yield a cursor in one transaction. Commit on success, roll back on error."""
-    conn = _checkout()
+    pool = _get_pool()
+    conn, cur = _begin(pool)
     broken = False
     try:
-        cur = conn.cursor()
-        cur.execute("SET LOCAL search_path TO pump, public")
-        cur.execute("SET LOCAL TIME ZONE 'Asia/Kolkata'")
         yield cur
         conn.commit()
     except psycopg2.OperationalError:
@@ -79,7 +82,7 @@ def tx():
         raise
     finally:
         try:
-            _get_pool().putconn(conn, close=broken or conn.closed)
+            pool.putconn(conn, close=broken or conn.closed)
         except Exception:
             pass
 

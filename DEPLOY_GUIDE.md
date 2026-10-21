@@ -95,12 +95,51 @@ Push the new code; Render redeploys. The database upgrades itself on start (new 
 nothing is removed). If you already ran "Import old data" on 2.0, old transport entries stay as they are
 (fuel and cash as separate lines) — balances are unaffected. The Android app does not need reinstalling.
 
-## If the old-data import seems stuck
+## Speed: put the server next to the database (most important)
 
-Version 2.1 runs the import in the background with a progress bar (a year of data takes well under a minute).
-You can close the page; open Settings → Import old data again to see progress or the result. If the server
-restarts during the import, nothing is saved and the page lets you start again. (Earlier builds ran it inside
-the web request and Render cut it off after 2 minutes, leaving the page loading forever.)
+Your Supabase database is in **Singapore** (`aws-1-ap-southeast-1`). The old `render.yaml` had no region, so
+Render created the web service in its default region, **Oregon, USA**. Every database request then crosses the
+Pacific (~170 ms each), and a page needs 6–24 of them.
+
+| Page | Server in Oregon | Server in Singapore |
+|---|---|---|
+| Overview (dashboard) | ~4 s | ~0.1 s |
+| Daily closing | ~3.6 s | ~0.1 s |
+| Credit transport | ~1.7 s | ~0.03 s |
+| Import a year of old data | ~30 s | ~1–2 s |
+
+Render cannot change the region of an existing service, so make a new one (about 10 minutes):
+
+1. Render → **New → Web Service** → pick the same GitHub repo → **Region: Singapore**.
+   Build command `pip install -r requirements.txt`, start command
+   `gunicorn app:app --workers 2 --threads 4 --timeout 120`, health check path `/healthz`.
+2. Old service → **Environment** → copy every variable into the new service (DATABASE_URL, SECRET_KEY,
+   SETUP_CODE, TANK_SYNC_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, PYTHON_VERSION).
+   Use the **same SECRET_KEY** so nobody is signed out.
+3. Deploy and open the new address. It uses the same database, so all data is already there; don't import again.
+4. The new service gets a new address (e.g. `https://sai-fuel-mart-xxxx.onrender.com`). Update it in:
+   - the Android app: long-press the Back button → Server address;
+   - the **ATG bookmarklet** on the ATG computer: replace the old address in its `/api/tank-sync` link.
+   (To keep one permanent address, add your own domain under Settings → Custom Domains.)
+5. When everything works, delete the old Oregon service.
+
+Also worth knowing: the **free** Render plan sleeps after 15 minutes idle (first open then takes 30–60 s) and gets
+a small slice of CPU. For a business used all day, the **Starter** plan (about $7/month) keeps it awake and faster.
+
+Built-in speed-ups in this version: about 60% fewer database trips per page, pages sent compressed (about 5×
+smaller on mobile data), and the old-data import sends rows in batches.
+
+## If the old-data import seems stuck or says it stopped
+
+1. Open Settings → Import old data. If a red box **Stuck database sessions** appears, press
+   **End stuck sessions**. These are earlier import attempts that never finished (for example from the old slow
+   version) and still hold the import lock; ending them is safe because their work was never saved.
+2. Type IMPORT and press **Import now** (background, with progress bar). If the import has to wait more than
+   20 seconds for another session it stops by itself and tells you why — it never hangs silently any more.
+3. If the background import still stops, use **Import while I wait** (runs inside the page; keep it open).
+4. Render → your service → **Logs** shows each step as `IMPORT 35% Transport entries` and any error in full.
+   Also check Render → Settings → Start command is
+   `gunicorn app:app --workers 2 --threads 4 --timeout 120` (the old one was just `gunicorn app:app`).
 
 ## ATG automation (HP Smart Connect bookmarklet)
 

@@ -29,6 +29,23 @@ Reports (every report has PDF and Excel)
   daily sale chart, top transporters, top lube products, expenses by category, staff today.
 - Business Excel with charts (monthly trend line chart, outstanding pie chart, daily sale bar chart) plus all data.
 
+Import that "stopped: server restarted" — fixed
+- Cause (reproduced): an earlier, abandoned import attempt was still holding the import lock in an open database
+  transaction, so the new import waited behind it with no time limit; after 5 minutes of silence the page
+  guessed "the server restarted".
+- Now: the import waits at most 20 s for another session and then stops with a clear reason; the progress screen
+  shows what it is waiting for; the import page lists stuck sessions with an "End stuck sessions" button; a
+  separate heartbeat keeps status honest; every step is written to Render's logs; new "Import while I wait" option.
+
+Speed
+- Fewer database trips on every page: the per-transaction health check and setup statements went from 4 trips
+  to 1; the signed-in user and pump name load in one query; the dashboard reuses its chart data instead of
+  recomputing the whole day; tank averages load in one query. Pages now make 6–24 trips (were 18–48).
+- Pages and data are sent gzip-compressed (Daily closing 26 KB → 5 KB).
+- Old-data import: parties and lube products in batches, progress updates over one reused connection;
+  a year of data in 231 trips (≈30 s worst case, ≈1–2 s with server and database in the same region).
+- render.yaml now sets region: singapore to match the Supabase database (see DEPLOY_GUIDE → Speed).
+
 Old-data import fixed (was loading forever)
 - Cause: it sent every old row to the database one at a time — about 40,000 trips for a year of data, which
   takes 3–100 minutes from Render to Supabase, but Render stops a request after 2 minutes.

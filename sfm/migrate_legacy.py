@@ -8,6 +8,8 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from flask import g
+import psycopg2
+import psycopg2.errors
 from psycopg2.extras import execute_values
 
 from . import db
@@ -95,7 +97,7 @@ def inspect_legacy():
     return info
 
 
-def run_import(username, progress=lambda step, pct: None):
+def run_import(username, progress=lambda step, pct, **kw: None):
     rep = {"counts": {}, "issues": [], "balances": []}
     T = today()
 
@@ -103,8 +105,15 @@ def run_import(username, progress=lambda step, pct: None):
         rep["counts"][k] = rep["counts"].get(k, 0) + n
 
     with db.tx() as cur:
-        cur.execute("SET LOCAL statement_timeout = 0")
-        cur.execute("SELECT pg_advisory_xact_lock(990011)")
+        # never wait forever behind another session (an abandoned earlier attempt, a stuck connection)
+        cur.execute("SET LOCAL lock_timeout = '20s'; SET LOCAL statement_timeout = '300s'")
+        cur.execute("SELECT pg_backend_pid() AS pid")
+        progress("Reading old tables", 3, pid=cur.fetchone()["pid"])
+        try:
+            cur.execute("SELECT pg_advisory_xact_lock(990011)")
+        except psycopg2.errors.LockNotAvailable:
+            raise UserError("Another database session is still holding the import (probably an earlier attempt "
+                            "that never finished). Use 'End stuck sessions' on this page, then start again.")
         progress("Reading old tables", 5)
         cur.execute("SELECT value FROM settings WHERE key='legacy_imported_at'")
         if cur.fetchone():
@@ -234,33 +243,38 @@ def run_import(username, progress=lambda step, pct: None):
         # ---------------- parties
         party_map, party_by_name, old_balance = {}, {}, {}
         rows, cols = _rows(cur, "credit_transporters")
+        cur.execute("SELECT LOWER(TRIM(name)) AS n FROM parties")
+        taken = {r["n"] for r in cur.fetchall()}
+        prows, meta = [], {}
         for r in rows:
             name = _s(r.get("party_name"), 100) or f"Party {r['id']}"
             base, k = name, 2
-            while True:
-                cur.execute("SELECT 1 FROM parties WHERE LOWER(TRIM(name))=LOWER(TRIM(%s))", (name,))
-                if not cur.fetchone():
-                    break
+            while name.strip().lower() in taken:
                 name = f"{base} ({k})"
                 k += 1
+            taken.add(name.strip().lower())
             if name != base:
                 rep["issues"].append(f"Duplicate party name '{base}' imported as '{name}'")
             mobile = "".join(c for c in _s(r.get("mobile")) if c.isdigit())[-10:]
-            cur.execute("""INSERT INTO parties (name, mobile, vehicles, active, legacy_id, discount_per_litre)
-                           VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
-                        (name, mobile, _s(r.get("vehicle_no"), 400).upper(),
-                         _s(r.get("status")).lower() != "inactive", r["id"], max(_n(r.get("discount")), ZERO)))
-            pid = cur.fetchone()["id"]
-            party_map[r["id"]] = pid
-            party_by_name[base.lower()] = pid
-            old_balance[pid] = (name, _n(r.get("balance_due")))
-            ob = _n(r.get("opening_balance")) if "opening_balance" in cols else ZERO
+            prows.append((name, mobile, _s(r.get("vehicle_no"), 400).upper(),
+                          _s(r.get("status")).lower() != "inactive", r["id"], max(_n(r.get("discount")), ZERO)))
+            meta[r["id"]] = (name, base, _n(r.get("balance_due")),
+                             _n(r.get("opening_balance")) if "opening_balance" in cols else ZERO)
+        inserted = execute_values(cur, """INSERT INTO parties (name, mobile, vehicles, active, legacy_id, discount_per_litre)
+                                          VALUES %s RETURNING id, legacy_id""", prows, page_size=500, fetch=True) if prows else []
+        openings = Batch(cur, """INSERT INTO party_txns (party_id, business_date, kind, debit, credit, remarks,
+                                 created_by, is_legacy) VALUES %s""",
+                         "(%s,%s,'opening',%s,%s,'Opening balance (old system)','import',TRUE)")
+        for row in inserted:
+            pid, lid = row["id"], row["legacy_id"]
+            name, base, bal, ob = meta[lid]
+            party_map[lid] = pid
+            party_by_name.setdefault(base.lower(), pid)
+            old_balance[pid] = (name, bal)
             if ob:
-                cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, debit, credit, remarks,
-                                                       created_by, is_legacy)
-                               VALUES (%s,%s,'opening',%s,%s,'Opening balance (old system)','import',TRUE)""",
-                            (pid, earliest, max(ob, ZERO), max(-ob, ZERO)))
+                openings.add((pid, earliest, max(ob, ZERO), max(-ob, ZERO)))
             count("parties")
+        openings.flush()
 
         def pid_for(r):
             if r.get("transporter_id") in party_map:
@@ -337,29 +351,37 @@ def run_import(username, progress=lambda step, pct: None):
                         remarks="Difference between old-system balance and its own entries, at import")
         txns.flush()
 
-        # ---------------- lube
+        # ---------------- lube (same rules: duplicate names combine their stock, negative stock → 0)
         rows, cols = _rows(cur, "lube_stock")
+        cur.execute("SELECT id, LOWER(TRIM(name)) AS n FROM lube_products")
+        existing = {r["n"]: r["id"] for r in cur.fetchall()}
+        new_products, stock_by_name, first_name = [], {}, {}
         for r in rows:
             name = _s(r.get("product_name"), 80)
             if not name:
                 continue
-            cur.execute("SELECT id FROM lube_products WHERE LOWER(TRIM(name))=LOWER(TRIM(%s))", (name,))
-            ex = cur.fetchone()
-            if ex:
-                pid = ex["id"]
+            key = name.strip().lower()
+            if key in existing or key in first_name:
                 rep["issues"].append(f"Lube '{name}' appeared twice; stock combined")
             else:
-                cur.execute("""INSERT INTO lube_products (name, sale_rate, legacy_id) VALUES (%s,%s,%s) RETURNING id""",
-                            (name, _n(r.get("selling_rate")), r["id"]))
-                pid = cur.fetchone()["id"]
+                first_name[key] = name
+                new_products.append((name, _n(r.get("selling_rate")), r["id"]))
                 count("lube products")
             stock = _n(r.get("closing_stock"))
             if stock < 0:
                 rep["issues"].append(f"Lube '{name}' had negative stock {stock} in old system; imported as 0")
                 stock = ZERO
-            if stock:
-                cur.execute("""INSERT INTO lube_moves (product_id, business_date, kind, qty, remarks, created_by)
-                               VALUES (%s,%s,'opening',%s,'Stock carried from old system','import')""", (pid, T, stock))
+            stock_by_name[key] = stock_by_name.get(key, ZERO) + stock
+        if new_products:
+            for row in execute_values(cur, "INSERT INTO lube_products (name, sale_rate, legacy_id) VALUES %s "
+                                           "RETURNING id, LOWER(TRIM(name)) AS n", new_products, page_size=500, fetch=True):
+                existing[row["n"]] = row["id"]
+        moves = Batch(cur, "INSERT INTO lube_moves (product_id, business_date, kind, qty, remarks, created_by) VALUES %s",
+                      "(%s,%s,'opening',%s,'Stock carried from old system','import')")
+        for key, stock in stock_by_name.items():
+            if stock and key in existing:
+                moves.add((existing[key], T, stock))
+        moves.flush()
 
         # ---------------- staff
         staff_by_name, staff_by_code = {}, {}
@@ -544,31 +566,115 @@ def _json_default(v):
     return str(v)
 
 
+_state_db = {"conn": None}
+
+
+def _state_cursor():
+    c = _state_db["conn"]
+    if c is None or c.closed:
+        c = _state_db["conn"] = _state_conn()
+    return c.cursor()
+
+
 def write_state(**kw):
     """Progress lives in its own committed row (the import itself is one big transaction
     that nobody can see until it finishes)."""
-    st = read_state() or {}
-    st.update(kw)
-    st["heartbeat"] = time.time()
-    c = _state_conn()
-    try:
-        with c.cursor() as cur:
+    for attempt in (1, 2):
+        try:
+            cur = _state_cursor()
+            cur.execute("SELECT value FROM pump.settings WHERE key=%s", (STATE_KEY,))
+            r = cur.fetchone()
+            st = json.loads(r[0]) if r and r[0] else {}
+            st.update(kw)
+            st["heartbeat"] = time.time()
             cur.execute("""INSERT INTO pump.settings (key, value) VALUES (%s, %s)
                            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""",
                         (STATE_KEY, json.dumps(st, default=_json_default)))
-    finally:
-        c.close()
+            return
+        except Exception:
+            try:
+                _state_db["conn"].close()
+            except Exception:
+                pass
+            _state_db["conn"] = None
+            if attempt == 2:
+                raise
 
 
 def read_state():
-    c = _state_conn()
     try:
-        with c.cursor() as cur:
-            cur.execute("SELECT value FROM pump.settings WHERE key=%s", (STATE_KEY,))
-            r = cur.fetchone()
-            return json.loads(r[0]) if r and r[0] else None
-    finally:
-        c.close()
+        cur = _state_cursor()
+        cur.execute("SELECT value FROM pump.settings WHERE key=%s", (STATE_KEY,))
+        r = cur.fetchone()
+        return json.loads(r[0]) if r and r[0] else None
+    except Exception:
+        _state_db["conn"] = None
+        cur = _state_cursor()
+        cur.execute("SELECT value FROM pump.settings WHERE key=%s", (STATE_KEY,))
+        r = cur.fetchone()
+        return json.loads(r[0]) if r and r[0] else None
+
+
+STUCK_SQL = """
+    SELECT a.pid, a.state, a.application_name, a.client_addr::text AS client,
+           EXTRACT(EPOCH FROM (now() - a.xact_start))::int AS tx_seconds,
+           EXTRACT(EPOCH FROM (now() - a.state_change))::int AS state_seconds,
+           LEFT(regexp_replace(COALESCE(a.query, ''), '\\s+', ' ', 'g'), 140) AS query,
+           EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = a.pid AND l.locktype = 'advisory'
+                   AND l.objid IN (990011, 842211) AND l.granted) AS holds_import_lock
+    FROM pg_stat_activity a
+    WHERE a.datname = current_database() AND a.pid <> pg_backend_pid() AND a.usename = current_user
+      AND a.xact_start IS NOT NULL
+      AND (now() - a.xact_start > interval '60 seconds'
+           OR EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = a.pid AND l.locktype = 'advisory'
+                      AND l.objid IN (990011, 842211) AND l.granted))
+    ORDER BY a.xact_start
+"""
+
+
+def stuck_sessions(exclude_pid=None):
+    """Database sessions of this app with a transaction open for over a minute or holding the
+    import lock — the usual reason an import 'hangs'."""
+    try:
+        cur = _state_cursor()
+        cur.execute(STUCK_SQL)
+        cols = [c.name for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        return [r for r in rows if r["pid"] != exclude_pid]
+    except Exception as e:
+        return [{"pid": None, "error": str(e)[:200]}]
+
+
+def end_stuck_sessions(exclude_pid=None):
+    ended = []
+    for r in stuck_sessions(exclude_pid):
+        if not r.get("pid"):
+            continue
+        cur = _state_cursor()
+        cur.execute("SELECT pg_terminate_backend(%s)", (r["pid"],))
+        if cur.fetchone()[0]:
+            ended.append(r)
+    return ended
+
+
+def _wait_info(pid):
+    """What the import's database session is doing right now (for the progress screen)."""
+    try:
+        cur = _state_cursor()
+        cur.execute("""SELECT state, wait_event_type, wait_event, pg_blocking_pids(pid) AS blockers,
+                              EXTRACT(EPOCH FROM (now() - state_change))::int AS secs
+                       FROM pg_stat_activity WHERE pid=%s""", (pid,))
+        r = cur.fetchone()
+        if not r:
+            return None
+        state, wtype, wevent, blockers, secs = r
+        if blockers:
+            return f"waiting {secs}s for another database session (pid {', '.join(map(str, blockers))})"
+        if wtype == "Lock":
+            return f"waiting {secs}s for a database lock"
+        return None
+    except Exception:
+        return None
 
 
 def is_running(st=None):
@@ -592,17 +698,62 @@ def start_background(app, username):
 
 
 def _worker(app, username):
+    import logging
+    log = logging.getLogger("sfm.import")
     t0 = time.time()
+    info = {"pid": None, "step": "Starting", "pct": 1, "alive": True}
+
+    def beat():
+        # keeps the 'still alive' signal going even while one database step is slow,
+        # and reports what the import is waiting on
+        while info["alive"]:
+            time.sleep(5)
+            if not info["alive"]:
+                break
+            try:
+                waiting = _wait_info(info["pid"]) if info["pid"] else None
+                write_state(state="running", step=info["step"], pct=info["pct"], waiting=waiting, pid=info["pid"])
+            except Exception:
+                pass
+
+    threading.Thread(target=beat, daemon=True, name="legacy-import-heartbeat").start()
     with app.app_context():
         try:
-            def progress(step, pct):
-                write_state(state="running", step=step, pct=pct)
+            def progress(step, pct, pid=None):
+                info.update(step=step, pct=pct)
+                if pid:
+                    info["pid"] = pid
+                log.info("IMPORT %s%% %s", pct, step)
+                write_state(state="running", step=step, pct=pct, waiting=None, pid=info["pid"],
+                            step_at=time.strftime("%H:%M:%S"))
             rep = run_import(username, progress=progress)
             rep["seconds"] = round(time.time() - t0, 1)
-            write_state(state="done", step="Finished", pct=100, report=rep)
+            info["alive"] = False
+            write_state(state="done", step="Finished", pct=100, report=rep, waiting=None)
+            log.info("IMPORT finished in %.1fs", rep["seconds"])
         except UserError as e:
-            write_state(state="failed", step="Stopped", error=str(e))
-        except Exception as e:  # nothing was saved: the whole import is one transaction
-            import logging
-            logging.getLogger("sfm").exception("Legacy import failed")
-            write_state(state="failed", step="Stopped", error=f"{type(e).__name__}: {str(e)[:400]}")
+            info["alive"] = False
+            log.warning("IMPORT stopped: %s", e)
+            write_state(state="failed", step=f"Stopped at: {info['step']}", error=str(e), waiting=None)
+        except BaseException as e:  # nothing was saved: the whole import is one transaction
+            info["alive"] = False
+            log.exception("Legacy import failed")
+            msg = str(e).strip().splitlines()[0][:300] if str(e).strip() else type(e).__name__
+            if isinstance(e, psycopg2.errors.LockNotAvailable):
+                msg = ("Waited 20 seconds for another database session that is holding the same records. "
+                       "Use 'End stuck sessions', then start again.")
+            elif isinstance(e, psycopg2.errors.QueryCanceled):
+                msg = "One database step took longer than 5 minutes and was cancelled. Try 'Import while I wait'."
+            write_state(state="failed", step=f"Stopped at: {info['step']}", error=f"{type(e).__name__}: {msg}",
+                        waiting=None)
+        finally:
+            info["alive"] = False
+
+
+def run_inline(username):
+    """'Import while I wait': same import, in the web request itself (no background job)."""
+    t0 = time.time()
+    rep = run_import(username)
+    rep["seconds"] = round(time.time() - t0, 1)
+    write_state(state="done", step="Finished", pct=100, report=rep, waiting=None)
+    return rep

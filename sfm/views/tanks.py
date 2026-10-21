@@ -20,7 +20,9 @@ api = Blueprint("api", __name__)
 def index():
     d = parse_date(request.args.get("d") or today().isoformat())
     with db.tx() as cur:
-        rec = tank_reconciliation(cur, d)
+        from ..services import tank_series, avg_daily_sales
+        month = tank_series(cur, d.replace(day=1), d)           # whole month once; today is the last day
+        rec = [r for r in month if r["date"] == d]
         cur.execute("""SELECT r.*, t.name AS tank_name, t.fuel_code FROM fuel_receipts r
                        JOIN tanks t ON t.id=r.tank_id
                        WHERE r.business_date BETWEEN %s AND %s ORDER BY r.business_date DESC, r.id DESC""",
@@ -31,20 +33,14 @@ def index():
                     (d - timedelta(days=13), d))
         history = cur.fetchall()
         stats = month_receipt_stats(cur, d)
-        from ..services import tank_series
-        month = tank_series(cur, d.replace(day=1), d)
         mt = {"gain": sum((r["variance"] for r in month if r["variance"] and r["variance"] > 0), Decimal(0)),
               "short": sum((-r["variance"] for r in month if r["variance"] and r["variance"] < 0), Decimal(0)),
               "gain_value": sum((r["value"] for r in month if r["value"] and r["value"] > 0), Decimal(0)),
               "short_value": sum((-r["value"] for r in month if r["value"] and r["value"] < 0), Decimal(0))}
-        from ..services import rates_for
-        rates = rates_for(cur, d)
-        for r in rec:
-            rt = rates.get(r["tank"]["fuel_code"])
-            r["value"] = (r["variance"] * rt).quantize(Decimal("0.01")) if (r["variance"] is not None and rt) else None
+        avgs = avg_daily_sales(cur, d)
         days_left = {}
         for r in rec:
-            avg = avg_daily_sale(cur, r["tank"]["fuel_code"], d)
+            avg = avgs.get(r["tank"]["fuel_code"], Decimal(0))
             if r["actual"] is not None and avg > 0:
                 days_left[r["tank"]["id"]] = (r["actual"] / avg).quantize(Decimal("0.1"))
     return render_template("tanks/index.html", d=d, rec=rec, receipts=receipts, history=history,
@@ -324,11 +320,13 @@ def api_tank_status():
                               temperature_c, density, dip_mm
                        FROM tank_dips ORDER BY tank_id, business_date DESC, updated_at DESC""")
         latest = {r["tank_id"]: r for r in cur.fetchall()}
+        from ..services import avg_daily_sales
+        avgs = avg_daily_sales(cur, t0)
         out = []
         for r in rows:
             t = r["tank"]
             lt = latest.get(t["id"])
-            avg = avg_daily_sale(cur, t["fuel_code"], t0)
+            avg = avgs.get(t["fuel_code"], Decimal(0))
             stock = Decimal(lt["volume_l"]) if lt else None
             atg = (lt["atg"] or {}) if lt else {}
             out.append({

@@ -33,7 +33,7 @@ def day_view(d):
         rates = rates_for(cur, d)
         fl = fuels(cur)
         st = settings_map(cur)
-    editable = _editable(d, t["status"])
+    editable = _editable(d, t["status"], st)
     return render_template("day/day.html", t=t, d=d, parties=parties, products=products, rates=rates,
                            fuels=fl, editable=editable, PAY_MODES=PAY_MODES,
                            DENOMINATIONS=DENOMINATIONS, EXPENSE_CATEGORIES=EXPENSE_CATEGORIES,
@@ -42,7 +42,7 @@ def day_view(d):
                            tolerance=Decimal(st.get("cash_tolerance") or "0"))
 
 
-def _editable(d, status):
+def _editable(d, status, st=None):
     """Same rules as assert_writable, evaluated for display only."""
     if d > today() or status == "locked":
         return False
@@ -50,8 +50,8 @@ def _editable(d, status):
         return False
     if role() != "owner":
         try:
-            back = int(db.one("SELECT value FROM settings WHERE key='backdate_days'")["value"])
-        except Exception:
+            back = int((st or {}).get("backdate_days") or 2)
+        except (TypeError, ValueError):
             back = 2
         if d < today() - timedelta(days=back):
             return False

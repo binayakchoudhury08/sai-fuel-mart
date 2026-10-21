@@ -433,6 +433,16 @@ def tank_reconciliation(cur, d):
     return tank_series(cur, d, d)
 
 
+def avg_daily_sales(cur, upto, days=7):
+    """{fuel_code: average litres per day over the last `days` days} in one query."""
+    cur.execute("""
+        SELECT n.fuel_code, SUM(r.closing - r.opening - r.testing) AS q, COUNT(DISTINCT r.business_date) AS n
+        FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
+        WHERE r.business_date > %s AND r.business_date <= %s GROUP BY n.fuel_code
+    """, (upto - timedelta(days=days), upto))
+    return {r["fuel_code"]: (Decimal(r["q"]) / r["n"]) for r in cur.fetchall() if r["n"]}
+
+
 def avg_daily_sale(cur, fuel_code, upto, days=7):
     cur.execute("""
         SELECT COALESCE(SUM(r.closing - r.opening - r.testing),0) AS q, COUNT(DISTINCT r.business_date) AS n
