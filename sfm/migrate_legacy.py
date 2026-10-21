@@ -18,7 +18,7 @@ from .util import ZERO, UserError, money, today
 
 LEGACY_TABLES = ["settings", "nozzle_master", "nozzle_entries", "daily_closing", "credit_transporters",
                  "transport_entries", "transporter_ledger", "lube_stock", "lube_transactions", "staff_master",
-                 "attendance", "salary_payments", "tank_level", "fuel_receipts", "proof_register", "activity_log"]
+                 "attendance", "salary_payments", "tank_level", "fuel_receipts", "proof_register"]
 
 
 def _cols(cur, table):
@@ -496,7 +496,7 @@ def run_import(username, progress=lambda step, pct, **kw: None):
                     count("tanker receipts")
         receipts.flush()
 
-        # ---------------- proofs + old activity log
+        # ---------------- proofs  (the old activity log is NOT imported, by owner's choice)
         proofs = Batch(cur, """INSERT INTO proofs (business_date, category, note, file_url, latitude, longitude, created_by,
                                video_url, fuel_code, stock_status, proof_time) VALUES %s""",
                        "(%s,%s,%s,%s,%s,%s,'import',%s,%s,%s,%s)")
@@ -514,16 +514,7 @@ def run_import(username, progress=lambda step, pct, **kw: None):
                              _s(r.get("proof_time"), 20) or _s(r.get("client_time"), 20)))
                 count("proof photos")
         proofs.flush()
-        progress("Old activity log", 90)
-        rows, cols = _rows(cur, "activity_log")
-        logs = Batch(cur, "INSERT INTO audit_log (at, username, role, action, entity, summary) VALUES %s",
-                     "(%s,%s,%s,'legacy',%s,%s)", page=1000)
-        for r in rows:
-            logs.add((r.get("logged_at") or datetime.now(), _s(r.get("username"), 40), _s(r.get("role"), 20),
-                         _s(r.get("module"), 40) or "old system",
-                         f"[old system] {_s(r.get('action'))}: {_s(r.get('description'), 450)}"))
-        logs.flush()
-        count("old activity log rows", len(rows))
+
 
         # ---------------- days: everything before today becomes read-only history
         progress("Locking old days as history", 96)

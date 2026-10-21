@@ -29,6 +29,8 @@ Reports (every report has PDF and Excel)
   daily sale chart, top transporters, top lube products, expenses by category, staff today.
 - Business Excel with charts (monthly trend line chart, outstanding pie chart, daily sale bar chart) plus all data.
 
+Old-data import no longer copies the old activity log (owner's choice); it stays in the old tables.
+
 Import that "stopped: server restarted" — fixed
 - Cause (reproduced): an earlier, abandoned import attempt was still holding the import lock in an open database
   transaction, so the new import waited behind it with no time limit; after 5 minutes of silence the page

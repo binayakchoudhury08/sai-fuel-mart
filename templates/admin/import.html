@@ -15,7 +15,7 @@
 {% for t, n in info.tables.items() %}<tr><td>{{ t }}</td><td class="num">{{ n }} rows</td></tr>{% else %}<tr><td class="empty">No old tables found.</td></tr>{% endfor %}</tbody></table></div></section>
 {% if info.new_entries %}<div class="notice">{{ info.new_entries }} entries were already made in the new app. Importing will add old history alongside them.</div>{% endif %}
 <section class="section"><div class="body stack">
-<p><b>What happens:</b> nozzles, tanks, rates, transporters with full history, lube products with current stock, staff, attendance, salary, tank dips, tanker receipts, photos and the old activity log are copied. Every day before today becomes read-only history.</p>
+<p><b>What happens:</b> nozzles, tanks, rates, transporters with full history, lube products with current stock, staff, attendance, salary, tank dips, tanker receipts, and photos are copied (the old activity log is not imported; it stays in the old database). Every day before today becomes read-only history.</p>
 <p><b>Balances:</b> each transporter’s balance is rebuilt from their old entries and compared with what the old app showed. Any difference is added as one clearly labelled adjustment, and you get a list to check.</p>
 <p><b>How long:</b> usually under a minute; a few minutes for several years of data. A progress bar shows each step.</p>
 <p><b>Do this first:</b> download a backup of the old app (old Settings → Full system export).</p>

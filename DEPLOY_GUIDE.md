@@ -46,7 +46,7 @@ For photo proofs: Supabase → Storage → New bucket named `proofs`, set to **P
 1. Open your site. It goes to **Create the owner account**. Enter the `SETUP_CODE`, your username and a strong password.
 2. Settings → **Import old data** (shown when old tables exist). Download a backup from the old app first.
    Type `IMPORT`. It copies nozzles, rates, transporters with history, lube stock, staff, attendance,
-   salary, tank dips, tanker receipts, photos and the old activity log, all in one go.
+   salary, tank dips, tanker receipts and photos, all in one go (the old activity log is left out).
 3. Read the import report. For each transporter it shows the balance the old app displayed and what its
    entries actually add up to. Differences (from the old app's bugs) are added as one labelled
    "adjustment" so balances stay what you have been billing. Check any big difference with the party.
