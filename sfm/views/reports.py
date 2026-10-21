@@ -83,21 +83,32 @@ def outstanding():
 def credit_register():
     start, end = _range()
     kind = request.args.get("kind") or ""
+    fmt = request.args.get("format")
+    try:
+        page = max(1, int(request.args.get("page") or 1))
+    except ValueError:
+        page = 1
+    per = 300
     with db.tx() as cur:
-        sql = """SELECT t.*, p.name AS party_name, lp.name AS lube_name FROM party_txns t
-                 JOIN parties p ON p.id=t.party_id LEFT JOIN lube_products lp ON lp.id=t.lube_product_id
-                 WHERE t.business_date BETWEEN %s AND %s"""
+        where = "t.business_date BETWEEN %s AND %s"
         params = [start, end]
         if kind in PARTY_KIND_LABEL:
-            sql += " AND t.kind=%s"
+            where += " AND t.kind=%s"
             params.append(kind)
-        sql += " ORDER BY t.business_date, t.id"
+        cur.execute(f"""SELECT COUNT(*) AS n, COALESCE(SUM(debit) FILTER (WHERE NOT voided),0) AS d,
+                               COALESCE(SUM(credit) FILTER (WHERE NOT voided),0) AS c
+                        FROM party_txns t WHERE {where}""", params)
+        agg = cur.fetchone()
+        sql = f"""SELECT t.*, p.name AS party_name, lp.name AS lube_name FROM party_txns t
+                  JOIN parties p ON p.id=t.party_id LEFT JOIN lube_products lp ON lp.id=t.lube_product_id
+                  WHERE {where} ORDER BY t.business_date, t.id"""
+        if fmt != "xlsx":
+            sql += f" LIMIT {per} OFFSET {(page - 1) * per}"
         cur.execute(sql, params)
         rows = cur.fetchall()
-    live = [r for r in rows if not r["voided"]]
-    tot = {"debit": sum((Decimal(r["debit"]) for r in live), ZERO),
-           "credit": sum((Decimal(r["credit"]) for r in live), ZERO)}
-    if request.args.get("format") == "xlsx":
+    tot = {"debit": Decimal(agg["d"]), "credit": Decimal(agg["c"])}
+    pages = max(1, -(-agg["n"] // per))
+    if fmt == "xlsx":
         data = [[r["business_date"], r["party_name"], PARTY_KIND_LABEL[r["kind"]], r["fuel_code"] or r["lube_name"],
                  r["qty"] or None, r["rate"] or None, r["debit"] or None, r["credit"] or None, r["pay_mode"],
                  r["receipt_no"], r["vehicle_no"], r["challan_no"], r["slip_no"], r["reference"], r["remarks"],
@@ -109,7 +120,7 @@ def credit_register():
     if request.args.get("format") == "pdf":
         return credit_register_pdf()
     return render_template("reports/credit_register.html", rows=rows, tot=tot, start=start, end=end, kind=kind,
-                           KIND=PARTY_KIND_LABEL)
+                           KIND=PARTY_KIND_LABEL, page=page, pages=pages, count=agg["n"])
 
 
 @bp.route("/reports/lube.xlsx")

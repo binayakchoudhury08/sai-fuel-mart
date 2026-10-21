@@ -5,8 +5,8 @@ from decimal import Decimal
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from .. import db
-from ..security import (assert_writable, audit, can, claim_form_token, current_user, login_required,
-                        role)
+from ..security import (assert_writable, audit, can, can_unlock, claim_form_token, current_user, login_required,
+                        managers_edit_history, role)
 from ..services import (DENOMINATIONS, EXPENSE_CATEGORIES, PAY_MODES, compute_day, lube_stock,
                         party_balances, rates_for, settings_map, snapshot_of, fuels)
 from ..util import ZERO, UserError, clean, money, parse_date, to_dec, today
@@ -30,16 +30,19 @@ def day_view(d):
         t = compute_day(cur, d)
         parties = [p for p in party_balances(cur, active_only=True)]
         products = [p for p in lube_stock(cur) if p["active"]]
+        cur.execute("SELECT id, name, emp_code FROM staff WHERE active ORDER BY name")
+        staff = cur.fetchall()
         rates = rates_for(cur, d)
         fl = fuels(cur)
         st = settings_map(cur)
+        may_lock = can_unlock(cur)
     editable = _editable(d, t["status"], st)
-    return render_template("day/day.html", t=t, d=d, parties=parties, products=products, rates=rates,
+    return render_template("day/day.html", t=t, d=d, parties=parties, products=products, rates=rates, staff=staff,
                            fuels=fl, editable=editable, PAY_MODES=PAY_MODES,
                            DENOMINATIONS=DENOMINATIONS, EXPENSE_CATEGORIES=EXPENSE_CATEGORIES,
                            prev_day=d - timedelta(days=1),
                            next_day=d + timedelta(days=1) if d < today() else None,
-                           tolerance=Decimal(st.get("cash_tolerance") or "0"))
+                           tolerance=Decimal(st.get("cash_tolerance") or "0"), may_lock=may_lock)
 
 
 def _editable(d, status, st=None):
@@ -48,7 +51,7 @@ def _editable(d, status, st=None):
         return False
     if status == "submitted" and role() == "operator":
         return False
-    if role() != "owner":
+    if role() != "owner" and not (role() == "manager" and (st or {}).get("managers_edit_history") == "1"):
         try:
             back = int((st or {}).get("backdate_days") or 2)
         except (TypeError, ValueError):
@@ -303,8 +306,23 @@ def lube_sale(d):
             raise UserError(f"{p['name']} has no selling rate. Set it in Lube stock.")
         cur.execute("SELECT COALESCE(SUM(qty),0) AS s FROM lube_moves WHERE product_id=%s AND NOT voided", (pid,))
         stock = Decimal(cur.fetchone()["s"])
+        if q > stock and request.form.get("add_stock") == "1":
+            # stock is in the office but its purchase was not entered yet: add exactly what is missing
+            if not can("manager"):
+                raise UserError("Only a manager or the owner can add stock. Ask them, or record the purchase in Lube stock.")
+            add = q - stock
+            bill = clean(request.form.get("stock_bill"), 60)
+            cur.execute("""INSERT INTO lube_moves (product_id, business_date, kind, qty, rate, amount, remarks, created_by)
+                           VALUES (%s,%s,'purchase',%s,0,0,%s,%s) RETURNING id""",
+                        (pid, d, add, ("Stock added from daily closing" + (f" – bill {bill}" if bill else "")
+                                       + " (purchase details to be completed)"), current_user()["username"]))
+            audit(cur, "create", "lube_move", cur.fetchone()["id"],
+                  f"Added {add} {p['unit']} of {p['name']} to stock from daily closing (stock was {stock})",
+                  business_date=d)
+            stock = q
         if q > stock:
-            raise UserError(f"Only {stock} {p['unit']} of {p['name']} in stock. Record the purchase first.")
+            raise UserError(f"Only {stock} {p['unit']} of {p['name']} in stock. If it has arrived, tick "
+                            "“Stock has arrived – add it” on the lube form, or use “Add stock that arrived”.")
         amount = money(q * rate)
         txn_id = None
         party_name = ""
@@ -391,11 +409,22 @@ def submit(d):
 
 
 @bp.route("/day/<d>/lock", methods=["POST"])
-@login_required("owner")
+@login_required("manager")
 def lock(d):
     d = parse_date(d)
     with db.tx() as cur:
+        if not can_unlock(cur):
+            raise UserError("Only the owner can verify and lock a day.")
         cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"day:{d.isoformat()}",))
+        cur.execute("SELECT is_legacy, status FROM days WHERE business_date=%s", (d,))
+        lg = cur.fetchone()
+        if lg and lg["is_legacy"] and lg["status"] != "locked":
+            # imported days have no cash count from the new system; lock them back as they were
+            cur.execute("UPDATE days SET status='locked', locked_by=%s, locked_at=NOW() WHERE business_date=%s",
+                        (current_user()["username"], d))
+            audit(cur, "lock", "day", d.isoformat(), "Imported day locked again after editing", business_date=d)
+            flash(f"{d.strftime('%d %b %Y')} locked again.", "success")
+            return redirect(url_for("day.day_view", d=d.isoformat()))
         t = compute_day(cur, d)
         if t["status"] == "locked":
             raise UserError("Already locked.")
@@ -415,19 +444,20 @@ def lock(d):
 
 
 @bp.route("/day/<d>/unlock", methods=["POST"])
-@login_required("owner")
+@login_required("manager")
 def unlock(d):
     d = parse_date(d)
     reason = clean(request.form.get("reason"), 300)
     if not reason:
         raise UserError("Write why the day is being unlocked. It is kept in the audit log.")
     with db.tx() as cur:
+        if not can_unlock(cur):
+            raise UserError("Only the owner can reopen a locked day. The owner can allow managers in "
+                            "Settings → Old data editing.")
         cur.execute("SELECT * FROM days WHERE business_date=%s FOR UPDATE", (d,))
         day = cur.fetchone()
         if not day or day["status"] == "open":
             raise UserError("Day is already open.")
-        if day["is_legacy"]:
-            raise UserError("Days imported from the old system stay read-only.")
         cur.execute("UPDATE days SET status='open' WHERE business_date=%s", (d,))
         audit(cur, "unlock", "day", d.isoformat(), f"Unlocked ({day['status']} → open): {reason}",
               before={"status": day["status"], "snapshot": day["snapshot"]}, business_date=d)

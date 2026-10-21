@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% block title %}Credit register{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Credit register{% endblock %}
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Credit register</h1><p>Every party entry, including cancelled ones, {{ start|d }} to {{ end|d }}.</p></div></div>
 {% include "reports/_tabs.html" %}
@@ -9,5 +9,5 @@
 <td><small>{% if r.kind=='fuel' %}{{ r.qty }} {{ r.fuel_code }} @ {{ r.rate }}{% endif %}{% if r.kind=='lube' %}{{ r.lube_name }} × {{ r.qty }}{% endif %}{% if r.receipt_no %}{{ r.pay_mode }} {{ r.receipt_no }}{% endif %} {{ r.vehicle_no }} {{ r.challan_no }} {{ r.slip_no }}{% if r.voided %} · cancelled: {{ r.void_reason }}{% endif %}</small></td>
 <td class="num">{{ r.debit|inr if r.debit else '' }}</td><td class="num">{{ r.credit|inr if r.credit else '' }}</td><td><small>{{ r.created_by }}</small></td></tr>
 {% else %}<tr><td colspan="7" class="empty">No entries in this range.</td></tr>{% endfor %}</tbody>
-<tfoot><tr><td colspan="4">Total (not counting cancelled)</td><td class="num">{{ tot.debit|inr }}</td><td class="num">{{ tot.credit|inr }}</td><td></td></tr></tfoot></table></div></section>
+<tfoot><tr><td colspan="4">Total for the whole period (not counting cancelled)</td><td class="num">{{ tot.debit|inr }}</td><td class="num">{{ tot.credit|inr }}</td><td></td></tr></tfoot></table></div>{{ pager(page, pages, count) }}</section>
 {% endblock %}

@@ -146,6 +146,16 @@ def get_setting(cur, key, default=""):
     return r["value"] if r else default
 
 
+def managers_edit_history(cur):
+    """Owner's switch: let managers reopen and correct old / imported days."""
+    return get_setting(cur, "managers_edit_history", "0") == "1"
+
+
+def can_unlock(cur):
+    r = role()
+    return r == "owner" or (r == "manager" and managers_edit_history(cur))
+
+
 def day_status(cur, d):
     cur.execute("SELECT status FROM days WHERE business_date=%s", (d,))
     r = cur.fetchone()
@@ -158,7 +168,7 @@ def assert_writable(cur, d, *, lock_row=True):
     if d > t:
         raise UserError("You cannot enter data for a future date.")
     r = role()
-    if r != "owner":
+    if r != "owner" and not (r == "manager" and managers_edit_history(cur)):
         try:
             back = int(get_setting(cur, "backdate_days", "2") or 2)
         except ValueError:

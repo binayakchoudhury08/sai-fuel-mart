@@ -95,6 +95,28 @@ Push the new code; Render redeploys. The database upgrades itself on start (new 
 nothing is removed). If you already ran "Import old data" on 2.0, old transport entries stay as they are
 (fuel and cash as separate lines) — balances are unaffected. The Android app does not need reinstalling.
 
+## New in 2.3 — photo proofs setup
+
+1. Supabase → **Storage** → bucket **proofs** (create it if missing). Set it to **Private** (the site reads files
+   with the service key and shows them only to signed-in users; old-app proofs keep working).
+2. Render → Environment: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (and optionally `SUPABASE_BUCKET` if the bucket
+   has another name).
+3. Install **SaiFuelMart-v2.3.0.apk** on the manager's phone (installs over the old app). First time on
+   Photo proofs → Take proof, allow **Camera**, **Microphone** (for video) and **Location**.
+4. Proofs can only be taken on a phone. On a PC you can view them and download the PDF.
+
+## Pausing the WhatsApp automation
+
+Website → **Automation (n8n)** → **Switch off** (n8n is refused at once), and/or switch each SFM workflow's
+**Active** toggle off in n8n. Switch on again later — nothing else needs redoing.
+
+## New in 2.2
+
+- Start command (Render → Settings): `gunicorn app:app --preload --workers 2 --threads 4 --timeout 120`
+- Correcting old or imported data: open the day → **Reopen day** (owner), or Settings → **Old data editing** to
+  allow managers or reopen a whole date range. Lock the days again when finished.
+- WhatsApp automations: see **N8N_WHATSAPP_GUIDE.md** in the automation folder.
+
 ## Speed: put the server next to the database (most important)
 
 Your Supabase database is in **Singapore** (`aws-1-ap-southeast-1`). The old `render.yaml` had no region, so

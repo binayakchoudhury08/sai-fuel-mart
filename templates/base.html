@@ -44,7 +44,7 @@
     <div class="group">People</div>
     {{ nav('staff.index','staff','Staff & attendance','staff.index') }}
     {% if can('manager') %}{{ nav('staff.salary','staff','Salary','staff.salary') }}{% endif %}
-    {{ nav('main.proofs','cam','Photo proofs','main.proofs') }}
+    {{ nav('proofs.index','cam','Photo proofs','proofs.') }}
     {% if can('manager') %}
     <div class="group">Office</div>
     {{ nav('reports.index','report','Reports','reports.') }}
@@ -54,6 +54,7 @@
     {% if can('owner') %}
     {{ nav('auth.users','staff','User accounts','auth.users') }}
     {{ nav('admin.audit_log','log','Audit log','admin.audit') }}
+    {{ nav('automation.settings_page','cog','Automation (n8n)','automation.') }}
     {% endif %}
     <div class="who">
       <b>{{ user.full_name or user.username }}</b> <span class="badge">{{ ROLE_LABEL[user.role] }}</span><br>

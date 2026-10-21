@@ -63,6 +63,8 @@ def save_general():
                 changes.append(f"{label}: '{st.get(k, '')}' → '{v}'")
         if changes:
             audit(cur, "update", "settings", None, "; ".join(changes))
+    from flask import session as _s
+    _s.pop("u_at", None)   # refresh the pump name shown in the header
     flash("Settings saved." if changes else "Nothing changed.", "success" if changes else "info")
     return redirect(url_for("admin.settings"))
 
@@ -334,3 +336,44 @@ def _decimalize(rep):
             except Exception:
                 b[k] = D(0)
     return rep
+
+
+# ------------------------------------------------------------------ old / imported data editing
+@bp.route("/settings/history", methods=["POST"])
+@login_required("owner")
+def history_settings():
+    action = request.form.get("action")
+    with db.tx() as cur:
+        if action == "toggle":
+            on = "1" if request.form.get("managers_edit_history") == "1" else "0"
+            cur.execute("""INSERT INTO settings (key, value) VALUES ('managers_edit_history', %s)
+                           ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", (on,))
+            audit(cur, "update", "settings", "managers_edit_history",
+                  "Managers may now edit old and imported days" if on == "1" else "Managers may no longer edit old days")
+            flash("Managers can now reopen and correct old days." if on == "1"
+                  else "Only the owner can change old days now.", "success")
+        elif action in ("reopen", "lock"):
+            start = parse_date(request.form.get("from"), "From date")
+            end = parse_date(request.form.get("to"), "To date")
+            if end < start:
+                start, end = end, start
+            if (end - start).days > 400:
+                raise UserError("Choose 400 days or less at a time.")
+            reason = clean(request.form.get("reason"), 300)
+            if not reason:
+                raise UserError("Write the reason; it is kept in the audit log.")
+            if action == "reopen":
+                cur.execute("""UPDATE days SET status='open' WHERE business_date BETWEEN %s AND %s
+                               AND status <> 'open' RETURNING business_date""", (start, end))
+            else:
+                cur.execute("""UPDATE days SET status='locked', locked_by=%s, locked_at=NOW()
+                               WHERE business_date BETWEEN %s AND %s AND status <> 'locked'
+                               AND business_date < %s RETURNING business_date""",
+                            (current_user()["username"], start, end, today()))
+            n = len(cur.fetchall())
+            audit(cur, action, "day", f"{start}..{end}",
+                  f"{'Reopened' if action == 'reopen' else 'Locked'} {n} day(s) {start:%d %b %Y}–{end:%d %b %Y}: {reason}")
+            flash(f"{n} day(s) {'reopened for corrections' if action == 'reopen' else 'locked'}.", "success")
+        else:
+            raise UserError("Unknown action.")
+    return redirect(url_for("admin.settings") + "#history")

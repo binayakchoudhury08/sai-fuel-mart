@@ -190,7 +190,10 @@ def add_payment():
         audit(cur, "create", "staff_payment", p["id"], f"{kind.title()} ₹{amt} to {s['name']} for {ym} ({mode})",
               after=p, business_date=d)
     flash(f"{kind.title()} of ₹{amt} recorded for {s['name']}.", "success")
-    return redirect(request.form.get("_back") or url_for("staff.salary", m=ym))
+    back = request.form.get("_back")
+    if back and back.startswith("/") and not back.startswith("//"):
+        return redirect(back)
+    return redirect(url_for("staff.salary", m=ym))
 
 
 @bp.route("/staff/payment/<int:pid>/void", methods=["POST"])
@@ -210,4 +213,7 @@ def void_payment(pid):
         audit(cur, "void", "staff_payment", pid, f"Cancelled {p['kind']} ₹{p['amount']}: {reason}", before=p,
               business_date=p["business_date"])
     flash("Payment cancelled.", "success")
+    back = request.form.get("_back")
+    if back and back.startswith("/") and not back.startswith("//"):
+        return redirect(back)
     return redirect(url_for("staff.salary", m=p["for_month"]))

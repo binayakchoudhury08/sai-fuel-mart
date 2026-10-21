@@ -15,7 +15,7 @@ bp = Blueprint("auth", __name__)
 
 
 def _start_session(u, remember):
-    session.clear()
+    session.clear()  # also drops the cached user copy
     session["uid"] = u["id"]
     session["pw"] = hashlib.sha256(u["password_hash"].encode()).hexdigest()[:16]
     session.permanent = bool(remember)
@@ -206,5 +206,7 @@ def user_update(uid):
                 raise UserError("You cannot remove your own owner role.")
             cur.execute("UPDATE users SET role=%s WHERE id=%s", (new_role, uid))
             audit(cur, "update", "user", uid, f"Role of '{u['username']}' {u['role']} → {new_role}")
+            cur.execute("INSERT INTO settings (key, value) VALUES ('users_changed_at', %s) ON CONFLICT (key) "
+                        "DO UPDATE SET value=EXCLUDED.value", (str(__import__('time').time()),))
             flash("Role updated.", "success")
     return redirect(url_for("auth.users"))

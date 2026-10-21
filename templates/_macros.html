@@ -27,3 +27,12 @@
 <span class="{% if signed and v < 0 %}neg{% elif signed and v > 0 %}pos{% endif %}">{% if signed and v > 0 %}+{% endif %}{{ v|inr }}</span>
 {%- endif -%}
 {%- endmacro %}
+
+{% macro pager(page, pages, count=None, label="entries") -%}
+{% if pages > 1 %}{% set args = request.args.to_dict() %}
+<nav class="pager noprint" aria-label="Pages">
+  {% if page > 1 %}<a class="btn small secondary" href="?{{ dict(args, page=1)|urlencode }}">« First</a><a class="btn small secondary" href="?{{ dict(args, page=page-1)|urlencode }}">‹ Older</a>{% endif %}
+  <span>Page {{ page }} of {{ pages }}{% if count %} · {{ count }} {{ label }}{% endif %}</span>
+  {% if page < pages %}<a class="btn small secondary" href="?{{ dict(args, page=page+1)|urlencode }}">Newer ›</a><a class="btn small secondary" href="?{{ dict(args, page=pages)|urlencode }}">Latest »</a>{% endif %}
+</nav>{% endif %}
+{%- endmacro %}

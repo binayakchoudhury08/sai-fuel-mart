@@ -1,5 +1,51 @@
 # Sai Fuel Mart — changes
 
+## 2.3.0
+
+Daily closing
+- Lube sale: out-of-stock products can be chosen. Tick "Stock has arrived – add it to stock first" to add the
+  missing quantity and record the sale in one go, or use "Add stock that arrived" on the same page.
+  Both are audited (manager/owner).
+- Expenses → "Pay staff – salary / advance / bonus": staff payments are entered in Daily closing for the day they
+  are paid. Cash from the counter comes off expected cash. The Salary sheet shows everything but no longer has
+  its own entry form.
+
+Photo proofs (rebuilt for the phone)
+- Live camera inside the page: no gallery, no file upload. A photo must be taken now (server refuses photos
+  older than 15 minutes, uploads from a PC, and anything that is not a real camera picture).
+- Every photo is stamped on the picture: proof type, pump, date and time (always IST), GPS with accuracy, user.
+- Optional live video up to 30 s from the same camera.
+- On a PC the page explains proofs are taken on the phone; viewing and the PDF work everywhere.
+- Register: photo cards with type, status, time, user, Video and Map buttons; filters; paging.
+- PDF with photos: each proof with its photo, details, and scan codes for the map and the video.
+- Files are private: served only to signed-in users through the site (no public links). Old-app proofs keep working.
+- Android app 2.3.0: lets the in-page camera/microphone work for your site only, and opens the camera directly
+  (never the gallery) for proof photos.
+
+
+Old / imported data can be corrected
+- The owner can reopen any day, including days imported from the old app, with a reason (kept in the audit log).
+- Settings → Old data editing: a switch that lets managers reopen, correct and lock old days too, plus
+  "reopen / lock a date range" for bulk fixes. Operators can never change old days.
+
+WhatsApp automations (n8n)
+- Settings → Automation (n8n): owner creates a read-only key (stored hashed, shown once, can be switched off,
+  replaced or deleted; every use is in the audit log).
+- Read-only API for n8n: overdue closings, transporter bill info + PDF/Excel file, day summary.
+- Four tested n8n workflows: 12 AM closing reminder to the manager, 4 PM transporter bill (PDF + Excel, starting
+  with SVT, any number of transporters), 9 PM day summary, and a failure alert. See N8N_WHATSAPP_GUIDE.md.
+
+Speed and large data
+- The signed-in user is re-checked against the database every 2 minutes and before every save, instead of on
+  every page (Party accounts: 18 → 3 database trips per page).
+- Long party statements and the credit register are paged (200 / 300 rows); running balances stay exact.
+  A 3-year statement: 6.3 s / 75 MB before → 0.2 s / 0.3 MB now.
+- New database indexes for years of data; gunicorn --preload.
+
+Design
+- Quick-action bar on the Overview; zebra rows and row highlight in tables; page controls on long lists.
+
+
 ## 2.1.0 — old features restored on the safe v2 base
 
 Credit transport

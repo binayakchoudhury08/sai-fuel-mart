@@ -276,6 +276,39 @@ def party_balance(cur, party_id, before=None):
     return Decimal(cur.fetchone()["b"])
 
 
+def party_statement_page(cur, party_id, start, end, page=None, per_page=200):
+    """One page of the statement with the running balance worked out by the database across
+    ALL rows (so page 40 of a 3-year statement is still correct) — only 200 rows travel."""
+    opening = party_balance(cur, party_id, before=start)
+    cur.execute("""SELECT COUNT(*) AS n,
+                          COALESCE(SUM(debit) FILTER (WHERE NOT voided),0) AS debit,
+                          COALESCE(SUM(credit) FILTER (WHERE NOT voided),0) AS credit,
+                          COALESCE(SUM(qty) FILTER (WHERE NOT voided AND kind='fuel'),0) AS fuel_qty
+                   FROM party_txns WHERE party_id=%s AND business_date BETWEEN %s AND %s""", (party_id, start, end))
+    agg = cur.fetchone()
+    n = agg["n"]
+    pages = max(1, -(-n // per_page))
+    page = pages if page is None else min(max(1, page), pages)     # default: the most recent page
+    cur.execute("""
+        SELECT * FROM (
+          SELECT t.*, f.unit, lp.name AS lube_name,
+                 %s + SUM(CASE WHEN t.voided THEN 0 ELSE t.debit - t.credit END)
+                      OVER (ORDER BY t.business_date, CASE WHEN t.kind='opening' THEN 0 ELSE 1 END, t.id) AS running,
+                 ROW_NUMBER() OVER (ORDER BY t.business_date, CASE WHEN t.kind='opening' THEN 0 ELSE 1 END, t.id) AS rn
+          FROM party_txns t LEFT JOIN fuels f ON f.code = t.fuel_code
+          LEFT JOIN lube_products lp ON lp.id = t.lube_product_id
+          WHERE t.party_id=%s AND t.business_date BETWEEN %s AND %s) x
+        WHERE rn > %s AND rn <= %s ORDER BY rn""",
+                (opening, party_id, start, end, (page - 1) * per_page, page * per_page))
+    rows = [dict(r) for r in cur.fetchall()]
+    debit, credit = Decimal(agg["debit"]), Decimal(agg["credit"])
+    return {"opening": opening, "rows": rows, "closing": opening + debit - credit,
+            "totals": {"debit": debit, "credit": credit, "fuel_qty": Decimal(agg["fuel_qty"])},
+            "page": page, "pages": pages, "count": n, "per_page": per_page,
+            "page_opening": (Decimal(rows[0]["running"]) - (Decimal(rows[0]["debit"]) - Decimal(rows[0]["credit"])
+                              if not rows[0]["voided"] else 0)) if rows else opening}
+
+
 def party_statement(cur, party_id, start=None, end=None, include_voided=True):
     """Rows with a running balance computed on the fly — so it is always
     right, even after edits and voids anywhere in the history."""

@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, csrf, void with context %}{% block title %}{{ p.name }}{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf, void, pager with context %}{% block title %}{{ p.name }}{% endblock %}
 {% block content %}
 {% set here = request.full_path %}
 <div class="pagehead"><div class="grow"><h1>{{ p.name }}</h1>
@@ -60,7 +60,7 @@
 <a class="btn small secondary" href="{{ url_for('transport.download', party=p.id, period='month', month=start.strftime('%Y-%m'), fmt='zip') }}">ZIP</a>
 <a class="btn small secondary" href="{{ url_for('parties.bill', pid=p.id, fmt='pdf', **{'from':start.isoformat(),'to':end.isoformat()}) }}" title="Account statement with payments and balance">Statement PDF</a></div></div></header>
 <div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Entry</th><th>Vehicle / Challan / Slip</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th><th></th></tr></thead><tbody>
-<tr><td>{{ start|d }}</td><td colspan="4"><i>Opening balance</i></td><td class="num"><b>{{ stmt.opening|inr }}</b></td><td></td></tr>
+<tr><td>{{ start|d if stmt.page == 1 else '' }}</td><td colspan="4"><i>{{ 'Opening balance' if stmt.page == 1 else 'Brought forward from page ' ~ (stmt.page - 1) }}</i></td><td class="num"><b>{{ (stmt.opening if stmt.page == 1 else stmt.page_opening)|inr }}</b></td><td></td></tr>
 {% for r in stmt.rows %}<tr class="{% if r.voided %}void{% endif %}">
   <td>{{ r.business_date|d }}</td>
   <td>{% if r.sl_no %}<small>SL {{ r.sl_no }}</small> {% endif %}{{ KIND[r.kind] }}{% if r.kind=='fuel' %} – {{ r.qty }} {{ r.fuel_code }} @ ₹{{ r.rate }}{% if r.cash_taken %} + cash ₹{{ r.cash_taken }}{% endif %}{% elif r.kind=='lube' %} – {{ r.lube_name or r.remarks }} × {{ r.qty }}{% endif %}
@@ -81,7 +81,7 @@
       <p class="hint">Wrong amount? Cancel the entry and enter it again.</p></form></details>{% endif %}
     {{ void(url_for('parties.void_txn', tid=r.id), back=here) }}{% endif %}</td>
 </tr>{% endfor %}</tbody>
-<tfoot><tr><td colspan="3">Closing balance on {{ end|d }}</td><td class="num">{{ stmt.totals.debit|inr }}</td><td class="num">{{ stmt.totals.credit|inr }}</td><td class="num">{{ stmt.closing|inr }}</td><td></td></tr></tfoot></table></div></section>
+<tfoot><tr><td colspan="3">Closing balance on {{ end|d }} <small>(totals for the whole period)</small></td><td class="num">{{ stmt.totals.debit|inr }}</td><td class="num">{{ stmt.totals.credit|inr }}</td><td class="num">{{ stmt.closing|inr }}</td><td></td></tr></tfoot></table></div>{{ pager(stmt.page, stmt.pages, stmt.count) }}</section>
 
 {% if can('manager') %}<section class="section"><details class="add" style="border-top:0"><summary>Edit party details</summary><div class="body">
 <form method="post" action="{{ url_for('parties.edit', pid=p.id) }}">{{ csrf() }}<div class="fields">

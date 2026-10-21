@@ -108,5 +108,8 @@ def add_move():
         m = cur.fetchone()
         audit(cur, "create", "lube_move", m["id"], f"{kind.title()} {q} {p['unit']} of {p['name']}"
               + (f": {remarks}" if remarks else ""), after=m, business_date=d)
-    flash("Stock entry saved.", "success")
+    flash(f"Stock entry saved: {p['name']} {'+' if q > 0 else ''}{q} {p['unit']}.", "success")
+    back = request.form.get("_back")
+    if back and back.startswith("/") and not back.startswith("//"):
+        return redirect(back)
     return redirect(url_for("lube.index"))

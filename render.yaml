@@ -4,7 +4,7 @@ services:
     runtime: python
     region: singapore   # same region as the Supabase database (ap-southeast-1)
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn app:app --preload --workers 2 --threads 4 --timeout 120
     healthCheckPath: /healthz
     envVars:
       - key: PYTHON_VERSION

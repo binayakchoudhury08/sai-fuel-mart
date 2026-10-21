@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% block title %}Take proof{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Take proof</h1><p>Live camera only. The photo is stamped with date, time, location and your name.</p></div>
+<a class="btn secondary" href="{{ url_for('proofs.index') }}">Register</a></div>
+{% if not mobile %}
+<section class="section"><div class="body stack"><h2>Open this on your phone</h2>
+<p>Proofs must be live photos, so they can only be taken with a phone camera. On the manager’s phone, open the Sai Fuel Mart app (or this website) → <b>Photo proofs → Take proof</b>.</p>
+<p class="hint">On this computer you can view all proofs and download the PDF from the register.</p></div></section>
+{% elif not configured %}<div class="notice">Photo storage isn’t connected yet. Ask the owner to finish the Supabase Storage setup.</div>
+{% else %}
+<div id="cam" data-station="{{ station }}" data-user="{{ user.full_name or user.username }}" data-post="{{ url_for('proofs.create') }}">
+  <input type="hidden" id="csrf" value="{{ csrf_token() }}"><input type="hidden" id="ft" value="{{ form_token() }}">
+  <section class="section" id="step-type" {% if cat %}hidden{% endif %}><header><h2>1. What is this proof for?</h2></header><div class="body">
+    <div class="typegrid">{% for c in TYPES %}<button type="button" class="typebtn" data-type="{{ c }}"><b>{{ c }}</b></button>{% endfor %}</div></div></section>
+
+  <section class="section" id="step-cam" {% if not cat %}hidden{% endif %}><header><h2 id="camtitle">{{ cat or '' }}</h2><button type="button" class="btn small secondary" id="change">Change type</button></header>
+  <div class="body flush">
+    <div class="viewfinder"><video id="video" playsinline muted autoplay></video><img id="preview" alt="Photo preview" hidden>
+      <div class="vf-top"><span id="gps" class="badge">Finding location…</span><span id="rectime" class="badge stop" hidden></span></div></div>
+    <div class="body camcontrols">
+      <button type="button" class="btn secondary" id="flip" aria-label="Switch camera">⟲ Flip</button>
+      <button type="button" class="shutter" id="shoot" aria-label="Take photo"></button>
+      <button type="button" class="btn secondary" id="retake" hidden>Retake</button>
+      <button type="button" class="btn secondary" id="rec">● Video</button>
+    </div>
+    <div class="body" id="fallback" hidden>
+      <p class="hint">This phone’s browser can’t show the live camera here. Use the button below — it opens the camera directly.</p>
+      <label class="btn" style="width:100%">Open camera<input type="file" id="camfile" accept="image/*" capture="environment" hidden></label>
+    </div>
+    <div class="body" id="videoinfo" hidden><span class="badge locked" id="vlabel">Video ready</span> <button type="button" class="btn small secondary" id="vremove">Remove video</button></div>
+  </div></section>
+
+  <section class="section" id="step-save" hidden><header><h2>2. Details</h2></header><div class="body">
+    <div class="fields">
+      <div><label>Stock status</label><select id="status">{% for s in STATUS %}<option value="{{ s }}">{{ s or '—' }}</option>{% endfor %}</select></div>
+      <div class="wide"><label>Note</label><input id="note" maxlength="300" placeholder="e.g. MS dip 1240 mm / nozzle 2 tested 5 L"></div>
+    </div>
+    <div class="meterbar" style="margin-top:12px" hidden id="upbar"><i style="width:0%"></i></div>
+    <p id="msg" class="hint" style="margin-top:8px"></p>
+    <p style="margin-top:12px"><button type="button" class="btn go" id="upload" style="width:100%;min-height:52px">Save proof</button></p>
+  </div></section>
+</div>
+<script src="{{ url_for('static', filename='js/camera.js') }}?v={{ VERSION }}" defer></script>
+{% endif %}
+{% endblock %}

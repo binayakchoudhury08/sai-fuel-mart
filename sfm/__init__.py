@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "2.1.0"
+VERSION = "2.3.0"
 
 
 def _secret_key():
@@ -62,32 +62,48 @@ def create_app():
         except Exception as e:  # keep the app up so the error page can explain
             log.exception("Schema setup failed: %s", e)
 
-    from .views import admin, auth, day, main, parties, lube, reports, staff, tanks, transport
+    from .views import admin, auth, automation, day, main, parties, lube, proofs, reports, staff, tanks, transport
     for bp in (auth.bp, main.bp, day.bp, parties.bp, lube.bp, tanks.bp, tanks.api, staff.bp, reports.bp,
-               admin.bp, transport.bp):
+               admin.bp, transport.bp, automation.bp, automation.api, proofs.bp):
         app.register_blueprint(bp)
 
     @app.before_request
     def load_user():
         g.user = None
-        if request.endpoint in ("static", "service_worker", "health") or (request.endpoint or "").startswith("api."):
+        if (request.endpoint in ("static", "service_worker", "health")
+                or (request.endpoint or "").startswith(("api.", "api_v1."))
+                or request.path.startswith("/api/v1/") or request.path == "/api/tank-sync"):
             return
         uid = session.get("uid")
         if uid:
-            u = db.one("SELECT id, username, full_name, role, active, must_change_pw, password_hash, "
-                       "(SELECT value FROM settings WHERE key='station_name') AS station_name "
-                       "FROM users WHERE id=%s", (uid,))
-            if u and u.get("station_name"):
-                g.station_name = u["station_name"]
-            stamp = hashlib.sha256(u["password_hash"].encode()).hexdigest()[:16] if u else None
-            if not u or not u["active"] or session.get("pw") != stamp:
-                session.clear()
+            import time as _t
+            cached = session.get("u")
+            fresh = cached and _t.time() - float(session.get("u_at", 0)) < 120
+            # pages re-use the signed-in user for 2 minutes (saves a database trip on every page);
+            # anything that saves data, and every 2 minutes, re-checks the database
+            if fresh and request.method == "GET":
+                g.user = dict(cached)
+                if session.get("u_station"):
+                    g.station_name = session["u_station"]
             else:
-                u = dict(u)
-                u.pop("password_hash", None)
-                u.pop("station_name", None)
-                g.user = u
-        if request.method == "POST" and not (request.endpoint or "").startswith("api."):
+                u = db.one("SELECT id, username, full_name, role, active, must_change_pw, password_hash, "
+                           "(SELECT value FROM settings WHERE key='station_name') AS station_name "
+                           "FROM users WHERE id=%s", (uid,))
+                stamp = hashlib.sha256(u["password_hash"].encode()).hexdigest()[:16] if u else None
+                if not u or not u["active"] or session.get("pw") != stamp:
+                    session.clear()
+                else:
+                    if u.get("station_name"):
+                        g.station_name = u["station_name"]
+                    u = dict(u)
+                    u.pop("password_hash", None)
+                    station = u.pop("station_name", None)
+                    g.user = u
+                    session["u"] = u
+                    session["u_at"] = _t.time()
+                    session["u_station"] = station
+        if request.method == "POST" and request.routing_exception is None \
+                and not (request.endpoint or "").startswith(("api.", "api_v1.")):
             check_csrf()
 
     @app.after_request

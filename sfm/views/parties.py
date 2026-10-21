@@ -9,7 +9,7 @@ from ..exports import party_bill_pdf, party_bill_xlsx
 from ..security import (assert_writable, audit, can, claim_form_token, current_user, login_required,
                         next_receipt_no, role)
 from ..services import (PARTY_KIND_LABEL, PAY_MODES, fuels, party_balance, party_balances,
-                        party_statement, rates_for, settings_map)
+                        party_statement, party_statement_page, rates_for, settings_map)
 from ..util import ZERO, UserError, clean, inr, money, parse_date, to_dec, today
 
 bp = Blueprint("parties", __name__)
@@ -113,7 +113,11 @@ def detail(pid):
         p = cur.fetchone()
         if not p:
             abort(404)
-        stmt = party_statement(cur, pid, start, end)
+        try:
+            pg = int(request.args["page"]) if request.args.get("page") else None
+        except ValueError:
+            pg = None
+        stmt = party_statement_page(cur, pid, start, end, page=pg)
         balance = party_balance(cur, pid)
         rates = rates_for(cur, today())
         fl = fuels(cur)

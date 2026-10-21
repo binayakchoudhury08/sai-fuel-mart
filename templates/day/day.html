@@ -14,7 +14,9 @@
 </div>
 
 {% if t.day and t.day.is_legacy %}
-<div class="notice">This day came from the old system and is read-only. Totals below are what the old app saved.</div>
+<div class="notice">This day came from the old system. Totals below are what the old app saved.
+{% if t.status == 'locked' %}{% if may_lock %} To correct it, use “Reopen day” at the bottom of the page.{% else %} Only the owner can reopen it.{% endif %}
+{% else %} It is <b>open for corrections</b> — lock it again at the bottom when finished.{% endif %}</div>
 {% set L = t.day.legacy_totals or {} %}
 <div class="stats">
   <div><b>{{ (L.total_fuel_sale or 0)|float|inr }}</b><span>Fuel sale (old)</span></div>
@@ -151,14 +153,27 @@
   <td>{{ m.pay_mode }}{% if m.party_name %} – {{ m.party_name }}{% endif %}{% if m.voided %} <small>cancelled: {{ m.void_reason }}</small>{% endif %}</td>
   <td class="actions keep">{% if editable and can('manager') and not m.voided %}{{ void(url_for('day.void_lube_move', mid=m.id), back=here ~ '#lube', what='sale') }}{% endif %}</td></tr>
 {% else %}<tr><td colspan="6" class="empty">No lube sold on this day.</td></tr>{% endfor %}</tbody></table></div>
-{% if editable %}<details class="add"><summary>Add lube sale</summary><div class="body">
+{% if editable %}<details class="add" open><summary>Add lube sale</summary><div class="body">
 <form method="post" action="{{ url_for('day.lube_sale', d=d.isoformat()) }}" data-lubeform>{{ hidden(here ~ '#lube') }}
 <div class="fields">
-  <div><label>Product</label><select name="product_id" required><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}" data-rate="{{ p.sale_rate }}" data-stock="{{ p.stock|qty }}" {% if p.stock <= 0 %}disabled{% endif %}>{{ p.name }} – ₹{{ p.sale_rate }}{% if p.stock <= 0 %} (out of stock){% endif %}</option>{% endfor %}</select></div>
+  <div><label>Product</label><select name="product_id" required><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}" data-rate="{{ p.sale_rate }}" data-stock="{{ p.stock|qty }}">{{ p.name }} – ₹{{ p.sale_rate }} · {{ 'in stock ' ~ (p.stock|qty) if p.stock > 0 else 'OUT OF STOCK' }}</option>{% endfor %}</select></div>
   <div><label>Quantity</label><input name="qty" inputmode="decimal" required value="1"></div>
   <div><label>Paid by</label><select name="pay_mode"><option>Cash</option><option>Credit</option></select></div>
   <div data-party hidden><label>Party</label><select name="party_id"><option value="">Choose…</option>{% for p in parties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
-</div><p class="hint" data-preview></p><p style="margin-top:10px"><button class="btn">Save lube sale</button></p></form></div></details>{% endif %}
+</div>
+{% if can('manager') %}<div class="formrow" style="margin-top:10px;align-items:center">
+  <label class="check" style="flex:0 1 auto"><input type="checkbox" name="add_stock" value="1"> Stock has arrived – add it to stock first (purchase not entered yet)</label>
+  <div style="max-width:220px"><input name="stock_bill" placeholder="Purchase bill no. (optional)"></div></div>{% endif %}
+<p class="hint" data-preview></p><p style="margin-top:10px"><button class="btn">Save lube sale</button></p></form></div></details>
+{% if can('manager') %}<details class="add"><summary>Add stock that arrived</summary><div class="body">
+<form method="post" action="{{ url_for('lube.add_move') }}">{{ hidden(here ~ '#lube') }}<input type="hidden" name="kind" value="purchase"><input type="hidden" name="business_date" value="{{ d.isoformat() }}">
+<div class="fields">
+  <div><label>Product</label><select name="product_id" required><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}">{{ p.name }} ({{ p.stock|qty }} now)</option>{% endfor %}</select></div>
+  <div><label>Quantity received</label><input name="qty" inputmode="decimal" required></div>
+  <div><label>Purchase rate (₹, optional)</label><input name="rate" inputmode="decimal"></div>
+  <div><label>Bill no. / supplier</label><input name="remarks"></div>
+</div><p style="margin-top:10px"><button class="btn secondary">Add to stock</button> <a class="hint" href="{{ url_for('lube.index') }}">Correct a stock count in Lube stock</a></p></form></div></details>{% endif %}
+{% endif %}
 </section>
 
 {# ---------------- expenses ---------------- #}
@@ -167,7 +182,8 @@
 {% for e in t.expenses %}<tr class="{% if e.voided %}void{% endif %}"><td>{{ e.description }}{% if e.voided %} <small>cancelled: {{ e.void_reason }}</small>{% endif %}</td><td>{{ e.category }}</td>
   <td>{{ 'Counter cash' if e.from_counter else 'Owner / bank' }}</td><td class="num">{{ e.amount|inr }}</td>
   <td class="actions keep">{% if editable and can('manager') and not e.voided %}{{ void(url_for('day.void_expense', eid=e.id), back=here ~ '#expenses', what='expense') }}{% endif %}</td></tr>{% endfor %}
-{% for s in t.staff_pay %}<tr class="{% if s.voided %}void{% endif %}"><td>{{ s.kind|title }} – {{ s.staff_name }} ({{ s.for_month }})</td><td>Staff</td><td>{{ s.pay_mode }}</td><td class="num">{{ s.amount|inr }}</td><td></td></tr>{% endfor %}
+{% for s in t.staff_pay %}<tr class="{% if s.voided %}void{% endif %}"><td>{{ s.kind|title }} – {{ s.staff_name }} ({{ s.for_month }}){% if s.remarks %} <small>{{ s.remarks }}</small>{% endif %}{% if s.voided %} <small>cancelled: {{ s.void_reason }}</small>{% endif %}</td><td>Staff {{ s.kind }}</td><td>{{ s.pay_mode }}</td><td class="num">{{ s.amount|inr }}</td>
+<td class="actions keep">{% if editable and can('manager') and not s.voided %}{{ void(url_for('staff.void_payment', pid=s.id), back=here ~ '#expenses', what='payment') }}{% endif %}</td></tr>{% endfor %}
 {% if not t.expenses and not t.staff_pay %}<tr><td colspan="5" class="empty">No expenses on this day.</td></tr>{% endif %}</tbody></table></div>
 {% if editable %}<details class="add"><summary>Add expense</summary><div class="body">
 <form method="post" action="{{ url_for('day.add_expense', d=d.isoformat()) }}">{{ hidden(here ~ '#expenses') }}
@@ -177,24 +193,34 @@
   <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required></div>
   <div><label>Paid from</label><select name="from_counter"><option value="1">Counter cash</option><option value="0">Owner / bank (not from drawer)</option></select></div>
 </div><p style="margin-top:10px"><button class="btn">Save expense</button></p></form>
-{% if can('manager') %}<p class="hint" style="margin-top:8px">Staff advances and salary are recorded on the <a href="{{ url_for('staff.salary') }}">Salary</a> page; “Cash from counter” payments show here automatically.</p>{% endif %}
+</div></details>
+{% if can('manager') %}<details class="add"><summary>Pay staff – salary / advance / bonus</summary><div class="body">
+<form method="post" action="{{ url_for('staff.add_payment') }}">{{ hidden(here ~ '#expenses') }}<input type="hidden" name="business_date" value="{{ d.isoformat() }}">
+<div class="fields">
+  <div><label>Staff</label><select name="staff_id" required><option value="">Choose…</option>{% for st_ in staff %}<option value="{{ st_.id }}">{{ st_.name }} ({{ st_.emp_code }})</option>{% endfor %}</select></div>
+  <div><label>Type</label><select name="kind"><option value="salary">Salary</option><option value="advance">Advance</option><option value="bonus">Bonus</option></select></div>
+  <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required></div>
+  <div><label>Salary month</label><input type="month" name="for_month" value="{{ d.strftime('%Y-%m') }}" required></div>
+  <div><label>Paid how</label><select name="pay_mode"><option>Cash from counter</option><option>Cash by owner</option><option>Bank transfer</option><option>UPI</option></select></div>
+  <div><label>Remarks</label><input name="remarks"></div>
+</div><p class="hint">“Cash from counter” is taken out of today’s expected cash. Every payment also shows on the Salary sheet.</p>
+<p style="margin-top:10px"><button class="btn">Save staff payment</button></p></form>
 </div></details>{% endif %}
+{% endif %}
 </section>
 
 {# ---------------- workflow ---------------- #}
-{% if not (t.day and t.day.is_legacy) %}
 <section class="section noprint"><div class="body btnrow">
-{% if t.status == 'open' and editable %}
+{% if t.status == 'open' and editable and not (t.day and t.day.is_legacy) %}
   <form method="post" action="{{ url_for('day.submit', d=d.isoformat()) }}" data-confirm="Submit this day for verification? Check the cash difference first.">{{ csrf() }}<button class="btn go">Submit day for verification</button></form>
 {% endif %}
-{% if can('owner') and t.status != 'locked' %}
+{% if may_lock and t.status != 'locked' %}
   <form method="post" action="{{ url_for('day.lock', d=d.isoformat()) }}" data-confirm="Verify and lock {{ d|d }}? After this nobody can change it unless you unlock it with a reason.">{{ csrf() }}<button class="btn">Verify &amp; lock</button></form>
 {% endif %}
-{% if can('owner') and t.status in ('locked','submitted') %}
-  <details class="void"><summary>Unlock / reopen</summary><form method="post" action="{{ url_for('day.unlock', d=d.isoformat()) }}">{{ csrf() }}
+{% if may_lock and t.status in ('locked','submitted') %}
+  <details class="void"><summary>Reopen day</summary><form method="post" action="{{ url_for('day.unlock', d=d.isoformat()) }}">{{ csrf() }}
     <label>Reason (kept in audit log)</label><input name="reason" required><button class="btn danger small">Reopen day</button></form></details>
 {% endif %}
 {% if t.day and t.day.submitted_by %}<small>Submitted by {{ t.day.submitted_by }} {{ t.day.submitted_at.strftime('%d %b %I:%M %p') if t.day.submitted_at }}</small>{% endif %}
 </div></section>
-{% endif %}
 {% endblock %}

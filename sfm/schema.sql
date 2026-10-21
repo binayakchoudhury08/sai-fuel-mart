@@ -424,3 +424,31 @@ ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS proof_time TEXT NOT NULL DEFAUL
 
 ALTER TABLE pump.staff ADD COLUMN IF NOT EXISTS department TEXT NOT NULL DEFAULT '';
 ALTER TABLE pump.staff ADD COLUMN IF NOT EXISTS shift TEXT NOT NULL DEFAULT '';
+
+-- ================================================================ v2.2: indexes for years of data
+CREATE INDEX IF NOT EXISTS nozzle_readings_nozzle_date_idx ON pump.nozzle_readings (nozzle_id, business_date DESC);
+CREATE INDEX IF NOT EXISTS party_txns_date_kind_idx ON pump.party_txns (business_date, kind) WHERE NOT voided;
+CREATE INDEX IF NOT EXISTS party_txns_party_live_idx ON pump.party_txns (party_id) INCLUDE (debit, credit) WHERE NOT voided;
+CREATE INDEX IF NOT EXISTS attendance_date_idx ON pump.attendance (work_date);
+CREATE INDEX IF NOT EXISTS staff_payments_month_idx ON pump.staff_payments (for_month);
+CREATE INDEX IF NOT EXISTS staff_payments_date_idx ON pump.staff_payments (business_date);
+CREATE INDEX IF NOT EXISTS expenses_date_idx ON pump.expenses (business_date);
+CREATE INDEX IF NOT EXISTS fuel_receipts_date_idx ON pump.fuel_receipts (business_date);
+CREATE INDEX IF NOT EXISTS tank_dips_tank_date_idx ON pump.tank_dips (tank_id, business_date DESC);
+CREATE INDEX IF NOT EXISTS audit_date_idx ON pump.audit_log (business_date);
+CREATE INDEX IF NOT EXISTS audit_user_idx ON pump.audit_log (username, id DESC);
+CREATE INDEX IF NOT EXISTS proofs_date_idx ON pump.proofs (business_date, category);
+CREATE INDEX IF NOT EXISTS day_collections_date_idx ON pump.day_collections (business_date);
+-- refresh planner statistics after big imports (cheap, safe to run on every start)
+ANALYZE pump.party_txns;
+ANALYZE pump.nozzle_readings;
+
+-- ================================================================ v2.3: live camera proofs
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS capture_mode TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS captured_at TIMESTAMPTZ;
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS gps_accuracy_m NUMERIC(8,1);
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS device TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS photo_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS video_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS photo_bytes INTEGER;
+ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS video_bytes INTEGER;

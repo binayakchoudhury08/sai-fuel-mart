@@ -1,6 +1,6 @@
 /* Caches only the app's static files. Pages and data always come from the
    server so nobody ever sees stale balances. */
-const CACHE = "sfm-static-v2.1.0";
+const CACHE = "sfm-static-v2.3.0";
 const ASSETS = ["/static/css/app.css", "/static/js/app.js", "/static/fonts/Barlow-Regular.woff2",
   "/static/fonts/Barlow-Medium.woff2", "/static/fonts/Barlow-SemiBold.woff2", "/static/fonts/Barlow-Bold.woff2",
   "/static/fonts/BarlowCondensed-SemiBold.woff2", "/static/fonts/BarlowCondensed-Bold.woff2",
