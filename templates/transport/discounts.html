@@ -1,8 +1,0 @@
-{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% block title %}Transporter discounts{% endblock %}
-{% block content %}
-<div class="pagehead"><div class="grow"><h1>Transporter discounts</h1><p>Rupees off per litre of fuel, shown on each bill as “Less discount” and “Net payable”. 0 = no discount.</p></div></div>
-<form method="post" class="section">{{ csrf() }}<div class="body flush tablewrap"><table><thead><tr><th>Transporter</th><th class="num">Balance</th><th>Discount ₹ per litre</th></tr></thead><tbody>
-{% for p in parties %}<tr><td>{{ p.name }}</td><td class="num">{{ p.balance|inr }}</td><td><input name="disc_{{ p.id }}" inputmode="decimal" value="{{ p.discount_per_litre }}" style="max-width:120px" {% if not can('owner') %}disabled{% endif %}></td></tr>
-{% else %}<tr><td colspan="3" class="empty">No transporters.</td></tr>{% endfor %}</tbody></table></div>
-{% if can('owner') %}<div class="body"><button class="btn">Save discounts</button></div>{% else %}<div class="body hint">Only the owner can change discounts.</div>{% endif %}</form>
-{% endblock %}

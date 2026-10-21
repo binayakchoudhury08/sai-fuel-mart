@@ -1,5 +1,5 @@
-{% set tabs = [('reports.index','Daily sales & cash'),('reports.nozzles','Nozzles'),('transport.index','Transport register'),
-  ('transport.bill','Transporter bills'),('reports.outstanding','Outstanding'),('reports.credit_register','Party entries'),
+{% set tabs = [('reports.index','Daily sales & cash'),('reports.nozzles','Nozzles'),
+  ('transport.index','Transport bills'),('reports.outstanding','Outstanding'),('reports.credit_register','Party entries'),
   ('reports.digital','Digital collections'),('reports.tanks','Tanks'),('reports.analytics','Analytics')] %}
 <nav class="btnrow noprint" style="margin-bottom:10px" aria-label="Reports">
 {% for ep, label in tabs %}<a class="btn small {{ '' if request.endpoint==ep else 'secondary' }}" href="{{ url_for(ep) }}">{{ label }}</a>{% endfor %}

@@ -315,41 +315,53 @@ owner.post(f"/transport/entry/{tid2}/correct", {"qty": "60", "fuel_code": "HSD",
 newr = sql("SELECT sl_no, qty, corrected_from FROM pump.party_txns WHERE slip_no='S2' AND NOT voided")
 check(newr[0][0] == sl2 and newr[0][1] == Decimal("60.00") and newr[0][2] == tid2, "correction keeps the same SL No and links to the old entry")
 check(sql("SELECT voided FROM pump.party_txns WHERE id=%s", (tid2,))[0][0], "corrected entry stays visible as cancelled")
-owner.post("/transport/discounts", {f"disc_{svt}": "1.50"})
-check(sql("SELECT discount_per_litre FROM pump.parties WHERE id=%s", (svt,))[0][0] == Decimal("1.50"), "per-litre discount saved")
-q = f"party={svt}&from={T.isoformat()}&to={T.isoformat()}"
-r = owner.get(f"/transport/bill?{q}")
-check(has(r, "Net payable") and has(r, "₹14,960.00") and has(r, "₹240.00"), "bill page: 160 L, ₹15,200 − ₹240 discount = net ₹14,960")
-r = owner.get(f"/transport/bill.xlsx?{q}")
-import openpyxl, io, zipfile
-wbx = openpyxl.load_workbook(io.BytesIO(r.data)); vals = [c.value for row in wbx.active.iter_rows() for c in row if c.value is not None]
-check("Net Payable" in vals and "SL No" in vals, "Excel bill has SL No and Net Payable rows (old format)")
-net = [vals[i + 1] for i, v in enumerate(vals) if v == "Net Payable"][0]
-check(abs(net - (9500 + 5400 + 300 - 1.5 * 160)) < 0.01, f"net payable = 15,200 − 240 = 14,960 (got {net})")
-r = owner.get(f"/transport/bill.pdf?{q}")
-check(r.status_code == 200 and r.data[:4] == b"%PDF" and "Bill" in r.headers.get("Content-Disposition", ""), "PDF bill downloads with old file name")
+import openpyxl, io, zipfile, subprocess
+q = f"party={svt}&period=day&d={T.isoformat()}"
+r = owner.get(f"/transport/download?{q}&fmt=xlsx")
+wbx = openpyxl.load_workbook(io.BytesIO(r.data)); ws = wbx.active
+vals = [c.value for row in ws.iter_rows() for c in row if c.value is not None]
+head = [c.value for c in ws[6]]
+check(head == ["Date", "SL", "Vehicle No.", "Slip No.", "Challan No.", "HSD Qty (L)", "Rate", "HSD Amount", "Cash Taken", "Total"],
+      f"day Excel bill has the simple columns {head}")
+tot = [row for row in ws.iter_rows(values_only=True) if row[0] == "TOTAL"][0]
+check(tot[5] == 160 and tot[8] == 800 and tot[9] == 15200, f"TOTAL row: 160 L, cash 800, total 15,200 {tot}")
+check(not any(isinstance(v, str) and ("Balance" in v or "Net Payable" in v or "Discount" in v) for v in vals),
+      "Excel bill shows no balance, discount or net payable")
+r = owner.get(f"/transport/download?{q}&fmt=pdf")
 open("/tmp/transport_bill.pdf", "wb").write(r.data)
-r = owner.get(f"/transport/bills.zip?{q}")
+txt = subprocess.run(["pdftotext", "-layout", "/tmp/transport_bill.pdf", "-"], capture_output=True, text=True).stdout
+check(r.data[:4] == b"%PDF" and "Vehicle No." in txt and "TOTAL" in txt and "15,200.00" in txt, "PDF day bill with columns and total")
+check("Balance" not in txt and "Net" not in txt and "Discount" not in txt and "Due" not in txt, "PDF bill shows no balance due / net payable / discount")
+r = owner.get(f"/transport/download?party={svt}&period=month&month={T.strftime('%Y-%m')}&fmt=zip")
 names = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
-check(any("/PDF/" in n for n in names) and any("/Excel/" in n for n in names) and T.strftime("%B %Y") in names[0],
-      f"daily bills ZIP has Month/PDF and Month/Excel folders {names[:2]}")
-r = owner.get(f"/transport/bills.zip?from={Y.isoformat()}&to={T.isoformat()}")
-check(r.mimetype == "application/zip" and len(zipfile.ZipFile(io.BytesIO(r.data)).namelist()) >= 4, "all-transporters ZIP works")
-owner.post("/transport/bill/post-discount", {"party": svt, "from": T.isoformat(), "to": T.isoformat()})
-r = owner.post("/transport/bill/post-discount", {"party": svt, "from": T.isoformat(), "to": T.isoformat()})
-check(has(r, "already in the account"), "bill discount can be posted only once")
-check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE party_id=%s AND kind='discount' AND NOT voided", (svt,))[0][0] == 1, "exactly one discount entry")
+mon = T.strftime("%b %Y")
+check(f"SVT Logistics/SVT Logistics Bill {mon}.pdf" in names and f"SVT Logistics/SVT Logistics Bill {mon}.xlsx" in names
+      and any(n.startswith("SVT Logistics/Daily PDF/") for n in names) and any(n.startswith("SVT Logistics/Daily Excel/") for n in names),
+      f"month ZIP: month bill PDF+Excel and daily PDF+Excel {names}")
+r = owner.get(f"/transport/download?period=month&month={T.strftime('%Y-%m')}&fmt=zip")
+folders = sorted({n.split("/")[0] for n in zipfile.ZipFile(io.BytesIO(r.data)).namelist()})
+check("SVT Logistics" in folders and "Sharma Transport" in folders, f"all-transporters ZIP: separate folder each {folders}")
+r = owner.get(f"/transport/download?period=month&month={T.strftime('%Y-%m')}&fmt=pdf")
+zn = zipfile.ZipFile(io.BytesIO(r.data)).namelist() if r.mimetype == "application/zip" else []
+check(len(zn) == 2 and all(n.endswith(".pdf") for n in zn), f"all transporters + PDF → one PDF per transporter {zn}")
+r = owner.get(f"/transport/download?party={svt}&period=month&month={T.strftime('%Y-%m')}&fmt=pdf")
+check(r.data[:4] == b"%PDF" and mon in r.headers.get("Content-Disposition", ""), "month PDF bill named by month")
+r = owner.get(f"/transport/bill.pdf?party={svt}&from={T.isoformat()}&to={T.isoformat()}", follow_redirects=True)
+check(r.data[:4] == b"%PDF", "old bill links still work")
+r = owner.get(f"/transport/download?party={svt}&period=day&d={(T - timedelta(days=9)).isoformat()}&fmt=pdf", follow_redirects=True)
+check(has(r, "No transport entries"), "empty day says so instead of an empty file")
 r = owner.post("/parties/txn", {"party": svt, "kind": "payment", "amount": "1000", "pay_mode": "Cash", "pay_for": "Lube"})
 check(sql("SELECT pay_for FROM pump.party_txns WHERE party_id=%s AND kind='payment'", (svt,))[0][0] == "Lube", "payment remembers Fuel/Lube")
 
 print("Restored reports")
-for url in ["/transport", f"/transport?{q}&q=WB23", "/transport/bill", "/transport/discounts", "/reports/nozzles", "/reports/digital",
+for url in ["/transport", f"/transport?d={T.isoformat()}&q=WB23", "/reports/nozzles", "/reports/digital",
             "/reports/tanks", "/analytics", "/proofs", f"/proofs?d={T.isoformat()}"]:
     check(owner.get(url).status_code == 200, f"GET {url}")
 for url in ["/reports?format=pdf", "/reports/sales.pdf", "/reports/nozzles?format=pdf", "/reports/nozzles?format=xlsx",
             "/reports/digital?format=pdf", "/reports/digital?format=xlsx", "/reports/tanks?format=pdf", "/reports/tanks?format=xlsx",
-            "/reports/outstanding?format=pdf", "/reports/credit-register?format=pdf", f"/transport/register.pdf?{q}",
-            f"/transport/register.xlsx?{q}", "/reports/attendance.xlsx", "/reports/business.xlsx",
+            "/reports/outstanding?format=pdf", "/reports/credit-register?format=pdf",
+            f"/transport/register.pdf?party={svt}&from={T.isoformat()}&to={T.isoformat()}",
+            f"/transport/register.xlsx?party={svt}&from={T.isoformat()}&to={T.isoformat()}", "/reports/attendance.xlsx", "/reports/business.xlsx",
             f"/proofs/report.pdf?d={T.isoformat()}"]:
     r = owner.get(url)
     check(r.status_code == 200 and len(r.data) > 900, f"download {url} ({len(r.data)} bytes)")

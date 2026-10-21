@@ -202,10 +202,17 @@ from decimal import ROUND_HALF_UP as _RHU
 GREEN = colors.HexColor("#16A34A")
 
 
-def bill_filename(party_name, start, ext):
-    """'SVT Logistics Bill 110626.pdf' — same naming as the old app."""
-    safe = _re.sub(r'[\\/:*?"<>|]', "", party_name or "Transporter").strip() or "Transporter"
-    return f"{safe} Bill {start.strftime('%d%m%y')}.{ext}"
+def _safe(name):
+    return _re.sub(r'[\\/:*?"<>|]', "", name or "Transporter").strip() or "Transporter"
+
+
+def bill_filename(party_name, start, ext, end=None):
+    """Day: 'SVT Logistics Bill 211026.pdf'   Month: 'SVT Logistics Bill Oct 2026.pdf'"""
+    if end and end != start:
+        if start.day == 1 and (end + __import__("datetime").timedelta(days=1)).day == 1 and start.month == end.month:
+            return f"{_safe(party_name)} Bill {start.strftime('%b %Y')}.{ext}"
+        return f"{_safe(party_name)} Bill {start.strftime('%d%m%y')}-{end.strftime('%d%m%y')}.{ext}"
+    return f"{_safe(party_name)} Bill {start.strftime('%d%m%y')}.{ext}"
 
 
 def bill_number(party, start, end):
@@ -214,15 +221,14 @@ def bill_number(party, start, end):
 
 
 def bill_figures(party, rows):
+    """Only the transport entries and their totals — no balance, discount or payments."""
     live = [r for r in rows if not r["voided"]]
-    litres = sum((Decimal(r["qty"]) for r in live if r["kind"] == "fuel"), Decimal(0))
-    fuel_amt = sum((Decimal(r["fuel_amount"]) for r in live), Decimal(0))
-    cash = sum((r["cash"] for r in live), Decimal(0))
-    total = sum((Decimal(r["debit"]) for r in live), Decimal(0))
-    rate = Decimal(party.get("discount_per_litre") or 0)
-    discount = (rate * litres).quantize(Decimal("0.01"), _RHU)
-    return {"rows": live, "litres": litres, "fuel_amount": fuel_amt, "cash": cash, "total": total,
-            "disc_rate": rate, "discount": discount, "net": total - discount}
+    return {"rows": live,
+            "litres": sum((Decimal(r["qty"]) for r in live if r["kind"] == "fuel"), Decimal(0)),
+            "fuel_amount": sum((Decimal(r["fuel_amount"]) for r in live), Decimal(0)),
+            "cash": sum((r["cash"] for r in live), Decimal(0)),
+            "total": sum((Decimal(r["debit"]) for r in live), Decimal(0)),
+            "days": len({r["business_date"] for r in live})}
 
 
 def _letterhead(st, title, meta_lines, width):
@@ -265,63 +271,73 @@ def _footer_fn(st, label, pagesize):
     return footer
 
 
+BILL_HEAD = ["Date", "SL", "Vehicle No.", "Slip No.", "Challan No.", "HSD Qty (L)", "Rate", "HSD Amount",
+             "Cash Taken", "Total"]
+
+
+def _bill_cells(r):
+    fuel = r["kind"] == "fuel"
+    return [r["business_date"].strftime("%d-%m-%Y"), str(r["sl_no"] or ""), r["vehicle_no"] or "-",
+            r["slip_no"] or "-", r["challan_no"] or "-",
+            f"{Decimal(r['qty']):.2f}" if fuel else "-", f"{Decimal(r['rate']):.2f}" if fuel else "-",
+            inr(r["fuel_amount"], symbol=False) if fuel else "-", inr(r["cash"], symbol=False) if r["cash"] else "-",
+            inr(r["debit"], symbol=False)]
+
+
 def transport_bill_pdf(party, rows, start, end, st):
     f = bill_figures(party, rows)
+    monthly = start != end
     buf = BytesIO()
     ps = landscape(A4)
     width = ps[0] - 40
     doc = SimpleDocTemplate(buf, pagesize=ps, leftMargin=20, rightMargin=20, topMargin=20, bottomMargin=38,
                             title=f"Bill {party['name']}")
     ss = getSampleStyleSheet()
-    lab = ParagraphStyle("l", parent=ss["Normal"], fontSize=9.5, leading=13, textColor=INK)
-    period = start.strftime("%d-%m-%Y") + ("" if start == end else " to " + end.strftime("%d-%m-%Y"))
+    lab = ParagraphStyle("l", parent=ss["Normal"], fontSize=10, leading=14, textColor=INK)
+    period = (start.strftime("%B %Y") if (monthly and start.day == 1 and start.month == end.month)
+              else start.strftime("%d-%m-%Y") + ("" if not monthly else " to " + end.strftime("%d-%m-%Y")))
     el = _letterhead(st, "CREDIT TRANSPORT BILL",
-                     [f"Bill No: {bill_number(party, start, end)}", f"Period: {period}",
-                      f"Generated: {now_ist().strftime('%d-%m-%Y %H:%M')}"], width)
-    el.append(Paragraph(f"<b>Bill To:</b> {party['name']}", lab))
-    if party.get("vehicles"):
-        el.append(Paragraph(f"<b>Vehicle No:</b> {party['vehicles']}", lab))
-    if party.get("mobile"):
-        el.append(Paragraph(f"<b>Contact:</b> {party['mobile']}", lab))
-    if party.get("gstin"):
-        el.append(Paragraph(f"<b>GSTIN:</b> {party['gstin']}", lab))
-    el.append(Spacer(1, 10))
-    data = [["Date", "SL", "Challan", "Vehicle", "Slip", "Fuel", "Qty (L)", "Rate", "Fuel Amt", "Cash Taken", "Final Amt"]]
+                     [f"Bill No: {bill_number(party, start, end)}", f"{'Month' if monthly else 'Date'}: {period}"], width)
+    el.append(Paragraph(f"<b>Transporter:</b> {party['name']}"
+                        + (f" &nbsp;&nbsp; <b>Mobile:</b> {party['mobile']}" if party.get("mobile") else ""), lab))
+    el.append(Spacer(1, 8))
+    data = [BILL_HEAD]
+    style = []
+    by_day = {}
     for r in f["rows"]:
-        data.append([r["business_date"].strftime("%d-%m-%Y"), str(r["sl_no"] or ""), r["challan_no"] or "-",
-                     r["vehicle_no"] or "-", r["slip_no"] or "-", r["fuel_code"] or "Cash",
-                     f"{Decimal(r['qty']):.2f}" if r["kind"] == "fuel" else "-",
-                     f"{Decimal(r['rate']):.2f}" if r["kind"] == "fuel" else "-",
-                     inr(r["fuel_amount"], symbol=False), inr(r["cash"], symbol=False),
-                     inr(r["debit"], symbol=False)])
+        by_day.setdefault(r["business_date"], []).append(r)
+    for d in sorted(by_day):
+        for r in by_day[d]:
+            data.append(_bill_cells(r))
+        if monthly and len(by_day) > 1:   # day subtotal in a month bill
+            dr = by_day[d]
+            data.append([f"{d.strftime('%d-%m-%Y')} total", "", "", "", "",
+                         f"{sum((Decimal(x['qty']) for x in dr if x['kind'] == 'fuel'), Decimal(0)):.2f}", "",
+                         inr(sum((Decimal(x['fuel_amount']) for x in dr), Decimal(0)), symbol=False),
+                         inr(sum((x['cash'] for x in dr), Decimal(0)), symbol=False),
+                         inr(sum((Decimal(x['debit']) for x in dr), Decimal(0)), symbol=False)])
+            i = len(data) - 1
+            style += [("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F1F5F9")),
+                      ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold"), ("SPAN", (0, i), (4, i))]
     if not f["rows"]:
-        data.append(["No entries in this period"] + [""] * 10)
-    data.append(["", "", "", "", "", "TOTAL", f"{f['litres']:.2f}", "-", inr(f["fuel_amount"], symbol=False),
-                 inr(f["cash"], symbol=False), inr(f["total"], symbol=False)])
+        data.append(["No entries"] + [""] * 9)
+    data.append(["TOTAL", "", "", "", "", f"{f['litres']:.2f}", "", inr(f["fuel_amount"], symbol=False),
+                  inr(f["cash"], symbol=False), inr(f["total"], symbol=False)])
     ti = len(data) - 1
     style = [("BACKGROUND", (0, 0), (-1, 0), INK), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8),
-             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D1D5DB")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD2DB")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-             ("ALIGN", (1, 1), (1, -1), "CENTER"), ("ALIGN", (6, 1), (-1, -1), "RIGHT"),
-             ("ROWBACKGROUNDS", (0, 1), (-1, ti - 1), [colors.white, colors.HexColor("#F8FAFC")]),
-             ("BACKGROUND", (0, ti), (-1, ti), colors.HexColor("#DCFCE7")), ("FONTNAME", (0, ti), (-1, ti), "Helvetica-Bold")]
-    if f["disc_rate"] > 0:
-        data.append(["Total amount"] + [""] * 9 + [inr(f["total"], symbol=False)])
-        data.append([f"Less discount (Rs {f['disc_rate']}/L x {f['litres']:.2f} L)"] + [""] * 9 + [inr(f["discount"], symbol=False)])
-        data.append(["NET PAYABLE"] + [""] * 9 + [inr(f["net"], symbol=False)])
-        a, b, c = ti + 1, ti + 2, ti + 3
-        for i in (a, b, c):
-            style += [("SPAN", (0, i), (9, i)), ("ALIGN", (0, i), (9, i), "RIGHT"), ("FONTNAME", (0, i), (-1, i), "Helvetica-Bold")]
-        style += [("BACKGROUND", (0, a), (-1, a), colors.HexColor("#F1F5F9")),
-                  ("BACKGROUND", (0, b), (-1, b), colors.HexColor("#FEE2E2")), ("TEXTCOLOR", (0, b), (-1, b), colors.HexColor("#B91C1C")),
-                  ("BACKGROUND", (0, c), (-1, c), GREEN), ("TEXTCOLOR", (0, c), (-1, c), colors.white),
-                  ("FONTSIZE", (0, c), (-1, c), 10.5), ("TOPPADDING", (0, c), (-1, c), 8), ("BOTTOMPADDING", (0, c), (-1, c), 8)]
-    widths = [62, 28, 74, 80, 62, 40, 62, 52, 88, 80, 90]
-    scale = width / sum(widths)
-    t = Table(data, colWidths=[w * scale for w in widths], repeatRows=1)
+             ("ALIGN", (1, 1), (1, -1), "CENTER"), ("ALIGN", (5, 1), (-1, -1), "RIGHT")] + style + [
+             ("BACKGROUND", (0, ti), (-1, ti), colors.HexColor("#DCFCE7")), ("FONTNAME", (0, ti), (-1, ti), "Helvetica-Bold"),
+             ("FONTSIZE", (0, ti), (-1, ti), 9.5), ("SPAN", (0, ti), (4, ti))]
+    widths = [68, 30, 86, 66, 76, 72, 52, 86, 76, 92]
+    t = Table(data, colWidths=[w * width / sum(widths) for w in widths], repeatRows=1)
     t.setStyle(TableStyle(style))
-    el += [t, Spacer(1, 34)]
+    el += [t, Spacer(1, 6),
+           Paragraph(f"Entries: {len(f['rows'])}" + (f" &nbsp;·&nbsp; Days: {f['days']}" if monthly else ""),
+                     ParagraphStyle("n", parent=ss["Normal"], fontSize=8.5, textColor=colors.HexColor("#475467"))),
+           Spacer(1, 36)]
     sig = Table([["", ""], ["Prepared By", "Authorised Signatory"]], colWidths=[width / 2, width / 2])
     sig.setStyle(TableStyle([("LINEABOVE", (0, 1), (0, 1), 0.6, colors.HexColor("#94A3B8")),
                              ("LINEABOVE", (1, 1), (1, 1), 0.6, colors.HexColor("#94A3B8")),
@@ -336,74 +352,93 @@ def transport_bill_pdf(party, rows, start, end, st):
 
 def transport_bill_xlsx(party, rows, start, end, st):
     f = bill_figures(party, rows)
+    monthly = start != end
     wb = Workbook()
     ws = wb.active
-    ws.title = "Transport Bill"
+    ws.title = "Bill"
+    period = start.strftime("%B %Y") if (monthly and start.day == 1) else (
+        start.strftime("%d-%m-%Y") + (" to " + end.strftime("%d-%m-%Y") if monthly else ""))
     ws.append([st.get("station_name") or "Sai Fuel Mart"]); ws["A1"].font = Font(bold=True, size=14)
-    ws.append([f"Credit Transport Bill {bill_number(party, start, end)} — {party['name']} — "
-               f"{start.strftime('%d-%m-%Y')} to {end.strftime('%d-%m-%Y')}"])
+    ws.append([f"Credit Transport Bill {bill_number(party, start, end)}"]); ws["A2"].font = Font(bold=True)
+    ws.append([f"Transporter: {party['name']}" + (f"   Mobile: {party['mobile']}" if party.get("mobile") else "")])
+    ws.append([f"{'Month' if monthly else 'Date'}: {period}"])
     ws.append([])
-    head = ["Date", "SL No", "Party Name", "Challan No", "Vehicle No", "Slip No", "Fuel", "Qty", "Rate",
-            "Fuel Amount", "Cash Taken", "Final Amount"]
-    ws.append(head)
+    ws.append(BILL_HEAD)
     hr = ws.max_row
     for c in ws[hr]:
         c.fill, c.font = HEAD_FILL, HEAD_FONT
+    sub_fill = PatternFill("solid", start_color="F1F5F9")
+    by_day = {}
     for r in f["rows"]:
-        ws.append([r["business_date"], r["sl_no"], party["name"], r["challan_no"], r["vehicle_no"], r["slip_no"],
-                   r["fuel_code"] or "Cash", float(r["qty"]) if r["kind"] == "fuel" else None,
-                   float(r["rate"]) if r["kind"] == "fuel" else None, float(r["fuel_amount"]), float(r["cash"]),
-                   float(r["debit"])])
-        ws.cell(row=ws.max_row, column=1).number_format = "dd-mm-yyyy"
-    ws.append([])
-    ws.append(["", "", "", "", "", "", "TOTAL", float(f["litres"]), None, float(f["fuel_amount"]), float(f["cash"]),
-               float(f["total"])])
-    tot = ws.max_row
-    for c in ws[tot]:
-        c.font = Font(bold=True); c.fill = PatternFill("solid", start_color="D9EAD3")
-    if f["disc_rate"] > 0:
-        for label, val, fill, font in [
-                ("Total Amount", f["total"], "F1F5F9", Font(bold=True)),
-                (f"Discount (Rs {f['disc_rate']}/L x {f['litres']:.2f} L)", f["discount"], "FEE2E2", Font(bold=True, color="B91C1C")),
-                ("Net Payable", f["net"], "16A34A", Font(bold=True, size=13, color="FFFFFF"))]:
-            ws.append([""] * 10 + [label, float(val)])
+        by_day.setdefault(r["business_date"], []).append(r)
+    for d in sorted(by_day):
+        for r in by_day[d]:
+            fuel = r["kind"] == "fuel"
+            ws.append([r["business_date"], r["sl_no"], r["vehicle_no"], r["slip_no"], r["challan_no"],
+                       float(r["qty"]) if fuel else None, float(r["rate"]) if fuel else None,
+                       float(r["fuel_amount"]) if fuel else None, float(r["cash"]) if r["cash"] else None,
+                       float(r["debit"])])
+            ws.cell(row=ws.max_row, column=1).number_format = "dd-mm-yyyy"
+        if monthly and len(by_day) > 1:
+            dr = by_day[d]
+            ws.append([f"{d.strftime('%d-%m-%Y')} total", None, None, None, None,
+                       float(sum((Decimal(x["qty"]) for x in dr if x["kind"] == "fuel"), Decimal(0))), None,
+                       float(sum((Decimal(x["fuel_amount"]) for x in dr), Decimal(0))),
+                       float(sum((x["cash"] for x in dr), Decimal(0))),
+                       float(sum((Decimal(x["debit"]) for x in dr), Decimal(0)))])
             for c in ws[ws.max_row]:
-                c.fill = PatternFill("solid", start_color=fill); c.font = font
-    for row in ws.iter_rows(min_row=hr + 1, min_col=8, max_col=12):
+                c.font = Font(bold=True); c.fill = sub_fill
+    ws.append(["TOTAL", None, None, None, None, float(f["litres"]), None, float(f["fuel_amount"]), float(f["cash"]),
+               float(f["total"])])
+    for c in ws[ws.max_row]:
+        c.font = Font(bold=True); c.fill = PatternFill("solid", start_color="D9EAD3")
+    for row in ws.iter_rows(min_row=hr + 1, min_col=6, max_col=10):
         for c in row:
             c.number_format = "#,##,##0.00"
-    for i, w in enumerate([12, 7, 24, 12, 13, 10, 7, 10, 9, 14, 13, 15], 1):
+    for i, w in enumerate([13, 6, 14, 11, 13, 12, 9, 14, 13, 15], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
-    ws.column_dimensions["K"].width = 34
     ws.freeze_panes = ws.cell(row=hr + 1, column=1)
     buf = BytesIO(); wb.save(buf); buf.seek(0)
     return buf
 
 
-def daily_bills_zip(parties_rows, st):
-    """parties_rows: list of (party, rows). One PDF + one Excel per party per day,
-    in folders 'Month YYYY/PDF' and 'Month YYYY/Excel' (per party when several)."""
+def transport_zip(pairs, st, start, end):
+    """pairs: [(party, rows)]. For each transporter separately:
+         <Transporter>/<Month YYYY> Month Bill (PDF + Excel)
+         <Transporter>/Daily PDF/<one per day>   and   <Transporter>/Daily Excel/<one per day>"""
     buf = BytesIO()
-    used = set()
-    multi = len(parties_rows) > 1
+    n = 0
     with _zip.ZipFile(buf, "w", _zip.ZIP_DEFLATED) as zf:
-        for party, rows in parties_rows:
+        for party, rows in pairs:
+            live = [r for r in rows if not r["voided"]]
+            if not live:
+                continue
+            folder = _safe(party["name"])
+            for ext, maker in (("pdf", transport_bill_pdf), ("xlsx", transport_bill_xlsx)):
+                zf.writestr(f"{folder}/{bill_filename(party['name'], start, ext, end)}",
+                            maker(party, live, start, end, st).getvalue())
+                n += 1
+            if start == end:
+                continue                      # a one-day ZIP needs no separate daily folder
             by_day = {}
-            for r in rows:
-                if not r["voided"]:
-                    by_day.setdefault(r["business_date"], []).append(r)
+            for r in live:
+                by_day.setdefault(r["business_date"], []).append(r)
             for d, day_rows in sorted(by_day.items()):
-                base = (f"{_re.sub(r'[^A-Za-z0-9 ]+', '', party['name']).strip()}/" if multi else "") + d.strftime("%B %Y")
-                for sub, data, ext in (("PDF", transport_bill_pdf(party, day_rows, d, d, st), "pdf"),
-                                       ("Excel", transport_bill_xlsx(party, day_rows, d, d, st), "xlsx")):
-                    name = f"{base}/{sub}/{bill_filename(party['name'], d, ext)}"
-                    n = 2
-                    while name in used:
-                        name = name.rsplit(".", 1)[0] + f"_{n}.{ext}"; n += 1
-                    used.add(name)
-                    zf.writestr(name, data.getvalue())
+                zf.writestr(f"{folder}/Daily PDF/{bill_filename(party['name'], d, 'pdf')}",
+                            transport_bill_pdf(party, day_rows, d, d, st).getvalue())
+                zf.writestr(f"{folder}/Daily Excel/{bill_filename(party['name'], d, 'xlsx')}",
+                            transport_bill_xlsx(party, day_rows, d, d, st).getvalue())
+                n += 2
     buf.seek(0)
-    return buf, len(used) // 2
+    return buf, n
+
+
+def daily_bills_zip(parties_rows, st):
+    """Kept for compatibility: day files only."""
+    if not parties_rows:
+        return BytesIO(), 0
+    dates = [r["business_date"] for _, rows in parties_rows for r in rows]
+    return transport_zip(parties_rows, st, min(dates), max(dates)) if dates else (BytesIO(), 0)
 
 
 # ====================================================================== generic report PDF

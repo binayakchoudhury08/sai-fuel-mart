@@ -194,3 +194,12 @@
   }
   badges(); setInterval(badges, 1000); setInterval(poll, 30000);
 })();
+
+/* Download box: copy the chosen transporter into each download form */
+(function(){
+  var sel = document.getElementById("dlparty");
+  if (!sel) return;
+  document.querySelectorAll("form[data-dl]").forEach(function(f){
+    f.addEventListener("submit", function(){ f.querySelector("[name=party]").value = sel.value; });
+  });
+})();

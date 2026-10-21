@@ -29,6 +29,16 @@ Reports (every report has PDF and Excel)
   daily sale chart, top transporters, top lube products, expenses by category, staff today.
 - Business Excel with charts (monthly trend line chart, outstanding pie chart, daily sale bar chart) plus all data.
 
+Credit transport made simple (owner's request)
+- One short entry form: Date, Transporter, Vehicle No., Slip No., Challan No., HSD Qty, Cash Taken (rate automatic,
+  total shown live). Below it: the day's entries, one Download box, and the month total per transporter.
+- Bills show only entries and totals — Date, SL, Vehicle No., Slip No., Challan No., HSD Qty, Rate, HSD Amount,
+  Cash Taken, Total, a TOTAL row and signatures. No balance due, no discount, no net payable, no payments.
+- Downloads for one transporter or all (each separately): day bill PDF/Excel, month bill PDF/Excel (with a
+  subtotal for each day), and a month ZIP = month bill + every day's bill in PDF and Excel, one folder per transporter.
+- Balances and payments stay in Party accounts ("Statement PDF" there is the account statement with balance).
+- The per-litre discount is no longer printed on bills.
+
 Old-data import no longer copies the old activity log (owner's choice); it stays in the old tables.
 
 Import that "stopped: server restarted" — fixed
