@@ -37,7 +37,7 @@
 <td>{{ r.vehicle_no }}</td><td>{{ r.slip_no }}</td><td>{{ r.challan_no }}</td>
 <td class="num">{{ r.qty|qty if r.kind=='fuel' else '' }}</td><td class="num">{{ r.rate if r.kind=='fuel' else '' }}</td>
 <td class="num">{{ r.fuel_amount|inr if r.fuel_amount else '' }}</td><td class="num">{{ r.cash|inr if r.cash else '' }}</td><td class="num"><b>{{ r.debit|inr }}</b></td>
-<td class="actions keep">{% if can('manager') and not r.voided %}
+<td class="actions keep">{% if can('cancel_entries') and not r.voided %}
 <details class="void"><summary style="color:inherit">Correct</summary><form method="post" action="{{ url_for('transport.correct_entry', tid=r.id) }}">{{ csrf() }}<input type="hidden" name="_back" value="{{ here }}"><input type="hidden" name="fuel_code" value="{{ r.fuel_code or 'HSD' }}">
 <label>Vehicle No.</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Slip No.</label><input name="slip_no" value="{{ r.slip_no }}">
 <label>Challan No.</label><input name="challan_no" value="{{ r.challan_no }}"><label>HSD Qty (L)</label><input name="qty" value="{{ r.qty if r.kind=='fuel' else '' }}">

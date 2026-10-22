@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "2.3.0"
+VERSION = "3.0.0"
 
 
 def _secret_key():
@@ -22,7 +22,7 @@ def _secret_key():
     # Fallback that is stable across workers/restarts and not guessable
     # without the DB password. Setting SECRET_KEY in Render is still better.
     seed = os.environ.get("DATABASE_URL", "") + "|sfm-v2"
-    log.warning("SECRET_KEY not set; deriving one from DATABASE_URL. Set SECRET_KEY in Render.")
+    log.warning("SECRET_KEY not set; deriving one from DATABASE_URL. Set SECRET_KEY in Vercel → Settings → Environment Variables.")
     return hashlib.sha256(seed.encode()).hexdigest()
 
 
@@ -39,9 +39,9 @@ def _friendly_db_error(e):
 
 
 def create_app():
-    app = Flask(__name__, static_folder="../static", template_folder="../templates")
+    app = Flask(__name__, static_folder="../public/static", static_url_path="/static", template_folder="../templates")
     app.secret_key = _secret_key()
-    on_https = os.environ.get("RENDER", "") != "" or os.environ.get("FORCE_HTTPS") == "1"
+    on_https = bool(os.environ.get("VERCEL") or os.environ.get("RENDER") or os.environ.get("FORCE_HTTPS") == "1")
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -62,9 +62,9 @@ def create_app():
         except Exception as e:  # keep the app up so the error page can explain
             log.exception("Schema setup failed: %s", e)
 
-    from .views import admin, auth, automation, day, main, parties, lube, proofs, reports, staff, tanks, transport
+    from .views import admin, auth, day, main, parties, lube, proofs, reports, staff, tanks, transport
     for bp in (auth.bp, main.bp, day.bp, parties.bp, lube.bp, tanks.bp, tanks.api, staff.bp, reports.bp,
-               admin.bp, transport.bp, automation.bp, automation.api, proofs.bp):
+               admin.bp, transport.bp, proofs.bp):
         app.register_blueprint(bp)
 
     @app.before_request
@@ -128,6 +128,7 @@ def create_app():
     def headers(resp):
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self)")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         if g.get("user") and resp.mimetype == "text/html":
             resp.headers["Cache-Control"] = "no-store"
@@ -212,8 +213,9 @@ def create_app():
                                        "note what you were doing and tell the owner."), 500
 
     @app.route("/service-worker.js")
-    def service_worker():
-        resp = app.send_static_file("service-worker.js")
+    def service_worker():   # on Vercel the CDN serves public/service-worker.js directly
+        from flask import send_from_directory
+        resp = send_from_directory(os.path.join(os.path.dirname(app.root_path), "public"), "service-worker.js")
         resp.headers["Cache-Control"] = "no-cache"
         resp.headers["Service-Worker-Allowed"] = "/"
         return resp

@@ -49,9 +49,9 @@ def _editable(d, status, st=None):
     """Same rules as assert_writable, evaluated for display only."""
     if d > today() or status == "locked":
         return False
-    if status == "submitted" and role() == "operator":
+    if status == "submitted" and not can("cancel_entries"):
         return False
-    if role() != "owner" and not (role() == "manager" and (st or {}).get("managers_edit_history") == "1"):
+    if not can("day_reopen"):
         try:
             back = int((st or {}).get("backdate_days") or 2)
         except (TypeError, ValueError):
@@ -68,7 +68,7 @@ def _touch_day(cur, d):
 
 # ------------------------------------------------------------------ readings
 @bp.route("/day/<d>/readings", methods=["POST"])
-@login_required()
+@login_required("closing_enter")
 def save_readings(d):
     d = parse_date(d)
     changed = 0
@@ -102,7 +102,7 @@ def save_readings(d):
                 if old:
                     opening = Decimal(old["opening"])
                     if raw_open and to_dec(raw_open) != opening:
-                        if role() != "owner":
+                        if not can("meter_override"):
                             raise UserError(f"{n['name']}: only the owner can change the first opening reading.")
                         opening = to_dec(raw_open, f"{n['name']} opening")
                         reason = clean(request.form.get(f"reason_{nid}"), 200) or "Owner corrected first reading"
@@ -114,7 +114,7 @@ def save_readings(d):
             else:
                 opening = auto_open
                 if raw_open and to_dec(raw_open) != auto_open:
-                    if role() != "owner":
+                    if not can("meter_override"):
                         raise UserError(f"{n['name']}: opening comes from the previous closing "
                                         f"({auto_open}). Only the owner can override it.")
                     reason = clean(request.form.get(f"reason_{nid}"), 200)
@@ -122,7 +122,7 @@ def save_readings(d):
                         raise UserError(f"{n['name']}: give a reason for changing the opening reading "
                                         "(e.g. meter replaced, reset).")
                     opening = to_dec(raw_open, f"{n['name']} opening")
-                elif old and old["opening_override_reason"] and role() == "owner" and raw_open:
+                elif old and old["opening_override_reason"] and can("meter_override") and raw_open:
                     reason = old["opening_override_reason"] if Decimal(old["opening"]) == opening else None
 
             if closing < opening:
@@ -162,7 +162,7 @@ def save_readings(d):
 
 # ------------------------------------------------------------------ collections + cash count
 @bp.route("/day/<d>/cash", methods=["POST"])
-@login_required()
+@login_required("closing_enter")
 def save_cash(d):
     d = parse_date(d)
     with db.tx() as cur:
@@ -230,9 +230,56 @@ def save_cash(d):
     return redirect(url_for("day.day_view", d=d.isoformat()) + "#cash")
 
 
+# ------------------------------------------------------------------ credit totals per transporter (reconciled)
+@bp.route("/day/<d>/credit", methods=["POST"])
+@login_required("closing_enter")
+def save_credit(d):
+    """Closing person's total credit per transporter for the day. It must match Credit transport."""
+    d = parse_date(d)
+    changes = []
+    with db.tx() as cur:
+        claim_form_token(cur)
+        assert_writable(cur, d)
+        _touch_day(cur, d)
+        cur.execute("SELECT party_id, amount FROM day_credit WHERE business_date=%s", (d,))
+        old = {r["party_id"]: Decimal(r["amount"]) for r in cur.fetchall()}
+        cur.execute("SELECT id, name FROM parties")
+        names = {r["id"]: r["name"] for r in cur.fetchall()}
+        wanted = {}
+        for k, v in request.form.items():
+            if k.startswith("credit_") and k[7:].isdigit() and v.strip() != "":
+                wanted[int(k[7:])] = to_dec(v, f"Credit for {names.get(int(k[7:]), 'party')}")
+        if request.form.get("new_party") and request.form.get("new_amount", "").strip():
+            pid = int(request.form["new_party"])
+            wanted[pid] = to_dec(request.form["new_amount"], f"Credit for {names.get(pid, 'party')}")
+        cleared = {int(k[7:]) for k, v in request.form.items() if k.startswith("credit_") and k[7:].isdigit() and v.strip() == ""}
+        for pid, amt in wanted.items():
+            if pid not in names:
+                raise UserError("Choose a valid transporter.")
+            if old.get(pid) != amt:
+                cur.execute("""INSERT INTO day_credit (business_date, party_id, amount, updated_by) VALUES (%s,%s,%s,%s)
+                               ON CONFLICT (business_date, party_id) DO UPDATE SET amount=EXCLUDED.amount,
+                               updated_by=EXCLUDED.updated_by, updated_at=NOW()""", (d, pid, amt, current_user()["username"]))
+                changes.append(f"{names[pid]} {old.get(pid, '–')} → {amt}")
+        for pid in cleared & set(old):
+            cur.execute("DELETE FROM day_credit WHERE business_date=%s AND party_id=%s", (d, pid))
+            changes.append(f"{names[pid]} {old[pid]} → removed")
+        if changes:
+            audit(cur, "update", "day_credit", d.isoformat(), "Closing credit totals: " + "; ".join(changes), business_date=d)
+        t = compute_day(cur, d)
+    bad = [r for r in t["recon"] if not r["ok"]]
+    if not changes:
+        flash("Nothing changed.", "info")
+    elif bad:
+        flash(f"Saved. {len(bad)} transporter(s) do not match Credit transport yet — see the red rows.", "error")
+    else:
+        flash("Saved. Every transporter matches Credit transport ✓", "success")
+    return redirect(url_for("day.day_view", d=d.isoformat()) + "#credit")
+
+
 # ------------------------------------------------------------------ expenses
 @bp.route("/day/<d>/expense", methods=["POST"])
-@login_required()
+@login_required("closing_enter")
 def add_expense(d):
     d = parse_date(d)
     amount = to_dec(request.form.get("amount"), "Expense amount", allow_blank=False)
@@ -257,7 +304,7 @@ def add_expense(d):
 
 
 @bp.route("/expense/<int:eid>/void", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def void_expense(eid):
     reason = clean(request.form.get("reason"), 200)
     if not reason:
@@ -278,7 +325,7 @@ def void_expense(eid):
 
 # ------------------------------------------------------------------ lube counter sale
 @bp.route("/day/<d>/lube-sale", methods=["POST"])
-@login_required()
+@login_required("closing_enter")
 def lube_sale(d):
     d = parse_date(d)
     try:
@@ -300,7 +347,7 @@ def lube_sale(d):
         if not p:
             raise UserError("Choose a lube product.")
         rate = Decimal(p["sale_rate"])
-        if request.form.get("rate") and can("manager"):
+        if request.form.get("rate") and can("rate_override"):
             rate = to_dec(request.form.get("rate"), "Rate")
         if rate <= 0:
             raise UserError(f"{p['name']} has no selling rate. Set it in Lube stock.")
@@ -308,8 +355,8 @@ def lube_sale(d):
         stock = Decimal(cur.fetchone()["s"])
         if q > stock and request.form.get("add_stock") == "1":
             # stock is in the office but its purchase was not entered yet: add exactly what is missing
-            if not can("manager"):
-                raise UserError("Only a manager or the owner can add stock. Ask them, or record the purchase in Lube stock.")
+            if not can("lube_stock"):
+                raise UserError("You are not allowed to add stock. Ask them, or record the purchase in Lube stock.")
             add = q - stock
             bill = clean(request.form.get("stock_bill"), 60)
             cur.execute("""INSERT INTO lube_moves (product_id, business_date, kind, qty, rate, amount, remarks, created_by)
@@ -355,7 +402,7 @@ def lube_sale(d):
 
 
 @bp.route("/lube-move/<int:mid>/void", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def void_lube_move(mid):
     reason = clean(request.form.get("reason"), 200)
     if not reason:
@@ -386,7 +433,7 @@ def void_lube_move(mid):
 
 # ------------------------------------------------------------------ workflow
 @bp.route("/day/<d>/submit", methods=["POST"])
-@login_required()
+@login_required("closing_submit")
 def submit(d):
     d = parse_date(d)
     with db.tx() as cur:
@@ -397,6 +444,11 @@ def submit(d):
             raise UserError("Enter closing readings first: " + ", ".join(missing))
         if t["counted_cash"] is None:
             raise UserError("Count the cash and enter it before submitting.")
+        if not t["recon_ok"]:
+            bad = [r for r in t["recon"] if not r["ok"]]
+            raise UserError("Credit does not match Credit transport for " + ", ".join(
+                f"{r['name']} (closing {r['declared'] if r['declared'] is not None else 'not entered'}, slips {r['register']})"
+                for r in bad) + ". Fix the slip entries or the closing amount first.")
         _touch_day(cur, d)
         snap = snapshot_of(t)
         cur.execute("""UPDATE days SET status='submitted', snapshot=%s, submitted_by=%s, submitted_at=NOW()
@@ -409,12 +461,10 @@ def submit(d):
 
 
 @bp.route("/day/<d>/lock", methods=["POST"])
-@login_required("manager")
+@login_required("day_lock")
 def lock(d):
     d = parse_date(d)
     with db.tx() as cur:
-        if not can_unlock(cur):
-            raise UserError("Only the owner can verify and lock a day.")
         cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"day:{d.isoformat()}",))
         cur.execute("SELECT is_legacy, status FROM days WHERE business_date=%s", (d,))
         lg = cur.fetchone()
@@ -433,6 +483,11 @@ def lock(d):
             raise UserError("Cannot lock: readings missing for " + ", ".join(missing))
         if t["counted_cash"] is None:
             raise UserError("Cannot lock: cash counted is not entered.")
+        if not t["recon_ok"]:
+            bad = [r for r in t["recon"] if not r["ok"]]
+            raise UserError("Credit does not match Credit transport for " + ", ".join(
+                f"{r['name']} (closing {r['declared'] if r['declared'] is not None else 'not entered'}, slips {r['register']})"
+                for r in bad) + ". Fix the slip entries or the closing amount first.")
         _touch_day(cur, d)
         snap = snapshot_of(t)
         cur.execute("""UPDATE days SET status='locked', snapshot=%s, locked_by=%s, locked_at=NOW()
@@ -444,7 +499,7 @@ def lock(d):
 
 
 @bp.route("/day/<d>/unlock", methods=["POST"])
-@login_required("manager")
+@login_required("day_reopen")
 def unlock(d):
     d = parse_date(d)
     reason = clean(request.form.get("reason"), 300)

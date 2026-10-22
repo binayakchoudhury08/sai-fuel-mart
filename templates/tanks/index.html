@@ -43,7 +43,7 @@
 <td><input name="water_{{ r.tank.id }}" inputmode="decimal" value="{{ r.dip.water_mm if r.dip and r.dip.water_mm else '' }}" style="max-width:80px"></td>
 <td class="num {% if r.variance is not none and r.variance < 0 %}neg{% elif r.variance %}pos{% endif %}">{% if r.variance is not none %}<b>{{ r.variance|qty }} L</b>{% if r.variance_pct is not none %}<br><small>{{ r.variance_pct }}% of sale</small>{% endif %}{% if r.value is not none %}<br><small>{{ r.value|inr }}</small>{% endif %}{% else %}—{% endif %}</td></tr>
 
-{% else %}<tr><td colspan="9" class="empty">No tanks. {% if can('owner') %}<a href="{{ url_for('admin.settings') }}#tanks">Add tanks in Settings.</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<tr><td colspan="9" class="empty">No tanks. {% if can('setup') %}<a href="{{ url_for('admin.settings') }}#tanks">Add tanks in Settings.</a>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% if rec %}<div class="body"><button class="btn">Save dip readings</button> <span class="hint">Sale is linked to tanks through each nozzle’s tank in Settings.</span></div>{% endif %}</form></section>
 
 
@@ -62,7 +62,7 @@
 <td class="num {% if r.invoice_qty_l and r.invoice_qty_l > r.received_qty_l %}neg{% endif %}">{{ (r.invoice_qty_l - r.received_qty_l)|qty if r.invoice_qty_l else '' }}</td>
 <td class="{% if r.challan_density and r.observed_density and ((r.challan_density - r.observed_density)|abs) > 3 %}neg{% endif %}">{{ r.challan_density or '' }} / {{ r.observed_density or '' }}</td>
 <td class="num {% if r.dip_variance_mm and r.dip_variance_mm < 0 %}neg{% endif %}">{{ r.dip_variance_mm if r.dip_variance_mm is not none else '' }}</td>
-<td class="actions keep">{% if can('manager') and not r.voided %}{{ void(url_for('tanks.void_receipt', rid=r.id), what='receipt') }}{% endif %}</td></tr>
+<td class="actions keep">{% if can('cancel_entries') and not r.voided %}{{ void(url_for('tanks.void_receipt', rid=r.id), what='receipt') }}{% endif %}</td></tr>
 {% else %}<tr><td colspan="10" class="empty">No tanker receipts in the last 30 days.</td></tr>{% endfor %}</tbody></table></div>
 <details class="add"><summary>Record a tanker receipt</summary><div class="body"><form method="post" action="{{ url_for('tanks.add_receipt') }}">{{ hidden() }}
 <div class="fields">

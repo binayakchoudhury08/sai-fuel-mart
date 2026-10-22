@@ -12,11 +12,17 @@ from ..services import (PARTY_KIND_LABEL, PAY_MODES, fuels, party_balance, party
                         party_statement, party_statement_page, rates_for, settings_map)
 from ..util import ZERO, UserError, clean, inr, money, parse_date, to_dec, today
 
+
+def _deliver_compat(buf, mimetype=None, as_attachment=True, download_name=None, **kw):
+    from ..storage import deliver
+    return deliver(buf, download_name, mimetype)
+
+
 bp = Blueprint("parties", __name__)
 
 
 @bp.route("/parties")
-@login_required()
+@login_required("accounts_view")
 def index():
     with db.tx() as cur:
         rows = party_balances(cur)
@@ -42,7 +48,7 @@ def _party_form():
 
 
 @bp.route("/parties/new", methods=["POST"])
-@login_required("manager")
+@login_required("parties_manage")
 def new():
     f = _party_form()
     opening = to_dec(request.form.get("opening_balance"), "Opening balance", allow_negative=True)
@@ -67,12 +73,12 @@ def new():
 
 
 @bp.route("/parties/<int:pid>/edit", methods=["POST"])
-@login_required("manager")
+@login_required("parties_manage")
 def edit(pid):
     f = _party_form()
     f["active"] = request.form.get("active") == "1"
     f["id"] = pid
-    if "discount_per_litre" in request.form and role() == "owner":
+    if "discount_per_litre" in request.form and can("parties_manage"):
         f["dpl"] = to_dec(request.form.get("discount_per_litre"), "Discount per litre")
     else:
         f["dpl"] = None
@@ -105,7 +111,7 @@ def _period():
 
 
 @bp.route("/parties/<int:pid>")
-@login_required()
+@login_required("accounts_view")
 def detail(pid):
     start, end = _period()
     with db.tx() as cur:
@@ -137,7 +143,7 @@ def _whatsapp_link(p, balance, st):
 
 # ------------------------------------------------------------------ entries
 @bp.route("/parties/<int:pid>/txn", methods=["POST"])
-@login_required()
+@login_required("payments")
 def add_txn(pid):
     kind = request.form.get("kind")
     if kind in ("fuel", "cash_advance"):
@@ -145,10 +151,10 @@ def add_txn(pid):
         return add_entry.__wrapped__(party_id=pid)
     if kind not in ("fuel", "cash_advance", "payment", "discount", "adjustment"):
         raise UserError("Unknown entry type.")
-    if kind in ("discount", "adjustment") and not can("manager"):
+    if kind == "discount" and not can("parties_manage"):
         abort(403)
-    if kind == "adjustment" and role() != "owner":
-        raise UserError("Only the owner can post adjustments.")
+    if kind == "adjustment" and not can("adjustments"):
+        raise UserError("You are not allowed to post balance adjustments.")
     d = parse_date(request.form.get("business_date") or today().isoformat())
     user = current_user()["username"]
     receipt = None
@@ -177,7 +183,7 @@ def add_txn(pid):
             if code not in rates or not rates[code]:
                 raise UserError(f"No rate set for {code or 'that fuel'} on {d.strftime('%d %b')}.")
             rate = rates[code]
-            if request.form.get("rate") and can("manager"):
+            if request.form.get("rate") and can("rate_override"):
                 rate = to_dec(request.form.get("rate"), "Rate")
                 if rate <= 0:
                     raise UserError("Rate must be more than zero.")
@@ -229,7 +235,7 @@ def add_txn(pid):
 
         if row["debit"] > 0 and Decimal(p["credit_limit"]) > 0:
             new_bal = party_balance(cur, pid) + row["debit"]
-            if new_bal > Decimal(p["credit_limit"]) and role() != "owner":
+            if new_bal > Decimal(p["credit_limit"]) and not can("credit_limit_override"):
                 raise UserError(f"Credit limit crossed: {p['name']} would owe {inr(new_bal)} "
                                 f"(limit {inr(p['credit_limit'])}). Only the owner can allow this.")
 
@@ -259,7 +265,7 @@ def add_txn(pid):
 
 
 @bp.route("/parties/txn", methods=["POST"])
-@login_required()
+@login_required("payments")
 def add_txn_any():
     """Quick-add from the Daily closing page, where the party is chosen in the form."""
     try:
@@ -275,7 +281,7 @@ def add_txn_any():
 
 
 @bp.route("/party-txn/<int:tid>/void", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def void_txn(tid):
     reason = clean(request.form.get("reason"), 200)
     if not reason:
@@ -286,7 +292,7 @@ def void_txn(tid):
         t = cur.fetchone()
         if not t or t["voided"]:
             raise UserError("Entry not found or already cancelled.")
-        if t["kind"] == "opening" and role() != "owner":
+        if t["kind"] == "opening" and not can("adjustments"):
             raise UserError("Only the owner can cancel an opening balance.")
         assert_writable(cur, t["business_date"])
         cur.execute("""UPDATE party_txns SET voided=TRUE, void_reason=%s, voided_by=%s, voided_at=NOW()
@@ -306,7 +312,7 @@ def void_txn(tid):
 
 
 @bp.route("/party-txn/<int:tid>/details", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def edit_txn_details(tid):
     """Fix text fields (vehicle, challan...) without touching money.
     Amount mistakes are fixed by cancelling and re-entering."""
@@ -332,7 +338,7 @@ def edit_txn_details(tid):
 
 
 @bp.route("/party-txn/<int:tid>/receipt")
-@login_required()
+@login_required("payments")
 def receipt(tid):
     with db.tx() as cur:
         cur.execute("SELECT t.*, p.name AS party_name, p.mobile FROM party_txns t JOIN parties p ON p.id=t.party_id "
@@ -352,7 +358,7 @@ def receipt(tid):
 
 
 @bp.route("/parties/<int:pid>/bill.<fmt>")
-@login_required()
+@login_required("accounts_view")
 def bill(pid, fmt):
     if fmt not in ("pdf", "xlsx"):
         abort(404)
@@ -372,4 +378,4 @@ def bill(pid, fmt):
     else:
         data = party_bill_xlsx(p, stmt, start, end, st)
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    return send_file(data, mimetype=mime, as_attachment=True, download_name=name)
+    return _deliver_compat(data, mimetype=mime, as_attachment=True, download_name=name)

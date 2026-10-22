@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Settings{% endblock %}
 {% block content %}
-{% set owner = can('owner') %}
+{% set owner = can('setup') %}
 <div class="pagehead"><div class="grow"><h1>Settings</h1>{% if not owner %}<p>Only the owner can change these.</p>{% endif %}</div></div>
 {% if owner and legacy_available and not legacy_done %}<div class="notice"><b>Old data found.</b> Bring your transporters, balances, nozzles, staff and history from the old app: <a href="{{ url_for('admin.import_legacy') }}">Import old data</a>.</div>{% endif %}
 {% if legacy_done %}<p class="hint">Old data imported on {{ legacy_done }}.</p>{% endif %}
@@ -16,10 +16,8 @@
 
 
 {% if owner %}<section class="section" id="history"><header><h2>Old data editing</h2></header><div class="body stack">
-<form method="post" action="{{ url_for('admin.history_settings') }}" class="formrow" style="align-items:center">{{ csrf() }}<input type="hidden" name="action" value="toggle">
-  <label class="check" style="flex:1"><input type="checkbox" name="managers_edit_history" value="1" {% if st.get('managers_edit_history')=='1' %}checked{% endif %} onchange="this.form.submit()">
-  Allow managers to reopen, correct and lock old days (including data imported from the old app)</label></form>
-<p class="hint">The owner can always do this. Every reopen, correction and lock is kept in the audit log with the reason. Operators can never change old days.</p>
+<p>Who may reopen locked days and change old (including imported) days is set in <a href="{{ url_for('admin.permissions') }}">Permissions</a>.</p>
+<p class="hint">Reopen or lock a whole date range at once. Every reopen, correction and lock is kept in the audit log with the reason.</p>
 <form method="post" action="{{ url_for('admin.history_settings') }}" class="fields">{{ csrf() }}
   <div><label>From</label><input type="date" name="from" required></div><div><label>To</label><input type="date" name="to" required max="{{ today.isoformat() }}"></div>
   <div class="wide"><label>Reason (kept in audit log)</label><input name="reason" required placeholder="e.g. correcting imported transporter entries"></div>

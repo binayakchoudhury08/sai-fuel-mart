@@ -50,7 +50,7 @@ def index():
 
 
 @bp.route("/tanks/dip", methods=["POST"])
-@login_required()
+@login_required("tanks")
 def save_dip():
     d = parse_date(request.form.get("business_date"))
     saved = 0
@@ -92,7 +92,7 @@ def save_dip():
 
 
 @bp.route("/tanks/receipt", methods=["POST"])
-@login_required()
+@login_required("tanks")
 def add_receipt():
     """Tanker receipt like the old Fuel Receipt page: one tanker, up to 5 compartments.
     Saved as one row per fuel/tank (so stock maths stays per tank), linked by receipt_group."""
@@ -207,7 +207,7 @@ def month_receipt_stats(cur, d):
 
 
 @bp.route("/tanks/receipt/<int:rid>/void", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def void_receipt(rid):
     reason = clean(request.form.get("reason"), 200)
     if not reason:

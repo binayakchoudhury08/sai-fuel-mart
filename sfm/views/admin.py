@@ -17,7 +17,7 @@ SETTING_KEYS = {
 
 
 @bp.route("/settings")
-@login_required("manager")
+@login_required("setup")
 def settings():
     with db.tx() as cur:
         st = settings_map(cur)
@@ -43,7 +43,7 @@ def settings():
 
 
 @bp.route("/settings/general", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_general():
     with db.tx() as cur:
         st = settings_map(cur)
@@ -70,7 +70,7 @@ def save_general():
 
 
 @bp.route("/settings/rates", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_rates():
     d = parse_date(request.form.get("effective_from"), "Effective date")
     if d > today() + timedelta(days=7):
@@ -120,7 +120,7 @@ def save_rates():
 
 
 @bp.route("/settings/fuel", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_fuel():
     code = clean(request.form.get("code"), 8).upper()
     name = clean(request.form.get("name"), 40)
@@ -137,7 +137,7 @@ def save_fuel():
 
 
 @bp.route("/settings/tank", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_tank():
     tid = request.form.get("id")
     f = {"name": clean(request.form.get("name"), 40), "fuel_code": request.form.get("fuel_code"),
@@ -166,7 +166,7 @@ def save_tank():
 
 
 @bp.route("/settings/nozzle", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_nozzle():
     nid = request.form.get("id")
     tank = request.form.get("tank_id") or None
@@ -208,7 +208,7 @@ def save_nozzle():
 
 
 @bp.route("/settings/mode", methods=["POST"])
-@login_required("owner")
+@login_required("setup")
 def save_mode():
     mid = request.form.get("id")
     name = clean(request.form.get("name"), 40)
@@ -229,7 +229,7 @@ def save_mode():
 
 
 @bp.route("/audit")
-@login_required("owner")
+@login_required("audit")
 def audit_log():
     q = clean(request.args.get("q"), 60)
     who = clean(request.args.get("user"), 40)
@@ -265,7 +265,8 @@ def import_legacy():
         st = read_state() or {}
         if is_running(st):
             return redirect(url_for("admin.import_legacy"))
-        if request.form.get("mode") == "wait":
+        import os as _os
+        if request.form.get("mode") == "wait" or _os.environ.get("VERCEL"):   # Vercel has no background jobs
             from ..migrate_legacy import write_state
             write_state(state="running", step="Importing (while you wait)", pct=50, error=None, report=None,
                         started_at=__import__("time").time())
@@ -340,7 +341,7 @@ def _decimalize(rep):
 
 # ------------------------------------------------------------------ old / imported data editing
 @bp.route("/settings/history", methods=["POST"])
-@login_required("owner")
+@login_required("day_reopen")
 def history_settings():
     action = request.form.get("action")
     with db.tx() as cur:
@@ -377,3 +378,33 @@ def history_settings():
         else:
             raise UserError("Unknown action.")
     return redirect(url_for("admin.settings") + "#history")
+
+
+
+# ------------------------------------------------------------------ permissions (owner only)
+@bp.route("/settings/permissions", methods=["GET", "POST"])
+@login_required("owner")
+def permissions():
+    from ..security import PERMISSIONS, PERM_KEYS, reset_perm_cache, role_perms
+    if request.method == "POST":
+        with db.tx() as cur:
+            before = role_perms()
+            changes = []
+            for r in ("admin", "manager", "operator"):
+                chosen = [k for k in PERM_KEYS if request.form.get(f"{r}:{k}") == "1"]
+                cur.execute("""INSERT INTO settings (key, value) VALUES (%s, %s)
+                               ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", (f"perms:{r}", ",".join(chosen)))
+                added = set(chosen) - before.get(r, set())
+                removed = before.get(r, set()) - set(chosen)
+                if added or removed:
+                    changes.append(f"{r}: +{','.join(sorted(added)) or '-'} −{','.join(sorted(removed)) or '-'}")
+            if changes:
+                audit(cur, "update", "permissions", None, "Permissions changed — " + " | ".join(changes))
+        reset_perm_cache()
+        flash("Permissions saved. They apply immediately." if changes else "Nothing changed.",
+              "success" if changes else "info")
+        return redirect(url_for("admin.permissions"))
+    groups = {}
+    for k, label, group, _ in PERMISSIONS:
+        groups.setdefault(group, []).append((k, label))
+    return render_template("admin/permissions.html", groups=groups, current=role_perms())

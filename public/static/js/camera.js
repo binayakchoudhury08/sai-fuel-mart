@@ -125,25 +125,19 @@
   });
   $("vremove").addEventListener("click", function () { state.video = null; $("videoinfo").hidden = true; });
 
-  // ---------- upload
+  // ---------- upload: files go straight to storage through one-time links
   up.addEventListener("click", function () {
     if (!state.photo) { say("Take the photo first.", true); return; }
-    var fd = new FormData();
-    fd.append("_csrf", $("csrf").value); fd.append("_ft", $("ft").value);
-    fd.append("category", state.type); fd.append("stock_status", $("status").value); fd.append("note", $("note").value);
-    fd.append("captured_at", String(state.takenAt)); fd.append("capture_mode", state.mode);
-    if (state.loc) { fd.append("lat", state.loc.lat); fd.append("lng", state.loc.lng); fd.append("acc", state.loc.acc); }
-    fd.append("photo", state.photo, "proof.jpg");
-    if (state.video) fd.append("video", state.video, "proof." + state.videoExt);
-    var x = new XMLHttpRequest(), bar = $("upbar"); bar.hidden = false; up.disabled = true; up.textContent = "Saving…";
-    x.upload.onprogress = function (e) { if (e.lengthComputable) bar.firstElementChild.style.width = Math.round(100 * e.loaded / e.total) + "%"; };
-    x.onload = function () {
-      var r = {}; try { r = JSON.parse(x.responseText); } catch (e) {}
-      if (x.status === 200 && r.ok) { say("Saved."); stop(); location.href = r.redirect; return; }
-      up.disabled = false; up.textContent = "Save proof"; say(r.error || ("Could not save (" + x.status + "). Check the internet and try again."), true);
-    };
-    x.onerror = function () { up.disabled = false; up.textContent = "Save proof"; say("No internet. Your photo is still here — try again.", true); };
-    x.open("POST", root.dataset.post); x.send(fd);
+    var bar = $("upbar"); bar.hidden = false; up.disabled = true; up.textContent = "Saving…"; say("");
+    var loc = state.loc || {};
+    window.LiveCam.upload({
+      csrf: $("csrf").value, startUrl: root.dataset.start, finishUrl: root.dataset.post,
+      startFields: { category: state.type }, photo: state.photo, video: state.video, videoExt: state.videoExt,
+      finishFields: { _ft: $("ft").value, category: state.type, stock_status: $("status").value, note: $("note").value,
+                      captured_at: String(state.takenAt), capture_mode: state.mode, lat: loc.lat, lng: loc.lng, acc: loc.acc },
+      progress: function (f) { bar.firstElementChild.style.width = Math.round(100 * f) + "%"; }
+    }).then(function (r) { say("Saved."); stop(); location.href = r.redirect; })
+      .catch(function (e) { up.disabled = false; up.textContent = "Save proof"; say(e.message, true); });
   });
   window.addEventListener("pagehide", stop);
 })();

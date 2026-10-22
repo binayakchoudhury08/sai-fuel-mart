@@ -7,5 +7,5 @@
 <div class="btnrow noprint" style="margin-bottom:14px"><span class="hint">More downloads:</span>
 <a class="btn small secondary" href="{{ url_for('reports.lube_xlsx') }}">Lube stock Excel</a>
 <a class="btn small secondary" href="{{ url_for('reports.attendance_xlsx') }}">Attendance Excel (this month)</a>
-{% if can('owner') %}<a class="btn small secondary" href="{{ url_for('reports.business_xlsx') }}">Business Excel with charts</a>
+{% if can('backup') %}<a class="btn small secondary" href="{{ url_for('reports.business_xlsx') }}">Business Excel with charts</a>
 <a class="btn small secondary" href="{{ url_for('reports.backup') }}">Full backup</a>{% endif %}</div>

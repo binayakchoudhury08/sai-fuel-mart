@@ -1,50 +1,68 @@
-{% extends "base.html" %}{% from "_macros.html" import status_badge, money with context %}{% block title %}Overview{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import status_badge with context %}{% import "_modules.html" as M with context %}{% from "_modules.html" import allowed with context %}
+{% block title %}Home{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>{{ today.strftime('%A, %d %B') }}</h1>
-<p>Today’s closing is {{ status_badge(td.status) }} · readings {{ td.readings_done }} of {{ td.readings_needed }} nozzles</p></div>
-<a class="btn" href="{{ url_for('day.day_view', d=today.isoformat()) }}">Open today’s closing</a></div>
+<div class="pagehead"><div class="grow"><span class="modicon" style="--mc:var(--c-closing)"><svg><use href="#i-home"/></svg></span>
+<div><h1>Namaste, {{ (user.full_name or user.username).split(' ')[0] }}</h1><p>{{ today.strftime('%A, %d %B %Y') }} · today’s closing is {{ status_badge(td.status) }}</p></div></div></div>
 
-{% if can('owner') and today.day <= 3 %}<div class="notice"><b>Start of the month:</b> download a full backup and keep it safe. <a href="{{ url_for('reports.business_xlsx') }}">Business Excel with charts</a> · <a href="{{ url_for('reports.backup') }}">Full backup</a></div>{% endif %}
-{% if needs_setup %}<div class="notice"><b>Finish setup first.</b> {% if can('owner') %}Add fuel rates, tanks and nozzles in <a href="{{ url_for('admin.settings') }}">Settings</a>, or import your old data there.{% else %}Ask the owner to set fuel rates and nozzles in Settings.{% endif %}</div>{% endif %}
-{% if pending and can('owner') %}<div class="notice"><b>{{ pending|length }} earlier day(s) not verified yet:</b>
-{% for p in pending %}<a href="{{ url_for('day.day_view', d=p.business_date.isoformat()) }}">{{ p.business_date.strftime('%d %b') }}</a> ({{ p.status }}){{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+{% if needs_setup and can('setup') %}<div class="notice"><b>Finish setup first:</b> add fuel rates, tanks and nozzles in <a href="{{ url_for('admin.settings') }}">Settings</a>.</div>{% endif %}
+{% if pending and can('day_lock') %}<div class="notice"><b>{{ pending|length }} earlier day(s) waiting for you to verify:</b>
+{% for p in pending %}<a href="{{ url_for('day.day_view', d=p.business_date.isoformat()) }}">{{ p.business_date.strftime('%d %b') }}</a>{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
 
-<nav class="quick" aria-label="Quick actions">
-  <a href="{{ url_for('transport.index') }}#entry"><svg><use href="#i-party"/></svg>Transport entry</a>
-  <a href="{{ url_for('day.day_view', d=today.isoformat()) }}#readings"><svg><use href="#i-day"/></svg>Meter readings</a>
-  <a href="{{ url_for('transport.index') }}#download"><svg><use href="#i-report"/></svg>Download bills</a>
-  <a href="{{ url_for('parties.index') }}"><svg><use href="#i-log"/></svg>Receive payment</a>
-  <a href="{{ url_for('tanks.index') }}"><svg><use href="#i-tank"/></svg>Tanks</a>
-</nav>
+{% if can('closing_enter') %}
+<section class="section"><header><h2>Today’s work</h2><small>Do them in this order. Tap a step to open it.</small></header><div class="body">
+<div class="checklist">
+  {% set rd = td.readings_needed and td.readings_done == td.readings_needed %}
+  <a class="step {{ 'done' if rd else 'todo' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#readings"><span class="no">{{ '✓' if rd else '1' }}</span>
+    <span class="t"><b>Meter readings</b><small>{{ td.readings_done }} of {{ td.readings_needed }} nozzles entered</small></span><span class="badge {{ 'locked' if rd else 'open' }}">{{ 'Done' if rd else 'To do' }}</span></a>
+  {% if can('transport_enter') %}<a class="step {{ 'done' if counts.slips else '' }}" href="{{ url_for('transport.index') }}#entry"><span class="no">{{ '✓' if counts.slips else '2' }}</span>
+    <span class="t"><b>Credit transport slips</b><small>{{ counts.slips }} slip(s) entered today</small></span><span class="badge {{ 'locked' if counts.slips else '' }}">{{ counts.slips }} slips</span></a>{% endif %}
+  {% set ck = td.recon_ok %}
+  <a class="step {{ 'done' if (ck and td.recon) else ('bad' if not ck else '') }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#credit"><span class="no">{{ '✓' if (ck and td.recon) else ('!' if not ck else '3') }}</span>
+    <span class="t"><b>Credit check</b><small>{% if not td.recon %}No credit today yet{% elif ck %}Closing totals match Credit transport{% else %}Totals don’t match yet — open to see which transporter{% endif %}</small></span>
+    <span class="badge {{ 'locked' if (ck and td.recon) else ('stop' if not ck else '') }}">{{ 'Matched' if (ck and td.recon) else ('Mismatch' if not ck else '—') }}</span></a>
+  {% set cc = td.counted_cash is not none %}
+  <a class="step {{ 'done' if cc else '' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#cash"><span class="no">{{ '✓' if cc else '4' }}</span>
+    <span class="t"><b>Digital collections &amp; cash count</b><small>{% if cc %}Counted {{ td.counted_cash|inr }} · expected {{ td.expected_cash|inr }}{% else %}Count the drawer at the end of the day{% endif %}</small></span><span class="badge {{ 'locked' if cc else '' }}">{{ 'Done' if cc else 'Later' }}</span></a>
+  {% if can('attendance_photo') or can('attendance_manual') %}{% set at = counts.staff and counts.present >= counts.staff %}
+  <a class="step {{ 'done' if at else '' }}" href="{{ url_for('staff.index') }}"><span class="no">{{ '✓' if at else '5' }}</span>
+    <span class="t"><b>Attendance (live photo)</b><small>{{ counts.present }} of {{ counts.staff }} staff marked present</small></span><span class="badge {{ 'locked' if at else 'open' }}">{{ counts.present }}/{{ counts.staff }}</span></a>{% endif %}
+  {% set sb = td.status in ('submitted','locked') %}
+  <a class="step {{ 'done' if sb else '' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#finish"><span class="no">{{ '✓' if sb else '6' }}</span>
+    <span class="t"><b>Submit the day</b><small>{{ 'Submitted — the owner verifies and locks it' if sb else 'After everything above is done' }}</small></span>{{ status_badge(td.status) }}</a>
+</div></div></section>
+{% endif %}
+
 <div class="stats">
   <div><b>{{ td.gross_sale|inr }}</b><span>Sales today so far</span></div>
   <div><b>{{ td.expected_cash|inr }}</b><span>Cash expected in drawer</span></div>
-  <div><b class="{% if week_diff < 0 %}neg{% elif week_diff > 0 %}pos{% endif %}">{{ week_diff|inr }}</b><span>Cash short/excess, last {{ week_diff_days }} closed day(s)</span></div>
-  <div><b>{{ total_due|inr }}</b><span>Owed by {{ due_count }} credit part{{ 'y' if due_count==1 else 'ies' }}</span></div>
+  {% if can('reports') %}<div><b class="{% if week_diff < 0 %}neg{% elif week_diff > 0 %}pos{% endif %}">{{ week_diff|inr }}</b><span>Cash short/excess, last {{ week_diff_days }} day(s)</span></div>{% endif %}
+  {% if can('accounts_view') %}<div><b>{{ total_due|inr }}</b><span>To collect from {{ due_count }} part{{ 'y' if due_count==1 else 'ies' }}</span></div>{% endif %}
+</div>
+
+<div class="tiles">
+{% for e, icon, label, desc, color, perm, match in M.MODULES[1:] if allowed(perm)|trim != '' %}
+  <a class="tile" href="{{ url_for(e) }}" style="--mc:var({{ color }})"><span class="modicon"><svg><use href="#i-{{ icon }}"/></svg></span><b>{{ label }}</b><small>{{ desc }}</small></a>
+{% endfor %}
 </div>
 
 <div class="grid2">
-  <section class="section"><header><h2>Sales, last 14 days</h2></header><div class="body">
+  {% if can('reports') %}<section class="section"><header><h2>Sales, last 14 days</h2></header><div class="body">
     <div class="bars">{% for c in chart %}
-      <a class="bar {% if c.date == today %}today{% elif c.diff is not none and c.diff < 0 %}short{% endif %}" href="{{ url_for('day.day_view', d=c.date.isoformat()) }}" title="{{ c.date|d }}: {{ c.sale|inr }}{% if c.diff is not none %}, cash {{ c.diff|inr }}{% endif %}">
+      <a class="bar {% if c.date == today %}today{% elif c.diff is not none and c.diff < 0 %}short{% endif %}" href="{{ url_for('day.day_view', d=c.date.isoformat()) }}" title="{{ c.date|d }}: {{ c.sale|inr }}">
         <i style="height:{{ (c.sale / peak * 100)|round(1) if c.sale else 0 }}%"></i><small class="muted">{{ c.date.day }}</small></a>{% endfor %}</div>
-    <div class="legend"><span><i style="background:var(--ink-2)"></i>Sale</span><span><i style="background:var(--stop)"></i>Cash short that day</span><span><i style="background:var(--amber)"></i>Today</span></div>
-  </div></section>
-
-  <section class="section"><header><h2>Highest dues</h2><a class="btn small secondary" href="{{ url_for('parties.index') }}">All parties</a></header>
-  <div class="body flush">{% if dues %}<table><tbody>{% for p in dues %}<tr>
-    <td><a href="{{ url_for('parties.detail', pid=p.id) }}"><b>{{ p.name }}</b></a><br><small>{% if p.last_payment %}Last paid {{ p.last_payment|d }}{% else %}No payment yet{% endif %}</small></td>
-    <td class="num neg"><b>{{ p.balance|inr }}</b>{% if p.credit_limit and p.balance > p.credit_limit %}<br><span class="badge stop">Over limit</span>{% endif %}</td></tr>{% endfor %}</tbody></table>
-  {% else %}<p class="empty">No one owes anything.</p>{% endif %}</div></section>
-
-  <section class="section"><header><h2>Tanks</h2><a class="btn small secondary" href="{{ url_for('tanks.index') }}">Dip &amp; tankers</a></header>
+    <div class="legend"><span><i style="background:#5B5BF7"></i>Sale</span><span><i style="background:#E0384F"></i>Cash short</span><span><i style="background:#0EA5A4"></i>Today</span></div>
+  </div></section>{% endif %}
+  <section class="section"><header><h2>Tanks</h2><a class="btn small secondary" href="{{ url_for('tanks.index') }}">Open</a></header>
   <div class="body">{% for r in tanks %}<div style="margin-bottom:12px">
-    <div class="formrow" style="justify-content:space-between"><b>{{ r.tank.name }}</b>
-      <span>{% if r.actual is not none %}{{ r.actual|qty }} L{% if r.fill_pct is not none %} · {{ r.fill_pct }}%{% endif %}{% if days_left.get(r.tank.id) %} · about {{ days_left[r.tank.id] }} days left{% endif %}{% if r.dip and r.dip.source=='atg' %} · <span class="badge locked">ATG {{ r.dip.updated_at.strftime('%I:%M %p') }}</span>{% endif %}{% if r.receipt_mismatch %} · <span class="badge stop">tanker not recorded</span>{% endif %}{% else %}<span class="muted">No dip today</span>{% endif %}</span></div>
-    {% if r.fill_pct is not none %}<div class="meterbar {% if r.fill_pct < 20 %}low{% endif %}"><i style="width:{{ [r.fill_pct,100]|min }}%"></i></div>{% endif %}
+    <div class="formrow" style="justify-content:space-between;align-items:center"><b>{{ r.tank.name }}</b>
+      <span>{% if r.actual is not none %}{{ r.actual|qty(0) }} L{% if r.fill_pct is not none %} · {{ r.fill_pct }}%{% endif %}{% if days_left.get(r.tank.id) %} · ~{{ days_left[r.tank.id] }} days{% endif %}{% else %}<span class="muted">No dip today</span>{% endif %}
+      {% if r.dip and r.dip.source=='atg' %} <span class="badge locked">ATG {{ r.dip.updated_at.strftime('%I:%M %p') }}</span>{% endif %}{% if r.receipt_mismatch %} <span class="badge stop">tanker not recorded</span>{% endif %}</span></div>
+    {% if r.fill_pct is not none %}<div class="meterbar {% if r.fill_pct < 20 %}low{% endif %}" style="margin-top:6px"><i style="width:{{ [r.fill_pct,100]|min }}%"></i></div>{% endif %}
   </div>{% else %}<p class="muted">No tanks set up.</p>{% endfor %}</div></section>
-
-  <section class="section"><header><h2>Lube to reorder</h2><a class="btn small secondary" href="{{ url_for('lube.index') }}">Lube stock</a></header>
+  {% if can('accounts_view') %}<section class="section"><header><h2>Highest dues</h2><a class="btn small secondary" href="{{ url_for('parties.index') }}">All</a></header>
+  <div class="body flush">{% if dues %}<table><tbody>{% for p in dues %}<tr><td><a href="{{ url_for('parties.detail', pid=p.id) }}"><b>{{ p.name }}</b></a><br><small>{% if p.last_payment %}Last paid {{ p.last_payment|d }}{% else %}No payment yet{% endif %}</small></td>
+    <td class="num neg"><b>{{ p.balance|inr }}</b></td></tr>{% endfor %}</tbody></table>{% else %}<p class="empty">No one owes anything.</p>{% endif %}</div></section>{% endif %}
+  <section class="section"><header><h2>Lube to reorder</h2><a class="btn small secondary" href="{{ url_for('lube.index') }}">Open</a></header>
   <div class="body flush">{% if lube %}<table><tbody>{% for p in lube %}<tr><td>{{ p.name }}</td><td class="num {% if p.stock <= 0 %}neg{% endif %}">{{ p.stock|qty }} {{ p.unit }}</td></tr>{% endfor %}</tbody></table>
   {% else %}<p class="empty">Every product is above its reorder level.</p>{% endif %}</div></section>
 </div>

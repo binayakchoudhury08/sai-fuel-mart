@@ -100,11 +100,27 @@ def one(sql, params=None):
 
 
 def ensure_schema():
-    """Create/upgrade the pump schema. Safe to run on every start; an
-    advisory lock stops two gunicorn workers doing it at the same time."""
+    """Create/upgrade the pump schema — but only when schema.sql has changed since the last run.
+    On Vercel every cold start calls this, so the normal path is one quick SELECT."""
+    import hashlib
     path = os.path.join(os.path.dirname(__file__), "schema.sql")
     with open(path, encoding="utf-8") as f:
         ddl = f.read()
+    version = hashlib.sha256(ddl.encode()).hexdigest()[:16]
+    try:
+        c0 = psycopg2.connect(_dsn(), connect_timeout=15,
+                              **({} if ("sslmode" in _dsn() or "/tmp" in _dsn() or "localhost" in _dsn())
+                                 else {"sslmode": "require"}))
+        try:
+            with c0.cursor() as cur:
+                cur.execute("SELECT value FROM pump.settings WHERE key='schema_version'")
+                r = cur.fetchone()
+            if r and r[0] == version:
+                return
+        finally:
+            c0.close()
+    except psycopg2.Error:
+        pass   # schema not there yet → create it below
     conn = psycopg2.connect(_dsn(), connect_timeout=20,
                             **({} if ("sslmode" in _dsn() or "/tmp" in _dsn() or "localhost" in _dsn())
                                else {"sslmode": "require"}))
@@ -115,6 +131,8 @@ def ensure_schema():
             cur.execute("SELECT pg_advisory_xact_lock(842211)")
             cur.execute("SET LOCAL client_min_messages TO warning")
             cur.execute(ddl)
+            cur.execute("""INSERT INTO pump.settings (key, value) VALUES ('schema_version', %s)
+                           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""", (version,))
             conn.commit()
     finally:
         conn.close()

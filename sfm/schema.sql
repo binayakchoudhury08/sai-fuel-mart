@@ -452,3 +452,34 @@ ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS photo_path TEXT NOT NULL DEFAUL
 ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS video_path TEXT NOT NULL DEFAULT '';
 ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS photo_bytes INTEGER;
 ALTER TABLE pump.proofs ADD COLUMN IF NOT EXISTS video_bytes INTEGER;
+
+-- ================================================================ v3.0: daily-closing credit totals per transporter
+-- What the closing person writes for each transporter for the day; reconciled against the slip entries.
+CREATE TABLE IF NOT EXISTS pump.day_credit (
+    business_date DATE NOT NULL,
+    party_id      INTEGER NOT NULL REFERENCES pump.parties(id),
+    amount        NUMERIC(14,2) NOT NULL CHECK (amount >= 0),
+    updated_by    TEXT,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (business_date, party_id)
+);
+DROP TRIGGER IF EXISTS day_credit_lockguard ON pump.day_credit;
+CREATE TRIGGER day_credit_lockguard BEFORE INSERT OR UPDATE OR DELETE ON pump.day_credit
+    FOR EACH ROW EXECUTE FUNCTION pump.guard_locked_day();
+
+-- live-photo attendance
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS photo_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS captured_at TIMESTAMPTZ;
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS latitude TEXT;
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS longitude TEXT;
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS marked_via TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '';
+
+-- v3.0: Admin role
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
+               AND pg_get_constraintdef(oid) NOT LIKE '%admin%') THEN
+        ALTER TABLE pump.users DROP CONSTRAINT users_role_check;
+        ALTER TABLE pump.users ADD CONSTRAINT users_role_check CHECK (role IN ('owner','admin','manager','operator'));
+    END IF;
+END $$;

@@ -12,9 +12,43 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from .util import UserError, now_ist, today
 
-ROLES = ("owner", "manager", "operator")
-ROLE_LABEL = {"owner": "Owner", "manager": "Manager", "operator": "Operator"}
-RANK = {"operator": 1, "manager": 2, "owner": 3}
+ROLES = ("owner", "admin", "manager", "operator")
+ROLE_LABEL = {"owner": "Owner", "admin": "Admin", "manager": "Manager", "operator": "Staff (data entry)"}
+RANK = {"operator": 1, "manager": 2, "admin": 3, "owner": 4}
+
+# Everything a role can be allowed to do. The OWNER always has all of it and is the only one who can
+# change this list for Admin, Manager and Staff (Settings → Permissions).
+#  key, label, group, default roles
+PERMISSIONS = [
+    ("closing_enter", "Enter daily closing: meter readings, cash, digital, expenses, lube sales", "Daily work", {"operator", "manager", "admin"}),
+    ("closing_submit", "Submit the day for verification", "Daily work", {"operator", "manager", "admin"}),
+    ("transport_enter", "Credit transport entries (slips)", "Daily work", {"operator", "manager", "admin"}),
+    ("bills", "Download transport bills (PDF / Excel / ZIP)", "Daily work", {"operator", "manager", "admin"}),
+    ("payments", "Receive payments from parties", "Daily work", {"operator", "manager", "admin"}),
+    ("tanks", "Tank dips and tanker receipts", "Daily work", {"operator", "manager", "admin"}),
+    ("proofs", "Take photo proofs", "Daily work", {"operator", "manager", "admin"}),
+    ("attendance_photo", "Mark attendance with a live staff photo", "Staff", {"manager", "admin"}),
+    ("attendance_manual", "Mark or change attendance without a photo (absent → present, leave, off)", "Staff", {"admin"}),
+    ("salary", "Pay salary / advance / bonus and see the salary sheet", "Staff", {"manager", "admin"}),
+    ("staff_manage", "Add and edit staff", "Staff", {"manager", "admin"}),
+    ("lube_stock", "Add lube stock, products and stock counts", "Stock", {"manager", "admin"}),
+    ("cancel_entries", "Cancel or correct entries (with reason)", "Control", {"manager", "admin"}),
+    ("rate_override", "Use a different rate on a credit entry", "Control", {"manager", "admin"}),
+    ("parties_manage", "Add / edit parties and give discounts", "Control", {"manager", "admin"}),
+    ("accounts_view", "See party balances and statements", "Control", {"manager", "admin"}),
+    ("reports", "See reports and analytics, download Excel / PDF", "Control", {"manager", "admin"}),
+    ("day_lock", "Verify and lock days", "Owner-level", {"admin"}),
+    ("day_reopen", "Reopen locked days and change days older than the back-date window", "Owner-level", {"admin"}),
+    ("meter_override", "Change an opening meter reading", "Owner-level", set()),
+    ("adjustments", "Balance adjustments and opening balances", "Owner-level", {"admin"}),
+    ("credit_limit_override", "Allow credit beyond a party's limit", "Owner-level", {"admin"}),
+    ("setup", "Fuel rates, nozzles, tanks, pump details", "Owner-level", {"admin"}),
+    ("users", "Create staff / manager accounts and reset their passwords", "Owner-level", {"admin"}),
+    ("audit", "See the audit log", "Owner-level", {"admin"}),
+    ("backup", "Download full backup", "Owner-level", set()),
+]
+PERM_KEYS = [p[0] for p in PERMISSIONS]
+_perm_cache = {"at": 0.0, "map": None}
 
 MAX_FAILED = 5
 LOCK_MINUTES = 15
@@ -51,9 +85,46 @@ def role():
     return u["role"] if u else None
 
 
-def can(min_role):
+def role_perms(cur=None):
+    """{role: set(keys)} — from Settings, falling back to the defaults above. Cached for 20 s."""
+    import time as _t
+    if _perm_cache["map"] is not None and _t.time() - _perm_cache["at"] < 20:
+        return _perm_cache["map"]
+    from . import db as _db
+    m = {r: {k for k, _, _, d in PERMISSIONS if r in d} for r in ("admin", "manager", "operator")}
+    try:
+        rows = _db.query("SELECT key, value FROM settings WHERE key LIKE 'perms:%%'")
+        for row in rows:
+            r = row["key"].split(":", 1)[1]
+            if r in m:
+                m[r] = {k for k in row["value"].split(",") if k in PERM_KEYS}
+    except Exception:
+        pass
+    _perm_cache.update(at=_t.time(), map=m)
+    return m
+
+
+def reset_perm_cache():
+    _perm_cache.update(at=0.0, map=None)
+
+
+def has(perm):
     r = role()
-    return bool(r) and RANK[r] >= RANK[min_role]
+    if not r:
+        return False
+    if r == "owner":
+        return True
+    return perm in role_perms().get(r, set())
+
+
+def can(what):
+    """Templates and views: can('perm_key'), can('a|b') for any of several, or a role name for 'at least this role'."""
+    if "|" in what:
+        return any(can(w) for w in what.split("|") if w)
+    if what in RANK:
+        r = role()
+        return bool(r) and RANK[r] >= RANK[what]
+    return has(what)
 
 
 def login_required(min_role="operator"):
@@ -151,9 +222,8 @@ def managers_edit_history(cur):
     return get_setting(cur, "managers_edit_history", "0") == "1"
 
 
-def can_unlock(cur):
-    r = role()
-    return r == "owner" or (r == "manager" and managers_edit_history(cur))
+def can_unlock(cur=None):
+    return has("day_reopen")
 
 
 def day_status(cur, d):
@@ -168,7 +238,7 @@ def assert_writable(cur, d, *, lock_row=True):
     if d > t:
         raise UserError("You cannot enter data for a future date.")
     r = role()
-    if r != "owner" and not (r == "manager" and managers_edit_history(cur)):
+    if not has("day_reopen"):
         try:
             back = int(get_setting(cur, "backdate_days", "2") or 2)
         except ValueError:
@@ -183,7 +253,7 @@ def assert_writable(cur, d, *, lock_row=True):
     if st == "locked":
         raise UserError(f"{d.strftime('%d %b %Y')} is verified and locked. "
                         "Only the owner can unlock it.")
-    if st == "submitted" and r == "operator":
+    if st == "submitted" and not has("cancel_entries"):
         raise UserError(f"{d.strftime('%d %b %Y')} has been submitted for verification. "
                         "Ask the manager to make changes.")
 

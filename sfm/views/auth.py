@@ -141,14 +141,14 @@ def change_password():
 
 # ------------------------------------------------------------------ users (owner)
 @bp.route("/users")
-@login_required("owner")
+@login_required("users")
 def users():
     rows = db.query("SELECT * FROM users ORDER BY active DESC, role, username")
     return render_template("auth/users.html", rows=rows, roles=ROLES)
 
 
 @bp.route("/users/new", methods=["POST"])
-@login_required("owner")
+@login_required("users")
 def user_new():
     username = clean(request.form.get("username"), 40).lower()
     role = request.form.get("role")
@@ -156,6 +156,8 @@ def user_new():
         raise UserError("Username can use letters, numbers, dot, dash and underscore only.")
     if role not in ROLES:
         raise UserError("Choose a role.")
+    if role in ("owner", "admin") and current_user()["role"] != "owner":
+        raise UserError("Only the owner can create Owner or Admin accounts.")
     pw = request.form.get("password") or ""
     validate_new_password(pw, username)
     with db.tx() as cur:
@@ -173,7 +175,7 @@ def user_new():
 
 
 @bp.route("/users/<int:uid>", methods=["POST"])
-@login_required("owner")
+@login_required("users")
 def user_update(uid):
     action = request.form.get("action")
     with db.tx() as cur:
@@ -181,6 +183,8 @@ def user_update(uid):
         u = cur.fetchone()
         if not u:
             raise UserError("User not found.")
+        if u["role"] in ("owner", "admin") and current_user()["role"] != "owner" and u["id"] != current_user()["id"]:
+            raise UserError("Only the owner can change Owner or Admin accounts.")
         if action == "reset":
             pw = request.form.get("password") or ""
             validate_new_password(pw, u["username"])
@@ -202,6 +206,8 @@ def user_update(uid):
             new_role = request.form.get("role")
             if new_role not in ROLES:
                 raise UserError("Choose a role.")
+            if new_role in ("owner", "admin") and current_user()["role"] != "owner":
+                raise UserError("Only the owner can give the Owner or Admin role.")
             if uid == current_user()["id"] and new_role != "owner":
                 raise UserError("You cannot remove your own owner role.")
             cur.execute("UPDATE users SET role=%s WHERE id=%s", (new_role, uid))

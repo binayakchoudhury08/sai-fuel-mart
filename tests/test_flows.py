@@ -161,6 +161,12 @@ check(r.status_code == 200 and has(r, "₹1,09,050.00"), "day page renders with 
 
 print("Workflow + locks")
 r = owner.post(f"{D}/submit", {})
+check(has(r, "does not match Credit transport") or has(r, "Credit does not match"), "submit blocked until closing credit matches Credit transport")
+r = owner.post(f"{D}/credit", {f"credit_{pid}": "10000"})
+check(has(r, "do not match"), "wrong closing total shows a mismatch")
+r = owner.post(f"{D}/credit", {f"credit_{pid}": "11000"})
+check(has(r, "Every transporter matches"), "closing total 11,000 = slips 9,000 + cash 2,000 → matched")
+r = owner.post(f"{D}/submit", {})
 check(sql("SELECT status FROM pump.days WHERE business_date=%s", (Y,))[0][0] == "submitted", "day submitted")
 owner.post(f"{D}/lock", {})
 check(sql("SELECT status FROM pump.days WHERE business_date=%s", (Y,))[0][0] == "locked", "day locked")

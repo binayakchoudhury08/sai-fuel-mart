@@ -26,15 +26,14 @@ def dashboard():
     t0 = today()
     with db.tx() as cur:
         span = range_summary(cur, t0 - timedelta(days=13), t0)
-        # today's headline numbers come from the same summary as the chart (same formula as Daily closing)
-        cur.execute("""SELECT (SELECT COUNT(*) FROM nozzles WHERE active) AS needed,
-                              (SELECT COUNT(*) FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
-                               WHERE n.active AND r.business_date=%s) AS done,
-                              (SELECT status FROM days WHERE business_date=%s) AS status""", (t0, t0))
-        rd = cur.fetchone()
-        tr = next((r for r in span if r["date"] == t0), None)
-        td = {"status": rd["status"] or "open", "readings_done": rd["done"], "readings_needed": rd["needed"],
-              "gross_sale": tr["gross_sale"] if tr else ZERO, "expected_cash": tr["expected_cash"] if tr else ZERO}
+        td = compute_day(cur, t0)
+        cur.execute("""SELECT (SELECT COUNT(*) FROM staff WHERE active) AS staff,
+                              (SELECT COUNT(*) FROM attendance a JOIN staff s ON s.id=a.staff_id
+                                WHERE s.active AND a.work_date=%s AND a.status IN ('P','H')) AS present,
+                              (SELECT COUNT(*) FROM party_txns WHERE business_date=%s AND NOT voided
+                                AND kind IN ('fuel','cash_advance')) AS slips,
+                              (SELECT COUNT(*) FROM proofs WHERE business_date=%s) AS proofs""", (t0, t0, t0))
+        counts = cur.fetchone()
         parties = party_balances(cur, active_only=False)
         lube = [p for p in lube_stock(cur) if p["active"] and Decimal(p["stock"]) <= Decimal(p["reorder_level"])]
         from ..services import tank_series, avg_daily_sales
@@ -67,7 +66,7 @@ def dashboard():
     dues = sorted((p for p in parties if Decimal(p["balance"]) > 0), key=lambda p: -Decimal(p["balance"]))
     total_due = sum((Decimal(p["balance"]) for p in dues), ZERO)
     diffs = [c["diff"] for c in chart[-7:] if c["diff"] is not None]
-    return render_template("dashboard.html", td=td, chart=chart, peak=peak, dues=dues[:6],
+    return render_template("dashboard.html", td=td, counts=counts, chart=chart, peak=peak, dues=dues[:6],
                            total_due=total_due, due_count=len(dues), lube=lube, tanks=tanks,
                            days_left=days_left, pending=pending, week_diff=sum(diffs, ZERO),
                            week_diff_days=len(diffs),

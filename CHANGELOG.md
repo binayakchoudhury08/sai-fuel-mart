@@ -1,5 +1,40 @@
 # Sai Fuel Mart — changes
 
+## 3.0.0
+
+Fixes
+- Phone "More" button now opens (website and app). The menu is a bottom sheet with every section as a tile.
+- Speed: moved to Vercel in Singapore next to the database (~1–3 ms per database request instead of ~170 ms).
+  Database setup runs only when it changes; static files come from Vercel's CDN.
+- Android app 3.0.0: GPU drawing and pre-rendering for smoother scrolling; Vercel address by default.
+
+Simpler, clearer design
+- New look: indigo navigation, frosted-glass panels, a colour and icon for every section, clear status chips.
+- Home shows "Today's work" as numbered steps with Done / To do / Mismatch.
+- Daily closing is 7 numbered steps with a step bar: readings, digital & cash, credit check, lube, expenses &
+  staff, payments, check & submit.
+
+Roles and permissions
+- Owner, Admin, Manager, Staff (data entry). The owner ticks what each role may do (Permissions page).
+  Admin gets only what the owner allows and can never create or change Owner/Admin accounts.
+
+Daily closing ↔ Credit transport reconciliation
+- Slips are entered only in Credit transport. In Daily closing you write each transporter's total for the day;
+  it is checked against the slips (✓ Matched / ✗ Check slips). Submit and lock are blocked until all match.
+
+Lube stock notebook
+- Per product for any day: opening, + arrived, − sold, = left. Write what arrived and what you counted on the
+  shelf; one Save. Count differences are recorded as stock counts.
+
+Attendance by live photo
+- Manager taps a staff member → live camera → photo (stamped with time, GPS, who took it) → Present.
+  No photo = absent. Managers only for today + the days the owner allows, within the owner's hours.
+  Owner (and anyone allowed) can mark/change any status with a reason.
+
+Removed
+- WhatsApp / n8n automation (switched off and removed from the website).
+
+
 ## 2.3.0
 
 Daily closing

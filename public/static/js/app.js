@@ -203,3 +203,15 @@
     f.addEventListener("submit", function(){ f.querySelector("[name=party]").value = sel.value; });
   });
 })();
+
+/* Phone "More" sheet: close after choosing, on Escape / Android back, and open with Enter/Space */
+(function(){
+  var more = document.getElementById("more"); if (!more) return;
+  document.querySelectorAll(".sheet a").forEach(function(a){ a.addEventListener("click", function(){ more.checked = false; }); });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") more.checked = false; });
+  document.querySelectorAll('label[for="more"][role="button"]').forEach(function(l){
+    l.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); more.checked = !more.checked; } });
+  });
+  more.addEventListener("change", function(){ if (more.checked) history.pushState({sheet:1}, ""); });
+  window.addEventListener("popstate", function(){ if (more.checked) more.checked = false; });
+})();

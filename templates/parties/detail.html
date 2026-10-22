@@ -21,7 +21,7 @@
   <div><label>Fuel</label><select name="fuel_code">{% for f in fuels %}<option value="{{ f.code }}" data-rate="{{ rates.get(f.code,'') }}" {% if f.code=='HSD' %}selected{% endif %}>{{ f.code }} – ₹{{ rates.get(f.code,'–') }}</option>{% endfor %}</select></div>
   <div><label>Litres</label><input name="qty" inputmode="decimal"></div>
   <div><label>or Amount (₹)</label><input name="amount" inputmode="decimal"></div>
-  {% if can('manager') %}<div><label>Rate (if different)</label><input name="rate" inputmode="decimal"></div>{% endif %}
+  {% if can('rate_override') %}<div><label>Rate (if different)</label><input name="rate" inputmode="decimal"></div>{% endif %}
   <div><label>Cash taken (₹)</label><input name="cash_taken" inputmode="decimal" placeholder="0"></div>
   <div><label>Vehicle</label><input name="vehicle_no" autocapitalize="characters" list="veh"></div>
   <div><label>Challan</label><input name="challan_no"></div><div><label>Slip</label><input name="slip_no"></div>
@@ -40,10 +40,10 @@
   <div class="wide"><label>Remarks</label><input name="remarks"></div>
 </div><p class="hint">Every payment gets a receipt number. Cash and UPI at the pump go into that day’s cash calculation.</p>
 <p style="margin-top:10px" class="btnrow"><button class="btn go">Save payment</button><label class="check"><input type="checkbox" name="print_receipt" value="1" checked> Show receipt</label></p></form>
-{% if can('manager') %}<details class="add" style="margin:12px -16px -14px"><summary>Discount{% if user.role=='owner' %} or adjustment{% endif %}</summary><div class="body">
+{% if can('parties_manage') %}<details class="add" style="margin:12px -16px -14px"><summary>Discount{% if can('adjustments') %} or adjustment{% endif %}</summary><div class="body">
 <form method="post" action="{{ url_for('parties.add_txn', pid=p.id) }}">{{ hidden() }}<div class="fields">
-  <div><label>Type</label><select name="kind"><option value="discount">Discount (reduces dues)</option>{% if user.role=='owner' %}<option value="adjustment">Adjustment</option>{% endif %}</select></div>
-  {% if user.role=='owner' %}<div><label>Direction (adjustment)</label><select name="direction"><option value="decrease">Reduce dues</option><option value="increase">Increase dues</option></select></div>{% endif %}
+  <div><label>Type</label><select name="kind"><option value="discount">Discount (reduces dues)</option>{% if can('adjustments') %}<option value="adjustment">Adjustment</option>{% endif %}</select></div>
+  {% if can('adjustments') %}<div><label>Direction (adjustment)</label><select name="direction"><option value="decrease">Reduce dues</option><option value="increase">Increase dues</option></select></div>{% endif %}
   <div><label>Amount (₹)</label><input name="amount" inputmode="decimal" required></div>
   <div><label>Date</label><input type="date" name="business_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
   <div class="wide"><label>Reason (required)</label><input name="remarks" required></div>
@@ -72,7 +72,7 @@
   <td class="num">{{ r.debit|inr if r.debit else '' }}</td><td class="num">{{ r.credit|inr if r.credit else '' }}</td>
   <td class="num">{% if not r.voided %}{{ r.running|inr }}{% endif %}</td>
   <td class="actions keep">{% if r.kind=='payment' %}<a class="btn small secondary" href="{{ url_for('parties.receipt', tid=r.id) }}">Receipt</a>{% endif %}
-  {% if can('manager') and not r.voided %}
+  {% if can('cancel_entries') and not r.voided %}
     {% if r.kind in ('fuel','cash_advance','payment') %}<details class="void"><summary style="color:inherit">Edit details</summary>
       <form method="post" action="{{ url_for('parties.edit_txn_details', tid=r.id) }}">{{ csrf() }}
       <label>Vehicle</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Challan</label><input name="challan_no" value="{{ r.challan_no }}">
@@ -83,7 +83,7 @@
 </tr>{% endfor %}</tbody>
 <tfoot><tr><td colspan="3">Closing balance on {{ end|d }} <small>(totals for the whole period)</small></td><td class="num">{{ stmt.totals.debit|inr }}</td><td class="num">{{ stmt.totals.credit|inr }}</td><td class="num">{{ stmt.closing|inr }}</td><td></td></tr></tfoot></table></div>{{ pager(stmt.page, stmt.pages, stmt.count) }}</section>
 
-{% if can('manager') %}<section class="section"><details class="add" style="border-top:0"><summary>Edit party details</summary><div class="body">
+{% if can('parties_manage') %}<section class="section"><details class="add" style="border-top:0"><summary>Edit party details</summary><div class="body">
 <form method="post" action="{{ url_for('parties.edit', pid=p.id) }}">{{ csrf() }}<div class="fields">
   <div><label>Name</label><input name="name" value="{{ p.name }}" required></div>
   <div><label>Mobile</label><input name="mobile" value="{{ p.mobile }}"></div>

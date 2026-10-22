@@ -154,8 +154,28 @@ def compute_day(cur, d):
     """, (d,))
     party_rows = cur.fetchall()
     live = [t for t in party_rows if not t["voided"]]
-    # transport credit = full slip total (diesel + cash taken), exactly like the old daily closing credit figure
-    credit_fuel = sum((Decimal(t["debit"]) for t in live if t["kind"] in ("fuel", "cash_advance")), ZERO)
+    # transport credit: the closing person's total per transporter (day_credit), reconciled with the slip
+    # entries in Credit transport. Days from before this existed fall back to the slip totals.
+    register = {}
+    for t in live:
+        if t["kind"] in ("fuel", "cash_advance"):
+            register[t["party_id"]] = register.get(t["party_id"], ZERO) + Decimal(t["debit"])
+    cur.execute("""SELECT dc.party_id, dc.amount, p.name FROM day_credit dc JOIN parties p ON p.id=dc.party_id
+                   WHERE dc.business_date=%s""", (d,))
+    declared = {r["party_id"]: (Decimal(r["amount"]), r["name"]) for r in cur.fetchall()}
+    names = {t["party_id"]: t["party_name"] for t in party_rows}
+    names.update({k: v[1] for k, v in declared.items()})
+    recon = []
+    for pid in sorted(set(register) | set(declared), key=lambda k: names.get(k, "")):
+        dec = declared[pid][0] if pid in declared else None
+        reg = register.get(pid, ZERO)
+        recon.append({"party_id": pid, "name": names.get(pid, "?"), "declared": dec, "register": reg,
+                      "diff": (dec - reg) if dec is not None else None,
+                      "ok": dec is not None and dec == reg})
+    has_declared = bool(declared)
+    credit_fuel = (sum((v[0] for v in declared.values()), ZERO) if has_declared
+                   else sum(register.values(), ZERO))
+    recon_ok = all(r["ok"] for r in recon) if recon else True
     credit_lube = sum((Decimal(t["debit"]) for t in live if t["kind"] == "lube"), ZERO)
     cash_advance = ZERO  # cash taken is already inside credit_fuel (one line, as before)
     pay_by_mode = OrderedDict((m, ZERO) for m in PAY_MODES)
@@ -207,6 +227,13 @@ def compute_day(cur, d):
         if q > sold:
             warnings.append(f"Credit {code} ({q} {by_fuel[code]['unit']}) is more than the meter sale "
                             f"({sold}). Check readings or credit entries.")
+    for r in recon:
+        if not r["ok"]:
+            if r["declared"] is None:
+                warnings.append(f"Credit: enter today's total for {r['name']} (Credit transport has {r['register']}).")
+            else:
+                warnings.append(f"Credit: {r['name']} closing {r['declared']} ≠ Credit transport {r['register']} "
+                                f"(difference {r['diff']}).")
     if digital_total > gross_sale + payments_drawer and gross_sale > 0:
         warnings.append("Digital collections are more than total sales. Check the figures.")
 
@@ -220,6 +247,8 @@ def compute_day(cur, d):
         "collections": collections, "digital_total": money(digital_total),
         "party_rows": party_rows, "credit_fuel": money(credit_fuel), "credit_lube": money(credit_lube),
         "credit_total": money(credit_fuel + credit_lube), "cash_advance": money(cash_advance),
+        "recon": recon, "recon_ok": recon_ok, "has_declared": has_declared,
+        "declared_total": money(sum((v[0] for v in declared.values()), ZERO)),
         "pay_by_mode": pay_by_mode, "payments_total": money(payments_total),
         "payments_drawer": money(payments_drawer),
         "expenses": expenses, "exp_counter": money(exp_counter), "exp_other": money(exp_other),
@@ -517,6 +546,8 @@ def range_summary(cur, start, end):
             COALESCE(SUM(credit) FILTER (WHERE kind='payment' AND pay_mode IN ('Cash','UPI at pump')),0) AS pay_drawer
             FROM party_txns WHERE NOT voided AND NOT is_legacy AND business_date BETWEEN %s AND %s
             GROUP BY business_date""")
+    declared = by_date("""SELECT business_date AS d, SUM(amount) AS a FROM day_credit
+                           WHERE business_date BETWEEN %s AND %s GROUP BY business_date""")
     exp = by_date("""SELECT business_date AS d,
             COALESCE(SUM(amount) FILTER (WHERE from_counter),0) AS counter,
             COALESCE(SUM(amount),0) AS total
@@ -526,7 +557,7 @@ def range_summary(cur, start, end):
             GROUP BY business_date""")
     days = by_date("SELECT business_date AS d, * FROM days WHERE business_date BETWEEN %s AND %s")
 
-    dates = sorted(set(fuel_rows) | set(lube) | set(digital) | set(party) | set(exp) | set(staffc) | set(days))
+    dates = sorted(set(fuel_rows) | set(lube) | set(digital) | set(party) | set(exp) | set(staffc) | set(days) | set(declared))
     out = []
     for d in dates:
         day = days.get(d)
@@ -554,7 +585,7 @@ def range_summary(cur, start, end):
         lcr = Decimal(lube[d]["credit"]) if d in lube else ZERO
         dg = Decimal(digital[d]["a"]) if d in digital else ZERO
         p = party.get(d)
-        cf = Decimal(p["credit_fuel"]) if p else ZERO
+        cf = Decimal(declared[d]["a"]) if d in declared else (Decimal(p["credit_fuel"]) if p else ZERO)
         cl = Decimal(p["credit_lube"]) if p else ZERO
         ca = Decimal(p["cash_advance"]) if p else ZERO
         pd = Decimal(p["pay_drawer"]) if p else ZERO

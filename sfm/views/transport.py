@@ -13,6 +13,12 @@ from ..services import (PAY_MODES, fuels, next_sl_no, party_balance, party_balan
                         register_totals, settings_map, transport_register)
 from ..util import ZERO, UserError, clean, inr, money, parse_date, to_dec, today
 
+
+def _deliver_compat(buf, mimetype=None, as_attachment=True, download_name=None, **kw):
+    from ..storage import deliver
+    return deliver(buf, download_name, mimetype)
+
+
 bp = Blueprint("transport", __name__)
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -74,7 +80,7 @@ def index():
 
 
 @bp.route("/transport/download")
-@login_required()
+@login_required("bills")
 def download():
     """One place for every bill: transporter (or all), day or month, PDF / Excel / ZIP."""
     period = request.args.get("period", "day")
@@ -105,7 +111,7 @@ def download():
     if fmt in ("pdf", "xlsx") and len(pairs) == 1:
         p, rows = pairs[0]
         maker = transport_bill_pdf if fmt == "pdf" else transport_bill_xlsx
-        return send_file(maker(p, rows, start, end, st), as_attachment=True,
+        return _deliver_compat(maker(p, rows, start, end, st), as_attachment=True,
                          mimetype="application/pdf" if fmt == "pdf" else XLSX,
                          download_name=bill_filename(p["name"], start, fmt, end))
     # ZIP (or several transporters): each transporter in its own folder
@@ -122,7 +128,7 @@ def download():
         buf.seek(0)
     who = pairs[0][0]["name"] if (pid and len(pairs) == 1) else "All transporters"
     kind = {"pdf": "PDF", "xlsx": "Excel", "zip": "PDF+Excel"}[fmt]
-    return send_file(buf, mimetype="application/zip", as_attachment=True,
+    return _deliver_compat(buf, mimetype="application/zip", as_attachment=True,
                      download_name=f"{''.join(c if c.isalnum() else ' ' for c in who).strip()} Bills {label} {kind}.zip")
 
 
@@ -153,7 +159,7 @@ def create_entry(cur, form, d, sl_no=None, corrected_from=None):
         if not rates.get(code):
             raise UserError(f"No {code} rate is set for {d.strftime('%d %b %Y')}. Set it in Settings → Fuel rates.")
         rate = rates[code]
-        if form.get("rate") and can("manager"):
+        if form.get("rate") and can("rate_override"):
             rate = to_dec(form.get("rate"), "Rate")
             if rate <= 0:
                 raise UserError("Rate must be more than zero.")
@@ -168,7 +174,7 @@ def create_entry(cur, form, d, sl_no=None, corrected_from=None):
     vehicle = clean(form.get("vehicle_no"), 20).upper().replace(" ", "")
     challan = clean(form.get("challan_no"), 30)
     slip = clean(form.get("slip_no"), 30)
-    if Decimal(p["credit_limit"]) > 0 and role() != "owner":
+    if Decimal(p["credit_limit"]) > 0 and not can("credit_limit_override"):
         new_bal = party_balance(cur, pid) + total
         if new_bal > Decimal(p["credit_limit"]):
             raise UserError(f"Credit limit crossed: {p['name']} would owe {inr(new_bal)} "
@@ -184,7 +190,7 @@ def create_entry(cur, form, d, sl_no=None, corrected_from=None):
 
 
 @bp.route("/transport/entry", methods=["POST"])
-@login_required()
+@login_required("transport_enter")
 def add_entry(party_id=None):
     d = parse_date(request.form.get("business_date") or today().isoformat())
     form = request.form.to_dict()
@@ -207,7 +213,7 @@ def add_entry(party_id=None):
 
 
 @bp.route("/transport/entry/<int:tid>/correct", methods=["POST"])
-@login_required("manager")
+@login_required("cancel_entries")
 def correct_entry(tid):
     """Fix an amount/qty mistake: the old row is cancelled (kept, struck through) and a
     corrected row takes the same SL No — one step, fully audited."""
@@ -238,7 +244,7 @@ def correct_entry(tid):
 @bp.route("/transport/bill")
 @bp.route("/transport/bill.<fmt>")
 @bp.route("/transport/bills.zip")
-@login_required()
+@login_required("bills")
 def bill(fmt=None):
     args = dict(request.args)
     p = args.get("party") or ""
@@ -254,7 +260,7 @@ def bill(fmt=None):
 
 
 @bp.route("/transport/register.<fmt>")
-@login_required()
+@login_required("bills")
 def register_file(fmt):
     start, end, pid, q = _filters(default_days=0)
     with db.tx() as cur:
@@ -272,11 +278,11 @@ def register_file(fmt):
     if fmt == "xlsx":
         data.append([None, None, "TOTAL (not counting cancelled)", None, None, None, None, tot["qty"], None,
                      tot["fuel_amount"], tot["cash"], tot["total"], None, None])
-        return send_file(workbook_bytes([("Transport register", heads, data, (8, 9, 10, 11, 12))]), mimetype=XLSX,
+        return _deliver_compat(workbook_bytes([("Transport register", heads, data, (8, 9, 10, 11, 12))]), mimetype=XLSX,
                          as_attachment=True, download_name=name + ".xlsx")
     if fmt == "pdf":
         pdf_rows = [r[:12] + [r[12][:40]] for r in data]
-        return send_file(report_pdf(st, "Credit transport register",
+        return _deliver_compat(report_pdf(st, "Credit transport register",
                                     f"{start:%d-%m-%Y} to {end:%d-%m-%Y}", heads[:13], pdf_rows,
                                     right_cols=range(7, 12),
                                     totals=["", "", "TOTAL", "", "", "", "", tot["qty"], "", tot["fuel_amount"],

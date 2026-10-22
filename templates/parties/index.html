@@ -1,7 +1,7 @@
 {% extends "base.html" %}{% from "_macros.html" import hidden with context %}{% block title %}Credit parties{% endblock %}
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Credit parties</h1><p>Transporters and customers who buy on credit. Balances are worked out from every entry, every time.</p></div>
-{% if can('manager') %}<a class="btn secondary" href="{{ url_for('reports.outstanding') }}">Outstanding report</a>{% endif %}</div>
+{% if can('reports') %}<a class="btn secondary" href="{{ url_for('reports.outstanding') }}">Outstanding report</a>{% endif %}</div>
 <div class="stats"><div><b class="neg">{{ total_due|inr }}</b><span>Total to collect</span></div>
 <div><b>{{ advance|inr }}</b><span>Advance held for parties</span></div><div><b>{{ rows|length }}</b><span>Parties</span></div></div>
 <section class="section"><header><h2>All parties</h2><input type="search" placeholder="Search name, mobile, vehicle" data-filter="#ptable" style="max-width:280px"></header>
@@ -13,7 +13,7 @@
   <td class="num {% if p.balance > 0 %}neg{% elif p.balance < 0 %}pos{% endif %}"><b>{{ p.balance|inr }}</b>{% if p.balance < 0 %}<br><small>advance</small>{% endif %}</td>
   <td>{{ p.last_payment|d if p.last_payment else '—' }}</td><td>{{ p.last_credit|d if p.last_credit else '—' }}</td></tr>
 {% else %}<tr><td colspan="5" class="empty">No parties yet.</td></tr>{% endfor %}</tbody></table></div>
-{% if can('manager') %}<details class="add" {% if not rows %}open{% endif %}><summary>Add a party</summary><div class="body">
+{% if can('parties_manage') %}<details class="add" {% if not rows %}open{% endif %}><summary>Add a party</summary><div class="body">
 <form method="post" action="{{ url_for('parties.new') }}">{{ hidden() }}<div class="fields">
   <div><label>Name</label><input name="name" required maxlength="100"></div>
   <div><label>Mobile (for WhatsApp)</label><input name="mobile" inputmode="tel" maxlength="14"></div>

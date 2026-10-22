@@ -35,53 +35,69 @@ def is_mobile():
     return bool(MOBILE_RE.search(request.headers.get("User-Agent", "")))
 
 
-# ------------------------------------------------------------------ storage (Supabase Storage)
-def _storage():
-    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "")
-    bucket = os.environ.get("SUPABASE_BUCKET", "proofs")
-    return base, key, bucket
+# ------------------------------------------------------------------ storage + capture tickets
+from .. import storage
 
 
 def storage_ready():
-    base, key, _ = _storage()
-    return bool(base and key)
+    return storage.ready()
 
 
-def _put(path, data, mime):
-    base, key, bucket = _storage()
-    r = requests.post(f"{base}/storage/v1/object/{bucket}/{path}", data=data, timeout=60,
-                      headers={"Authorization": f"Bearer {key}", "apikey": key, "Content-Type": mime,
-                               "x-upsert": "false"})
-    if r.status_code >= 300:
-        raise UserError(f"Could not save the file ({r.status_code}). Check the '{bucket}' bucket exists in Supabase "
-                        "Storage.")
+def _serializer():
+    from flask import current_app
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(current_app.secret_key, salt="live-capture")
 
 
-def _get(path):
-    base, key, bucket = _storage()
-    r = requests.get(f"{base}/storage/v1/object/{bucket}/{path}", timeout=60,
-                     headers={"Authorization": f"Bearer {key}", "apikey": key})
-    if r.status_code >= 300:
-        return None, None
-    return r.content, r.headers.get("Content-Type", "application/octet-stream")
+def issue_capture(prefix, label, want_video=False, video_ext="webm"):
+    """Paths + one-time upload links for a live capture, and a signed ticket that proves
+    this signed-in user asked for exactly these paths (checked when saving)."""
+    d = today()
+    tag = re.sub("[^A-Za-z0-9]+", "-", label)[:40]
+    uid = uuid.uuid4().hex
+    photo = f"{prefix}/{d:%Y-%m}/{d.isoformat()}_{tag}_{uid}.jpg"
+    video = f"{prefix}/{d:%Y-%m}/{d.isoformat()}_{tag}_{uid}.{video_ext}" if want_video else ""
+    out = {"photo_url": storage.signed_upload(photo)}
+    if video:
+        out["video_url"] = storage.signed_upload(video)
+    out["ticket"] = _serializer().dumps({"u": current_user()["id"], "p": photo, "v": video})
+    return out
+
+
+def check_capture(ticket, require_video=False):
+    """Validates the ticket and the uploaded files. Returns (photo_path, video_path, photo_bytes, video_bytes)."""
+    from itsdangerous import BadSignature, SignatureExpired
+    try:
+        t = _serializer().loads(ticket or "", max_age=2 * 3600)
+    except (BadSignature, SignatureExpired):
+        raise UserError("This capture expired. Take the photo again.")
+    if t.get("u") != current_user()["id"]:
+        raise UserError("This capture belongs to another user.")
+    data, _, size = storage.get(t["p"])
+    if not data or data[:3] != b"\xff\xd8\xff" or size > MAX_PHOTO:
+        raise UserError("The photo did not reach storage. Check the internet and take it again.")
+    vsize = None
+    if t.get("v"):
+        head, _, vsize = storage.get(t["v"], first_bytes=16)
+        if head:
+            if not (head[:4] == b"\x1a\x45\xdf\xa3" or head[4:8] == b"ftyp") or vsize > MAX_VIDEO:
+                raise UserError("The video is not a valid camera recording.")
+        else:
+            t["v"], vsize = "", None
+    return t["p"], t.get("v", ""), size, vsize
 
 
 def _fetch_file(row, kind):
-    """Bytes of a proof's photo/video: private path (new) or the old app's public URL (imported)."""
+    """Bytes of a proof photo (for the PDF): private path or an old-app link."""
     path = row["photo_path"] if kind == "photo" else row["video_path"]
     if path:
-        return _get(path)
+        data, mime, _ = storage.get(path)
+        return data, mime
     url = row["file_url"] if kind == "photo" else row["video_url"]
-    base, key, _ = _storage()
-    # old-app files: if the link is in our own Supabase storage, read it privately (works after the
-    # bucket is made private, so no public link is needed any more)
-    m = re.search(r"/storage/v1/object/(?:public|sign|authenticated)/([^?]+)", url or "")
-    if m and base and key and url.startswith(base):
-        r = requests.get(f"{base}/storage/v1/object/{m.group(1)}", timeout=60,
-                         headers={"Authorization": f"Bearer {key}", "apikey": key})
-        if r.ok:
-            return r.content, r.headers.get("Content-Type", "application/octet-stream")
+    p = _own_path(url)
+    if p:
+        data, mime, _ = storage.get(p)
+        return data, mime
     if url and url.startswith("https://"):
         try:
             r = requests.get(url, timeout=30)
@@ -90,6 +106,15 @@ def _fetch_file(row, kind):
         except requests.RequestException:
             pass
     return None, None
+
+
+def _own_path(url):
+    """Old-app public link inside our own bucket → its path (so it can be read privately)."""
+    base, _, bucket = storage.config()
+    m = re.search(r"/storage/v1/object/(?:public|sign|authenticated)/([^/]+)/([^?]+)", url or "")
+    if m and base and (url or "").startswith(base) and m.group(1) == bucket:
+        return m.group(2)
+    return None
 
 
 # ------------------------------------------------------------------ register
@@ -122,7 +147,7 @@ def index():
 
 
 @bp.route("/proofs/new")
-@login_required()
+@login_required("proofs")
 def new():
     cat = request.args.get("category") if request.args.get("category") in PROOF_TYPES else ""
     return render_template("proofs/camera.html", TYPES=PROOF_TYPES, STATUS=STOCK_STATUS, cat=cat,
@@ -136,16 +161,32 @@ def settings_station():
         return "Sai Fuel Mart"
 
 
+@bp.route("/proofs/start", methods=["POST"])
+@login_required("proofs")
+def start():
+    """Step 1 of saving: the phone gets one-time upload links (files go straight to storage)."""
+    if not is_mobile():
+        return jsonify({"ok": False, "error": "Proofs can only be taken on a phone with its camera."}), 400
+    if not storage_ready():
+        return jsonify({"ok": False, "error": "Photo storage is not set up yet. Ask the owner."}), 400
+    cat = request.form.get("category")
+    if cat not in PROOF_TYPES:
+        return jsonify({"ok": False, "error": "Choose what this proof is for."}), 400
+    ext = "mp4" if request.form.get("video_ext") == "mp4" else "webm"
+    try:
+        return jsonify({"ok": True, **issue_capture("proofs", cat, request.form.get("video") == "1", ext)})
+    except UserError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
 @bp.route("/proofs/new", methods=["POST"])
-@login_required()
+@login_required("proofs")
 def create():
-    """Receives the live-camera capture from the phone. Returns JSON (the page uploads with fetch)."""
+    """Step 2: the files are already in storage; check them and record the proof."""
     def fail(msg, code=400):
         return jsonify({"ok": False, "error": msg}), code
     if not is_mobile():
         return fail("Proofs can only be taken on a phone with its camera.")
-    if not storage_ready():
-        return fail("Photo storage is not set up. The owner must add SUPABASE_URL and SUPABASE_SERVICE_KEY in Render.")
     cat = request.form.get("category")
     if cat not in PROOF_TYPES:
         return fail("Choose what this proof is for.")
@@ -158,33 +199,11 @@ def create():
         return fail("Photo time missing. Take the photo again.")
     if abs((now_ist() - taken).total_seconds()) > 15 * 60:
         return fail("This photo was not taken just now. Take a fresh photo.")
-    photo = request.files.get("photo")
-    if not photo:
-        return fail("Take the photo first.")
-    pdata = photo.read(MAX_PHOTO + 1)
-    if len(pdata) > MAX_PHOTO or pdata[:3] != b"\xff\xd8\xff":
-        return fail("The photo is not a valid camera picture.")
-    video = request.files.get("video")
-    vdata, vext, vmime = None, None, None
-    if video and video.filename:
-        vdata = video.read(MAX_VIDEO + 1)
-        if len(vdata) > MAX_VIDEO:
-            return fail("Video is too long. Keep it under 30 seconds.")
-        if vdata[:4] == b"\x1a\x45\xdf\xa3":
-            vext, vmime = "webm", "video/webm"
-        elif vdata[4:8] == b"ftyp":
-            vext, vmime = "mp4", "video/mp4"
-        else:
-            return fail("The video is not a valid camera recording.")
+    try:
+        ppath, vpath, psize, vsize = check_capture(request.form.get("ticket"))
+    except UserError as e:
+        return fail(str(e))
     d = taken.date()
-    folder = d.strftime("%Y-%m")
-    pid = uuid.uuid4().hex
-    ppath = f"{folder}/{d.isoformat()}_{re.sub('[^A-Za-z0-9]+', '-', cat)}_{pid}.jpg"
-    _put(ppath, pdata, "image/jpeg")
-    vpath = ""
-    if vdata:
-        vpath = f"{folder}/{d.isoformat()}_{re.sub('[^A-Za-z0-9]+', '-', cat)}_{pid}.{vext}"
-        _put(vpath, vdata, vmime)
     lat, lng = clean(request.form.get("lat"), 20), clean(request.form.get("lng"), 20)
     try:
         acc = round(float(request.form.get("acc") or 0), 1) or None
@@ -200,11 +219,10 @@ def create():
                        VALUES (%s,%s,%s,'','',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     (d, cat, clean(request.form.get("note"), 300), fuel, status, taken.strftime("%I:%M:%S %p"),
                      lat or None, lng or None, current_user()["username"], mode, taken, acc,
-                     clean(request.headers.get("User-Agent"), 120), ppath, vpath, len(pdata),
-                     len(vdata) if vdata else None))
+                     clean(request.headers.get("User-Agent"), 120), ppath, vpath, psize, vsize))
         new_id = cur.fetchone()["id"]
         audit(cur, "create", "proof", new_id, f"{cat} proof taken live at {taken:%I:%M %p}"
-              + (f" ({status})" if status else "") + (" with video" if vdata else "")
+              + (f" ({status})" if status else "") + (" with video" if vpath else "")
               + (f", GPS {lat},{lng}" if lat else ", no GPS"), business_date=d)
     return jsonify({"ok": True, "id": new_id, "redirect": url_for("proofs.index", d=d.isoformat())})
 
@@ -212,18 +230,22 @@ def create():
 @bp.route("/proofs/<int:pid>/<kind>")
 @login_required()
 def file(pid, kind):
+    """Private file → a 10-minute signed link, handed only to signed-in users."""
     if kind not in ("photo", "video"):
         abort(404)
     row = db.one("SELECT * FROM proofs WHERE id=%s", (pid,))
     if not row:
         abort(404)
-    data, mime = _fetch_file(row, kind)
-    if data is None:
-        abort(404)
-    resp = Response(data, mimetype=mime)
-    resp.headers["Cache-Control"] = "private, max-age=86400"
-    resp.headers["Content-Disposition"] = f"inline; filename=proof-{pid}-{kind}"
-    return resp
+    path = row["photo_path"] if kind == "photo" else row["video_path"]
+    url = row["file_url"] if kind == "photo" else row["video_url"]
+    path = path or _own_path(url)
+    if path and storage_ready():
+        link = storage.signed_download(path, 600)
+        if link:
+            return redirect(link)
+    if url and url.startswith("https://"):
+        return redirect(url)
+    abort(404)
 
 
 # ------------------------------------------------------------------ PDF with photos
@@ -290,6 +312,7 @@ def pdf():
         data, mime = _fetch_file(r, "photo")
         if data and (mime or "").startswith("image") or (data and data[:3] == b"\xff\xd8\xff"):
             try:
+                data = _shrink(data)
                 img = Image(BytesIO(data))
                 ratio = img.imageHeight / float(img.imageWidth or 1)
                 w = width * 0.55
@@ -305,9 +328,20 @@ def pdf():
         el.append(KeepTogether([Paragraph(r["category"], h), Spacer(1, 3), t, Spacer(1, 12)]))
     fn = _footer_fn(st, "Proof report", A4)
     doc.build(el, onFirstPage=fn, onLaterPages=fn)
-    buf.seek(0)
-    return send_file(buf, mimetype="application/pdf", as_attachment=True,
-                     download_name=f"{(cat or 'All')} proofs {d:%d%m%y}.pdf")
+    return storage.deliver(buf, f"{(cat or 'All')} proofs {d:%d%m%y}.pdf", "application/pdf")
+
+
+def _shrink(data, max_px=1000, quality=72):
+    """Keeps the PDF small enough to download quickly (and under Vercel's size limit)."""
+    try:
+        from PIL import Image as PI
+        im = PI.open(BytesIO(data))
+        im.thumbnail((max_px, max_px))
+        out = BytesIO()
+        im.convert("RGB").save(out, "JPEG", quality=quality, optimize=True)
+        return out.getvalue()
+    except Exception:
+        return data
 
 
 # old address used by earlier versions

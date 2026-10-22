@@ -9,6 +9,12 @@ from ..security import audit, login_required
 from ..services import PARTY_KIND_LABEL, fuels, lube_stock, party_balances, range_summary, rates_for
 from ..util import ZERO, UserError, now_ist, parse_date, today
 
+
+def _deliver_compat(buf, mimetype=None, as_attachment=True, download_name=None, **kw):
+    from ..storage import deliver
+    return deliver(buf, download_name, mimetype)
+
+
 bp = Blueprint("reports", __name__)
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -27,7 +33,7 @@ def _range(default_days=None):  # noqa: C901
 
 
 @bp.route("/reports")
-@login_required("manager")
+@login_required("reports")
 def index():
     start, end = _range()
     with db.tx() as cur:
@@ -49,7 +55,7 @@ def index():
                  r["difference"]] for r in rows]
         n = len(fl)
         money_cols = tuple(range(3, 3 + n + 11))
-        return send_file(workbook_bytes([("Daily sales", heads, data, money_cols)]), mimetype=XLSX,
+        return _deliver_compat(workbook_bytes([("Daily sales", heads, data, money_cols)]), mimetype=XLSX,
                          as_attachment=True, download_name=f"Sales {start:%d%m%y}-{end:%d%m%y}.xlsx")
     if request.args.get("format") == "pdf":
         return sales_pdf()
@@ -57,7 +63,7 @@ def index():
 
 
 @bp.route("/reports/outstanding")
-@login_required("manager")
+@login_required("reports")
 def outstanding():
     with db.tx() as cur:
         rows = party_balances(cur)
@@ -69,7 +75,7 @@ def outstanding():
         data = [[r["name"], r["mobile"], "Active" if r["active"] else "Inactive", r["total_debit"],
                  r["total_credit"], r["balance"], r["credit_limit"] or None, r["last_payment"],
                  r["days_since_payment"]] for r in rows]
-        return send_file(workbook_bytes([("Outstanding", ["Party", "Mobile", "Status", "Total debit",
+        return _deliver_compat(workbook_bytes([("Outstanding", ["Party", "Mobile", "Status", "Total debit",
                                           "Total credit", "Balance", "Credit limit", "Last payment",
                                           "Days since payment"], data, (4, 5, 6, 7))]),
                          mimetype=XLSX, as_attachment=True, download_name=f"Outstanding {t:%d%m%y}.xlsx")
@@ -79,7 +85,7 @@ def outstanding():
 
 
 @bp.route("/reports/credit-register")
-@login_required("manager")
+@login_required("reports")
 def credit_register():
     start, end = _range()
     kind = request.args.get("kind") or ""
@@ -115,7 +121,7 @@ def credit_register():
                  "CANCELLED: " + (r["void_reason"] or "") if r["voided"] else "", r["created_by"]] for r in rows]
         heads = ["Date", "Party", "Type", "Item", "Qty", "Rate", "Debit", "Credit", "Mode", "Receipt", "Vehicle",
                  "Challan", "Slip", "Reference", "Remarks", "Cancelled", "Entered by"]
-        return send_file(workbook_bytes([("Credit register", heads, data, (6, 7, 8))]), mimetype=XLSX,
+        return _deliver_compat(workbook_bytes([("Credit register", heads, data, (6, 7, 8))]), mimetype=XLSX,
                          as_attachment=True, download_name=f"Credit register {start:%d%m%y}-{end:%d%m%y}.xlsx")
     if request.args.get("format") == "pdf":
         return credit_register_pdf()
@@ -124,7 +130,7 @@ def credit_register():
 
 
 @bp.route("/reports/lube.xlsx")
-@login_required("manager")
+@login_required("reports")
 def lube_xlsx():
     with db.tx() as cur:
         prods = lube_stock(cur)
@@ -135,7 +141,7 @@ def lube_xlsx():
            p["reorder_level"], "Active" if p["active"] else "Inactive"] for p in prods]
     s2 = [[m["business_date"], m["name"], m["kind"], m["qty"], m["rate"], m["amount"], m["pay_mode"], m["remarks"],
            "CANCELLED" if m["voided"] else "", m["created_by"]] for m in moves]
-    return send_file(workbook_bytes([
+    return _deliver_compat(workbook_bytes([
         ("Stock", ["Product", "Unit", "Sale rate", "Stock", "Stock value", "Reorder at", "Status"], s1, (3, 5)),
         ("Movements", ["Date", "Product", "Type", "Qty", "Rate", "Amount", "Mode", "Remarks", "Cancelled", "By"],
          s2, (5, 6))]), mimetype=XLSX, as_attachment=True, download_name=f"Lube stock {today():%d%m%y}.xlsx")
@@ -148,7 +154,7 @@ BACKUP_TABLES = ["settings", "users", "fuels", "fuel_rates", "tanks", "nozzles",
 
 
 @bp.route("/reports/backup.xlsx")
-@login_required("owner")
+@login_required("backup")
 def backup():
     sheets = []
     with db.tx() as cur:
@@ -161,7 +167,7 @@ def backup():
             data = [[(str(r[c]) if isinstance(r[c], (dict, list)) else r[c]) for c in cols] for r in rows]
             sheets.append((t, cols, data, ()))
         audit(cur, "export", "backup", None, "Downloaded full backup")
-    return send_file(workbook_bytes(sheets), mimetype=XLSX, as_attachment=True,
+    return _deliver_compat(workbook_bytes(sheets), mimetype=XLSX, as_attachment=True,
                      download_name=f"SaiFuelMart backup {now_ist():%Y-%m-%d %H%M}.xlsx")
 
 
@@ -179,14 +185,14 @@ import calendar
 
 
 def _pdf(st, title, start, end, heads, rows, right, totals=None, widths=None, fname=None, notes=None):
-    return send_file(report_pdf(st, title, f"{start:%d-%m-%Y} to {end:%d-%m-%Y}" if start else "", heads, rows,
+    return _deliver_compat(report_pdf(st, title, f"{start:%d-%m-%Y} to {end:%d-%m-%Y}" if start else "", heads, rows,
                                 right_cols=right, totals=totals, widths=widths, notes=notes),
                      mimetype="application/pdf", as_attachment=True,
                      download_name=(fname or title) + (f" {start:%d%m%y}-{end:%d%m%y}" if start else "") + ".pdf")
 
 
 @bp.route("/reports/sales.pdf")
-@login_required("manager")
+@login_required("reports")
 def sales_pdf():
     start, end = _range()
     with db.tx() as cur:
@@ -206,7 +212,7 @@ def sales_pdf():
 
 
 @bp.route("/reports/nozzles")
-@login_required("manager")
+@login_required("reports")
 def nozzles():
     start, end = _range()
     fuel = request.args.get("fuel") or ""
@@ -233,7 +239,7 @@ def nozzles():
     data = [[r["business_date"], r["name"], r["machine_no"], r["fuel_code"], r["opening"], r["closing"], r["testing"],
              r["sale"], r["rate"], r["amount"]] for r in rows]
     if fmt == "xlsx":
-        return send_file(workbook_bytes([
+        return _deliver_compat(workbook_bytes([
             ("Nozzle readings", heads, data, (5, 6, 7, 8, 9, 10)),
             ("Per nozzle", ["Nozzle", "Fuel", "Days", "Sale", "Testing", "Amount"],
              [[n["name"], n["fuel_code"], n["days"], n["sale"], n["testing"], n["amount"]] for n in per_nozzle], (4, 5, 6))]),
@@ -247,7 +253,7 @@ def nozzles():
 
 
 @bp.route("/reports/digital")
-@login_required("manager")
+@login_required("reports")
 def digital():
     start, end = _range()
     with db.tx() as cur:
@@ -267,7 +273,7 @@ def digital():
     heads = ["Date"] + [m["name"] for m in used] + ["Total"]
     fmt = request.args.get("format")
     if fmt == "xlsx":
-        return send_file(workbook_bytes([("Digital collections", heads, rows + [totals], tuple(range(2, len(heads) + 1)))]),
+        return _deliver_compat(workbook_bytes([("Digital collections", heads, rows + [totals], tuple(range(2, len(heads) + 1)))]),
                          mimetype=XLSX, as_attachment=True, download_name=f"Digital collections {start:%d%m%y}-{end:%d%m%y}.xlsx")
     if fmt == "pdf":
         return _pdf(st, "Digital collections", start, end, heads, rows, range(1, len(heads)), totals, None,
@@ -284,7 +290,7 @@ def tank_range(cur, start, end):
 
 
 @bp.route("/reports/tanks")
-@login_required("manager")
+@login_required("reports")
 def tanks():
     start, end = _range(default_days=13) if not request.args.get("from") else _range()
     if (end - start).days > 186:
@@ -309,7 +315,7 @@ def tanks():
                   (Decimal(r["invoice_qty_l"]) - Decimal(r["received_qty_l"])) if r["invoice_qty_l"] else None,
                   r["challan_density"], r["observed_density"], r["dip_variance_mm"], r["water_checked"], r["remarks"]]
                  for r in receipts]
-        return send_file(workbook_bytes([("Stock variance", heads, data, (3, 4, 5, 6, 7, 8, 10)),
+        return _deliver_compat(workbook_bytes([("Stock variance", heads, data, (3, 4, 5, 6, 7, 8, 10)),
                                          ("Tanker receipts", rheads, rdata, (7, 8, 9))]),
                          mimetype=XLSX, as_attachment=True, download_name=f"Tank report {start:%d%m%y}-{end:%d%m%y}.xlsx")
     if fmt == "pdf":
@@ -319,7 +325,7 @@ def tanks():
 
 
 @bp.route("/reports/outstanding.pdf")
-@login_required("manager")
+@login_required("reports")
 def outstanding_pdf():
     with db.tx() as cur:
         rows = sorted(party_balances(cur), key=lambda r: -Decimal(r["balance"]))
@@ -328,7 +334,7 @@ def outstanding_pdf():
     data = [[r["name"], r["mobile"], r["opening_bal"], r["fuel_credit"], r["lube_credit"], r["received"], r["discounts"],
              r["balance"], r["last_payment"], (t - r["last_payment"]).days if r["last_payment"] else ""] for r in rows]
     s = lambda k: sum((Decimal(r[k]) for r in rows), _Z)
-    return send_file(report_pdf(st, "Outstanding balances", f"As on {t:%d-%m-%Y}",
+    return _deliver_compat(report_pdf(st, "Outstanding balances", f"As on {t:%d-%m-%Y}",
                                 ["Party", "Mobile", "Opening", "Fuel credit", "Lube credit", "Received", "Discount",
                                  "Balance", "Last paid", "Days"], data, right_cols=range(2, 10),
                                 totals=["TOTAL", "", s("opening_bal"), s("fuel_credit"), s("lube_credit"), s("received"),
@@ -338,7 +344,7 @@ def outstanding_pdf():
 
 
 @bp.route("/reports/credit-register.pdf")
-@login_required("manager")
+@login_required("reports")
 def credit_register_pdf():
     start, end = _range()
     with db.tx() as cur:
@@ -358,7 +364,7 @@ def credit_register_pdf():
 
 # ------------------------------------------------------------------ attendance workbook (old export restored)
 @bp.route("/reports/attendance.xlsx")
-@login_required("manager")
+@login_required("reports")
 def attendance_xlsx():
     ym = request.args.get("m") or today().strftime("%Y-%m")
     from .staff import salary_sheet
@@ -392,13 +398,13 @@ def attendance_xlsx():
         sheets.append((f"{r['staff']['name'][:24]} {r['staff']['emp_code'][-4:]}", ["Date", "Day", "Status"],
                        [[d, d.strftime("%a"), {"P": "Present", "H": "Half day", "A": "Absent", "L": "Leave",
                                               "O": "Weekly off"}.get(grid.get(sid, {}).get(d, ""), "")] for d in days], ()))
-    return send_file(workbook_bytes(sheets), mimetype=XLSX, as_attachment=True,
+    return _deliver_compat(workbook_bytes(sheets), mimetype=XLSX, as_attachment=True,
                      download_name=f"Attendance {calendar.month_name[first.month]} {first.year}.xlsx")
 
 
 # ------------------------------------------------------------------ analytics
 @bp.route("/analytics")
-@login_required("manager")
+@login_required("reports")
 def analytics():
     ym = request.args.get("m") or today().strftime("%Y-%m")
     try:
@@ -453,7 +459,7 @@ def analytics():
 
 # ------------------------------------------------------------------ full business workbook with charts
 @bp.route("/reports/business.xlsx")
-@login_required("owner")
+@login_required("backup")
 def business_xlsx():
     t = today()
     with db.tx() as cur:
@@ -538,4 +544,4 @@ def business_xlsx():
         w = wb.create_sheet(f"data_{name}"[:31])
         write_sheet(w, cols, data, ())
     buf = BytesIO(); wb.save(buf); buf.seek(0)
-    return send_file(buf, mimetype=XLSX, as_attachment=True, download_name=f"SaiFuelMart business {t:%Y-%m-%d}.xlsx")
+    return _deliver_compat(buf, mimetype=XLSX, as_attachment=True, download_name=f"SaiFuelMart business {t:%Y-%m-%d}.xlsx")
