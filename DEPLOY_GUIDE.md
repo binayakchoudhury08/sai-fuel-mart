@@ -31,7 +31,8 @@ Replace your repo's files with the contents of `1-website-for-github`. Commit an
 5. Check that **Settings → Functions → Region** shows **Singapore (sin1)**.
 
 ## 3. Supabase Storage (photos)
-Supabase → **Storage** → bucket **`proofs`** → set it **Private**. Photos and videos are uploaded straight from
+Photos go to the bucket **`proof-files`** (the same one the old app used). Owner → Settings → **Photo storage
+check** shows if it exists, creates it if needed, can make it **Private**, and runs a full test. Photos and videos are uploaded straight from
 the phone to this bucket through one-time links and shown only to signed-in users through 10-minute links.
 
 ## 4. Point everything at the new address

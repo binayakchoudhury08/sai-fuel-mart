@@ -2,7 +2,7 @@
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Photo proofs</h1><p>Dip checks, nozzle testing and stock checks — taken live on the phone camera, stamped with time and location.</p></div>
 {% if mobile %}<a class="btn" href="{{ url_for('proofs.new') }}" style="min-height:48px">Take proof</a>{% endif %}</div>
-{% if not configured %}<div class="notice">Photo storage isn’t connected. The owner must add SUPABASE_URL, SUPABASE_SERVICE_KEY and a Storage bucket named “proofs” in Render (see the setup guide).</div>{% endif %}
+{% if not configured %}<div class="notice">Photo storage isn’t connected yet.{% if user.role == 'owner' %} <a href="{{ url_for('admin.storage_check') }}">Open the photo storage check</a>.{% else %} Ask the owner.{% endif %}</div>{% endif %}
 {% if mobile %}
 <section class="section"><header><h2>Take a proof now</h2><small>{{ today|d }}</small></header><div class="body">
 <div class="typegrid">{% for c in TYPES[:6] %}<a class="typebtn" href="{{ url_for('proofs.new', category=c) }}"><b>{{ c }}</b><small>{% if today_counts.get(c) %}✓ {{ today_counts[c] }} today{% else %}not yet today{% endif %}</small></a>{% endfor %}

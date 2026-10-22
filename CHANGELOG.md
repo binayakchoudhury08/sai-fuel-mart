@@ -1,5 +1,14 @@
 # Sai Fuel Mart — changes
 
+## 3.1.1
+
+Photo storage fixed
+- Cause: the old app's Supabase bucket is "proof-files"; 3.x looked for "proofs", which does not exist.
+  The default is now "proof-files" (SUPABASE_BUCKET can still override it).
+- Works with both Supabase key styles: legacy service_role (eyJ…) and the new secret keys (sb_secret_…).
+- Settings → Photo storage check (owner): shows URL, key type, bucket, private/public; buttons to create the
+  bucket, make it private, and run a full upload/view test. Errors now say plainly what is wrong.
+
 ## 3.1.0
 
 Temporary access (owner only — menu → Temporary access)

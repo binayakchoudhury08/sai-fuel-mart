@@ -508,3 +508,29 @@ def access():
         gr["describe"] = describe(gr["perms"])
     return render_template("admin/access.html", users=users, grants=grants, presets=PRESETS, notes=PRESET_NOTES,
                            groups=groups, labels=labels, pre_from=request.args.get("from", ""), pre_to=request.args.get("to", ""))
+
+
+# ------------------------------------------------------------------ photo storage check (owner)
+@bp.route("/settings/storage", methods=["GET", "POST"])
+@login_required("owner")
+def storage_check():
+    import os
+    from .. import storage
+    base, key, bucket = storage.config()
+    steps = None
+    if request.method == "POST" and storage.ready():
+        action = request.form.get("action")
+        if action == "create":
+            ok, err = storage.create_bucket()
+            flash(f"Bucket “{bucket}” created (private)." if ok else f"Could not create it: {err}", "success" if ok else "error")
+        elif action == "private":
+            ok, err = storage.make_private()
+            flash("Bucket is private now." if ok else f"Could not change it: {err}", "success" if ok else "error")
+        elif action == "test":
+            steps = storage.self_test()
+        with db.tx() as cur:
+            audit(cur, "admin", "storage", bucket, f"Photo storage: {action}")
+    info, err = (storage.bucket_info() if storage.ready() else (None, None))
+    return render_template("admin/storage.html", base=base, bucket=bucket, kind=storage.key_kind(key) if key else "",
+                           has_url=bool(base), has_key=bool(key), info=info, err=err, steps=steps,
+                           bucket_from_env=bool(os.environ.get("SUPABASE_BUCKET", "").strip()))

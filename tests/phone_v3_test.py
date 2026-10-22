@@ -9,7 +9,7 @@ async def main():
         ctx = await b.new_context(user_agent=ANDROID, viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block",
                                   permissions=["camera", "microphone", "geolocation"], geolocation={"latitude": 22.6543, "longitude": 88.8765, "accuracy": 8})
         pg = await ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
-        await pg.goto(B + "/login"); await pg.fill("#u", "mgr2"); await pg.fill("#p", "Mgr@123456x"); await pg.click("button")
+        await pg.goto(B + "/login"); await pg.fill("#u", __import__("os").environ.get("PU", "mgr2")); await pg.fill("#p", __import__("os").environ.get("PP", "Mgr@123456x")); await pg.click("button")
         # More menu on phone
         await pg.goto(B + "/dashboard"); await pg.click("label[for=more][role=button]")
         vis = await pg.locator(".sheet").is_visible(); tiles = await pg.locator(".sheet .tile").count()

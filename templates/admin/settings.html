@@ -24,6 +24,7 @@
   <div class="wide btnrow"><button class="btn secondary" name="action" value="reopen">Reopen these days for corrections</button>
   <button class="btn" name="action" value="lock">Lock these days</button></div></form>
 </div></section>{% endif %}
+{% if user.role == 'owner' %}<div class="flash info">Photos not saving or not opening? <a href="{{ url_for('admin.storage_check') }}">&nbsp;Open the photo storage check</a>.</div>{% endif %}
 <section class="section" id="general"><header><h2>Pump details &amp; rules</h2></header><div class="body">
 <form method="post" action="{{ url_for('admin.save_general') }}">{{ csrf() }}<div class="fields">
 {% for k, (label, lim) in keys.items() %}<div {% if k=='station_address' %}class="wide"{% endif %}><label>{{ label }}</label><input name="{{ k }}" value="{{ st.get(k,'') }}" maxlength="{{ lim }}" {% if not owner %}disabled{% endif %}></div>{% endfor %}

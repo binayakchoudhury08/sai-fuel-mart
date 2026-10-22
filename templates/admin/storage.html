@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Photo storage{% endblock %}
+{% block content %}
+<div class="pagehead">{{ head('cam', '--c-proofs', 'Photo storage', 'Where proof and attendance photos are kept (Supabase Storage).') }}</div>
+<section class="section"><header><h2>Check</h2></header><div class="body flush tablewrap"><table><tbody>
+<tr><td>SUPABASE_URL set in Vercel</td><td>{% if has_url %}<span class="match ok">✓ {{ base }}</span>{% else %}<span class="match bad">✗ missing — add it in Vercel → Settings → Environment Variables</span>{% endif %}</td></tr>
+<tr><td>SUPABASE_SERVICE_KEY set</td><td>{% if has_key %}<span class="match {{ 'bad' if 'wrong' in kind else 'ok' }}">{{ '✗' if 'wrong' in kind else '✓' }} {{ kind }}</span>{% else %}<span class="match bad">✗ missing — use the service_role or secret key from Supabase → Project Settings → API</span>{% endif %}</td></tr>
+<tr><td>Bucket name</td><td><b>{{ bucket }}</b> <small class="muted">{{ '(from SUPABASE_BUCKET)' if bucket_from_env else '(default, same as the old app)' }}</small></td></tr>
+<tr><td>Bucket exists</td><td>{% if info %}<span class="match ok">✓ yes</span>{% elif err %}<span class="match bad">✗ {{ err }}</span>{% else %}—{% endif %}</td></tr>
+<tr><td>Bucket is private</td><td>{% if info %}{% if info.public %}<span class="match wait">● public — anyone with a link can open photos</span>{% else %}<span class="match ok">✓ private</span>{% endif %}{% else %}—{% endif %}</td></tr>
+</tbody></table></div>
+{% if has_url and has_key %}<div class="body btnrow"><form method="post">{{ csrf() }}
+  {% if not info %}<button class="btn" name="action" value="create">Create bucket “{{ bucket }}” (private)</button>{% endif %}
+  {% if info and info.public %}<button class="btn secondary" name="action" value="private" data-confirm="Make the bucket private? Photos will open only inside the website for signed-in users.">Make it private</button>{% endif %}
+  <button class="btn secondary" name="action" value="test">Run full test</button></form></div>{% endif %}
+{% if steps %}<div class="body flush"><table><tbody>{% for name, ok, msg in steps %}<tr><td>{{ name }}</td><td><span class="match {{ 'ok' if ok else 'bad' }}">{{ '✓ works' if ok else '✗ ' ~ msg }}</span></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+</section>
+<p class="hint">After changing anything in Vercel’s Environment Variables, press Redeploy in Vercel so the website picks it up.</p>
+{% endblock %}
