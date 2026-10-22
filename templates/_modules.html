@@ -1,0 +1,21 @@
+{# One list of sections used by the sidebar, the phone "More" sheet and the Home tiles. #}
+{% set MODULES = [
+  ('main.dashboard',  'home',  'Home',            'Today at a glance',              '--c-closing',   '',                    'main.dashboard'),
+  ('day.day_today',   'day',   'Daily closing',   'Readings, cash, credit, submit', '--c-closing',   'closing_enter',       'day.'),
+  ('transport.index', 'truck', 'Credit transport','Slip entries & bills',           '--c-transport', 'transport_enter|bills','transport.'),
+  ('parties.index',   'wallet','Party accounts',  'Balances & payments',            '--c-accounts',  'accounts_view',       'parties.'),
+  ('lube.index',      'oil',   'Lube stock',      'Stock notebook',                 '--c-lube',      '',                    'lube.'),
+  ('tanks.index',     'tank',  'Tanks',           'Dips, tankers, ATG',             '--c-tanks',     'tanks',               'tanks.'),
+  ('staff.index',     'staff', 'Attendance',      'Live photo attendance',          '--c-staff',     'attendance_photo|attendance_manual|staff_manage', 'staff.index'),
+  ('staff.salary',    'rupee', 'Salary',          'Salary sheet',                   '--c-staff',     'salary',              'staff.salary'),
+  ('proofs.index',    'cam',   'Photo proofs',    'Dip & nozzle proofs',            '--c-proofs',    '',                    'proofs.'),
+  ('reports.index',   'chart', 'Reports',         'Sales, bills, analytics',        '--c-reports',   'reports',             'reports.'),
+  ('admin.settings',  'cog',   'Settings',        'Rates, nozzles, tanks',          '--c-settings',  'setup',               'admin.settings'),
+  ('auth.users',      'users', 'Users',           'Logins & passwords',             '--c-settings',  'users',               'auth.users'),
+  ('admin.permissions','shield','Permissions',    'Who can do what',                '--c-settings',  'owner',               'admin.permissions'),
+  ('admin.access',    'shield','Temporary access','Let someone edit old days',      '--c-settings',  'owner',               'admin.access'),
+  ('admin.audit_log', 'log',   'Audit log',       'Every change',                   '--c-settings',  'audit',               'admin.audit'),
+] %}
+{% macro allowed(perm) -%}
+{%- if not perm -%}1{%- else -%}{%- for p in perm.split('|') -%}{%- if can(p) -%}1{%- endif -%}{%- endfor -%}{%- endif -%}
+{%- endmacro %}

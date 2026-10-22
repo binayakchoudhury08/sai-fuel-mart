@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% block title %}Import old data{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Import data from the old app</h1>
+<p>Copies your old records into the new system once. The old tables are only read, never changed.</p></div></div>
+{% if failed %}<div class="flash error">The last import attempt stopped: {{ failed.error or 'no reason was recorded' }}. Nothing was saved, so it is safe to start again.</div>{% endif %}
+{% set real_stuck = stuck|selectattr('pid')|list %}
+{% if real_stuck %}<section class="section" style="border-color:var(--stop)"><header><h2>Stuck database sessions</h2></header>
+<div class="body"><p>These sessions of this app have had a transaction open for a long time or are holding the import lock. They are usually earlier import attempts that never finished, and a new import would wait behind them.</p></div>
+<div class="body flush tablewrap"><table><thead><tr><th>Session</th><th>State</th><th class="num">Open for</th><th>Holding import lock</th><th>Last statement</th></tr></thead><tbody>
+{% for r in real_stuck %}<tr><td>{{ r.pid }}</td><td>{{ r.state }}</td><td class="num">{{ (r.tx_seconds // 60) }} min {{ r.tx_seconds % 60 }} s</td><td>{{ 'Yes' if r.holds_import_lock else 'No' }}</td><td><small>{{ r.query }}</small></td></tr>{% endfor %}</tbody></table></div>
+<div class="body"><form method="post" action="{{ url_for('admin.import_end_stuck') }}" data-confirm="End these database sessions? Anything they had not saved is discarded (it was never visible anyway).">{{ csrf() }}
+<button class="btn danger">End stuck sessions</button> <span class="hint">Safe: unfinished work in those sessions was never saved.</span></form></div></section>{% endif %}
+{% if info.done %}<div class="flash info">Already imported on {{ info.done }}. It cannot run twice.</div>{% else %}
+<section class="section"><header><h2>Found in the old database</h2></header><div class="body flush"><table><tbody>
+{% for t, n in info.tables.items() %}<tr><td>{{ t }}</td><td class="num">{{ n }} rows</td></tr>{% else %}<tr><td class="empty">No old tables found.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if info.new_entries %}<div class="notice">{{ info.new_entries }} entries were already made in the new app. Importing will add old history alongside them.</div>{% endif %}
+<section class="section"><div class="body stack">
+<p><b>What happens:</b> nozzles, tanks, rates, transporters with full history, lube products with current stock, staff, attendance, salary, tank dips, tanker receipts, and photos are copied (the old activity log is not imported; it stays in the old database). Every day before today becomes read-only history.</p>
+<p><b>Balances:</b> each transporter’s balance is rebuilt from their old entries and compared with what the old app showed. Any difference is added as one clearly labelled adjustment, and you get a list to check.</p>
+<p><b>How long:</b> usually under a minute; a few minutes for several years of data. A progress bar shows each step.</p>
+<p><b>Do this first:</b> download a backup of the old app (old Settings → Full system export).</p>
+<form method="post">{{ csrf() }}<label>Type IMPORT to confirm</label><div class="formrow"><div><input name="confirm" required autocomplete="off"></div>
+<div style="flex:0"><button class="btn">Import now</button></div>
+<div style="flex:0"><button class="btn secondary" name="mode" value="wait">Import while I wait</button></div></div>
+<p class="hint">“Import now” runs in the background with a progress bar. “Import while I wait” runs inside this page (keep it open; usually under a minute) — use it if the background import ever stops.</p></form>
+</div></section>{% endif %}
+{% endblock %}

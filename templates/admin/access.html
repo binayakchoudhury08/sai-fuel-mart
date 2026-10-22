@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Temporary access{% endblock %}
+{% block content %}
+<div class="pagehead">{{ head('shield', '--c-settings', 'Temporary access', 'Let one person change chosen dates — including locked and old-system days — until a time you set.') }}
+<a class="btn secondary" href="{{ url_for('admin.permissions') }}">Permissions</a></div>
+
+<section class="section"><header><h2><span class="n">+</span>Give temporary access</h2></header><div class="body">
+<form method="post">{{ hidden() }}<input type="hidden" name="action" value="create">
+<div class="fields">
+  <div><label>Who</label><select name="user_id" required><option value="">Choose…</option>
+    {% for u in users %}<option value="{{ u.id }}">{{ u.full_name or u.username }} ({{ ROLE_LABEL[u.role] }})</option>{% endfor %}</select></div>
+  <div><label>From date</label><input type="date" name="date_from" value="{{ pre_from }}" max="{{ today.isoformat() }}" required></div>
+  <div><label>To date</label><input type="date" name="date_to" value="{{ pre_to }}" max="{{ today.isoformat() }}" required></div>
+  <div><label>Valid for</label><select name="valid_hours" data-validfor>
+    <option value="24">1 day</option><option value="48" selected>2 days</option><option value="72">3 days</option>
+    <option value="168">7 days</option><option value="custom">Until a date &amp; time…</option></select></div>
+  <div data-until hidden><label>Valid until</label><input type="datetime-local" name="valid_until"></div>
+</div>
+<h3 style="margin:18px 0 8px">What they may do on those dates</h3>
+<div class="typegrid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">{% for key, (label, perms) in presets.items() %}
+  <label class="typebtn" style="flex-direction:row;align-items:flex-start;gap:10px"><input type="checkbox" name="preset_{{ key }}" value="1" {% if key=='old_days' %}checked{% endif %} style="margin-top:3px">
+  <span><b>{{ label }}</b><br><small>{{ notes[key] }}</small></span></label>{% endfor %}</div>
+<details class="add" style="margin-top:12px;border:1px solid var(--line-2);border-radius:12px"><summary>Choose exactly (advanced)</summary><div class="body">
+{% for group, items in groups.items() %}<h3 style="margin:10px 0 6px">{{ group }}</h3>
+{% for k, label in items %}<label class="check" style="margin-bottom:6px"><input type="checkbox" name="perm_{{ k }}" value="1"> {{ label }}</label>{% endfor %}{% endfor %}
+</div></details>
+<div class="fields" style="margin-top:14px">
+  <label class="check wide"><input type="checkbox" name="open_locked" value="1" checked> Open the locked days in this range (including old-system days). They lock again automatically when the access ends.</label>
+  <div class="wide"><label>Reason (kept in the audit log)</label><input name="reason" required placeholder="e.g. correct transporter entries imported from the old app"></div>
+</div>
+<p style="margin-top:12px"><button class="btn">Give access</button></p>
+</form></div></section>
+
+<section class="section"><header><h2>Access given</h2></header><div class="body flush tablewrap"><table>
+<thead><tr><th>Who</th><th>Dates</th><th>May do</th><th>Valid until</th><th>Status</th><th></th></tr></thead><tbody>
+{% for a in grants %}<tr class="{% if not a.live %}void{% endif %}">
+  <td><b>{{ a.full_name or a.username }}</b><br><small>{{ ROLE_LABEL[a.role] }}</small></td>
+  <td>{{ a.date_from|d }} – {{ a.date_to|d }}{% if a.reopened_days %}<br><small>{{ a.reopened_days|length }} locked day(s) opened</small>{% endif %}</td>
+  <td><small>{{ a.describe }}</small><br><small class="muted">{{ a.reason }}</small></td>
+  <td>{{ a.valid_until.strftime('%d %b %Y %I:%M %p') }}</td>
+  <td class="keep">{% if a.live %}<span class="badge locked">Active</span>{% elif a.revoked_at %}<span class="badge stop">Stopped</span>{% else %}<span class="badge">Expired</span>{% endif %}
+    {% if a.closed_at and a.reopened_days %}<br><small>days locked again</small>{% endif %}</td>
+  <td class="actions keep">{% if a.live %}<form method="post" data-confirm="Stop this access now? The days it opened will be locked again.">{{ csrf() }}<input type="hidden" name="action" value="revoke"><input type="hidden" name="id" value="{{ a.id }}"><button class="btn small danger">Stop now</button></form>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="6" class="empty">No temporary access given yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<script>
+document.querySelector("[data-validfor]").addEventListener("change", function(e){ document.querySelector("[data-until]").hidden = e.target.value !== "custom"; });
+</script>
+{% endblock %}

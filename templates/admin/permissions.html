@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Permissions{% endblock %}
+{% block content %}
+<div class="pagehead">{{ head('shield', '--c-settings', 'Permissions', 'You (the owner) decide what Admin, Manager and Staff can do. You can always do everything.') }}
+<a class="btn" href="{{ url_for('admin.access') }}">Temporary access…</a></div>
+<form method="post">{{ csrf() }}
+{% for group, items in groups.items() %}
+<section class="section"><header><h2>{{ group }}</h2></header><div class="body flush tablewrap"><table class="permgrid">
+<thead><tr><th>Allowed to…</th><th>Admin</th><th>Manager</th><th>Staff (data entry)</th></tr></thead><tbody>
+{% for k, label in items %}<tr><td>{{ label }}</td>
+{% for r in ['admin','manager','operator'] %}<td><input type="checkbox" name="{{ r }}:{{ k }}" value="1" {% if k in current[r] %}checked{% endif %} aria-label="{{ r }} – {{ label }}"></td>{% endfor %}</tr>{% endfor %}
+</tbody></table></div></section>
+{% endfor %}
+<div class="section"><div class="body btnrow"><button class="btn">Save permissions</button>
+<span class="hint">Changes apply within a few seconds. Every change is written to the audit log. Only you can open this page.</span></div></div>
+</form>
+{% endblock %}

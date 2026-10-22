@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden with context %}{% block title %}Credit parties{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Credit parties</h1><p>Transporters and customers who buy on credit. Balances are worked out from every entry, every time.</p></div>
+{% if can('reports') %}<a class="btn secondary" href="{{ url_for('reports.outstanding') }}">Outstanding report</a>{% endif %}</div>
+<div class="stats"><div><b class="neg">{{ total_due|inr }}</b><span>Total to collect</span></div>
+<div><b>{{ advance|inr }}</b><span>Advance held for parties</span></div><div><b>{{ rows|length }}</b><span>Parties</span></div></div>
+<section class="section"><header><h2>All parties</h2><input type="search" placeholder="Search name, mobile, vehicle" data-filter="#ptable" style="max-width:280px"></header>
+<div class="body flush tablewrap"><table id="ptable"><thead><tr><th>Party</th><th>Mobile</th><th class="num">Balance</th><th>Last payment</th><th>Last credit</th></tr></thead><tbody>
+{% for p in rows %}<tr>
+  <td><a href="{{ url_for('parties.detail', pid=p.id) }}"><b>{{ p.name }}</b></a>{% if not p.active %} <span class="badge">inactive</span>{% endif %}
+    {% if p.credit_limit and p.balance > p.credit_limit %} <span class="badge stop">over limit</span>{% endif %}<br><small>{{ p.vehicles }}</small></td>
+  <td>{{ p.mobile }}</td>
+  <td class="num {% if p.balance > 0 %}neg{% elif p.balance < 0 %}pos{% endif %}"><b>{{ p.balance|inr }}</b>{% if p.balance < 0 %}<br><small>advance</small>{% endif %}</td>
+  <td>{{ p.last_payment|d if p.last_payment else '—' }}</td><td>{{ p.last_credit|d if p.last_credit else '—' }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No parties yet.</td></tr>{% endfor %}</tbody></table></div>
+{% if can('parties_manage') %}<details class="add" {% if not rows %}open{% endif %}><summary>Add a party</summary><div class="body">
+<form method="post" action="{{ url_for('parties.new') }}">{{ hidden() }}<div class="fields">
+  <div><label>Name</label><input name="name" required maxlength="100"></div>
+  <div><label>Mobile (for WhatsApp)</label><input name="mobile" inputmode="tel" maxlength="14"></div>
+  <div><label>Credit limit (₹, 0 = none)</label><input name="credit_limit" inputmode="decimal" value="0"></div>
+  <div><label>GSTIN</label><input name="gstin" maxlength="15"></div>
+  <div class="wide"><label>Vehicle numbers</label><input name="vehicles" placeholder="WB23A1234, WB23B5678"></div>
+  <div class="wide"><label>Address</label><input name="address"></div>
+  <div><label>Opening balance (₹)</label><input name="opening_balance" inputmode="decimal" placeholder="0"><p class="hint">What they already owe. Negative = advance.</p></div>
+  <div><label>Opening balance date</label><input type="date" name="opening_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}"></div>
+</div><p style="margin-top:12px"><button class="btn">Add party</button></p></form></div></details>{% endif %}
+</section>
+{% endblock %}

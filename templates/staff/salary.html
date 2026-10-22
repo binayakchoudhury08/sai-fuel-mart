@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, void with context %}{% block title %}Salary {{ month_name }}{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Salary – {{ month_name }}</h1>
+<p>Earned = monthly salary × (present + half-days ÷ 2 + weekly offs) ÷ {{ sheet.ndays }} days. Leave and absent are unpaid.</p></div>
+<div class="datenav"><a class="btn secondary small" href="?m={{ prev_m }}">‹</a><b>{{ month_name }}</b>{% if next_m %}<a class="btn secondary small" href="?m={{ next_m }}">›</a>{% endif %}<a class="btn secondary small" href="{{ url_for('reports.attendance_xlsx', m=ym) }}">Excel</a></div></div>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Staff</th><th class="num">Salary</th><th class="num">P</th><th class="num">½</th><th class="num">Off</th><th class="num">A/L</th><th class="num">Unmarked</th><th class="num">Earned</th><th class="num">Advance</th><th class="num">Paid</th><th class="num">Still to pay</th></tr></thead><tbody>
+{% for r in sheet.rows %}<tr><td><b>{{ r.staff.name }}</b></td><td class="num">{{ r.staff.monthly_salary|inr }}</td><td class="num">{{ r.att.get('P',0) }}</td><td class="num">{{ r.att.get('H',0) }}</td><td class="num">{{ r.att.get('O',0) }}</td>
+<td class="num">{{ r.att.get('A',0) + r.att.get('L',0) }}</td><td class="num {% if sheet.ndays - r.marked > 0 %}neg{% endif %}">{{ sheet.ndays - r.marked }}</td>
+<td class="num">{{ r.earned|inr }}</td><td class="num">{{ r.advance|inr }}</td><td class="num">{{ r.salary_paid|inr }}</td><td class="num {% if r.balance < 0 %}neg{% endif %}"><b>{{ r.balance|inr }}</b></td></tr>
+{% else %}<tr><td colspan="11" class="empty">No staff.</td></tr>{% endfor %}</tbody></table></div>
+<div class="body"><p class="hint">Salary, advance and bonus payments are entered in <a href="{{ url_for('day.day_view', d=today.isoformat()) }}#expenses"><b>Daily closing → Expenses → Pay staff</b></a> for the day they are paid. They all appear here.</p></div></section>
+<section class="section"><header><h2>Payments for {{ month_name }}</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Staff</th><th>Type</th><th>How</th><th class="num">Amount</th><th></th></tr></thead><tbody>
+{% for p in payments %}<tr class="{% if p.voided %}void{% endif %}"><td>{{ p.business_date|d }}</td><td>{{ p.staff_name }}</td><td>{{ p.kind|title }}</td><td>{{ p.pay_mode }}{% if p.remarks %} <small>{{ p.remarks }}</small>{% endif %}</td><td class="num">{{ p.amount|inr }}</td>
+<td class="actions keep">{% if not p.voided %}{{ void(url_for('staff.void_payment', pid=p.id), what='payment') }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">No payments for this month yet.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

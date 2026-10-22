@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}Tank report{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Tank stock &amp; variance</h1><p>{{ start|d }} to {{ end|d }} · book stock = last dip + tanker − meter sale</p></div></div>
+{% include "reports/_tabs.html" %}{% include "reports/_range.html" %}
+<div class="stats"><div><b class="{% if tl < 0 %}neg{% elif tl > 0 %}pos{% endif %}">{{ tl|qty }} L</b><span>Net gain (+) / loss (−)</span></div>
+<div><b class="{% if tv < 0 %}neg{% elif tv > 0 %}pos{% endif %}">{{ tv|inr }}</b><span>Value at that day’s rate</span></div><div><b>{{ receipts|length }}</b><span>Tanker receipts</span></div></div>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th class="num">Opening</th><th class="num">+ Tanker</th><th class="num">− Sale</th><th class="num">Book</th><th class="num">Dip</th><th class="num">Gain/Loss L</th><th class="num">% of sale</th><th class="num">₹</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ url_for('tanks.index', d=r.date.isoformat()) }}">{{ r.date.strftime('%d %b') }}</a></td><td>{{ r.tank.name }}</td><td class="num">{{ r.opening|qty if r.opening is not none else '—' }}</td><td class="num">{{ r.received|qty if r.received else '' }}</td><td class="num">{{ r.sold|qty }}</td><td class="num">{{ r.book|qty if r.book is not none else '—' }}</td><td class="num">{{ r.actual|qty if r.actual is not none else '—' }}</td>
+<td class="num {% if r.variance is not none and r.variance < 0 %}neg{% elif r.variance %}pos{% endif %}">{{ r.variance|qty if r.variance is not none else '' }}</td><td class="num">{{ r.variance_pct if r.variance_pct is not none else '' }}</td><td class="num">{{ r.value|inr if r.value is not none else '' }}</td></tr>
+{% else %}<tr><td colspan="10" class="empty">No tank data in this range.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

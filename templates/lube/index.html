@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, void with context %}{% from "_head.html" import head %}{% block title %}Lube stock{% endblock %}
+{% block content %}
+<div class="pagehead">{{ head('oil', '--c-lube', 'Lube stock notebook', 'Opening + arrived − sold = left. Count the shelf and write it here.') }}
+<div class="datenav"><a class="btn secondary small" href="?d={{ prev_day.isoformat() }}" aria-label="Previous day">‹</a>
+<input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/lube?d=__D__" aria-label="Date">
+{% if next_day %}<a class="btn secondary small" href="?d={{ next_day.isoformat() }}" aria-label="Next day">›</a>{% endif %}</div></div>
+
+<div class="stats"><div><b>{{ products|selectattr('active')|list|length }}</b><span>Products</span></div><div><b>{{ value|inr }}</b><span>Stock value at selling rate</span></div>
+<div><b class="{% if low %}neg{% endif %}">{{ low|length }}</b><span>At or below reorder level</span></div></div>
+
+<section class="section" style="--sc:var(--c-lube)"><header><h2><span class="n">✎</span>Notebook for {{ d.strftime('%d %b %Y') }}</h2><input type="search" placeholder="Find product" data-filter="#nb" style="max-width:220px"></header>
+<form method="post" action="{{ url_for('lube.notebook') }}">{{ hidden() }}<input type="hidden" name="business_date" value="{{ d.isoformat() }}">
+<div class="body flush tablewrap"><table id="nb"><thead><tr><th>Product</th><th class="num">Opening</th><th class="num">+ Arrived</th><th class="num">− Sold</th><th class="num">= Left</th>
+{% if can('lube_stock') %}<th>Arrived now</th><th>Counted on shelf</th>{% endif %}</tr></thead><tbody>
+{% for p in products if p.active %}<tr>
+  <td><b>{{ p.name }}</b><br><small>₹{{ p.sale_rate }} · {{ p.unit }}{% if p.stock <= p.reorder_level %} · <span class="neg">reorder</span>{% endif %}</small></td>
+  <td class="num">{{ p.opening|qty }}</td><td class="num pos">{{ ('+' ~ (p.added|qty)) if p.added else '' }}</td>
+  <td class="num neg">{{ ('−' ~ (p.sold|qty)) if p.sold else '' }}{% if p.removed %}<br><small>−{{ p.removed|qty }} adj.</small>{% endif %}</td>
+  <td class="num"><b>{{ p.left_qty|qty }}</b></td>
+  {% if can('lube_stock') %}<td><input name="add_{{ p.id }}" inputmode="decimal" placeholder="+ qty" style="max-width:110px"></td>
+  <td><input name="count_{{ p.id }}" inputmode="decimal" placeholder="count" style="max-width:110px"></td>{% endif %}
+</tr>{% else %}<tr><td colspan="7" class="empty">No products yet.</td></tr>{% endfor %}</tbody></table></div>
+{% if can('lube_stock') %}<div class="body"><div class="formrow"><div><label>Bill no. / supplier (for stock that arrived)</label><input name="bill"></div>
+<div style="flex:0"><button class="btn">Save notebook</button></div></div>
+<p class="hint">“Arrived now” adds to stock. “Counted on shelf” corrects the book to what you actually have — the difference is recorded as a stock count.</p></div>{% endif %}
+</form></section>
+
+{% if can('lube_stock') %}<section class="section"><details class="add" style="border-top:0"><summary>Add a new product</summary><div class="body"><form method="post" action="{{ url_for('lube.save_product') }}">{{ hidden() }}<div class="fields">
+<div><label>Name</label><input name="name" required></div><div><label>Unit</label><input name="unit" value="pcs"></div>
+<div><label>Selling rate (₹)</label><input name="sale_rate" inputmode="decimal" required></div><div><label>Opening stock</label><input name="opening_stock" inputmode="decimal" value="0"></div>
+<div><label>Reorder when stock reaches</label><input name="reorder_level" inputmode="decimal" value="5"></div>
+</div><p style="margin-top:10px"><button class="btn">Add product</button></p></form></div></details>
+<details class="add"><summary>Edit a product (rate, name, hide)</summary><div class="body flush tablewrap"><table><tbody>
+{% for p in products %}<tr class="{% if not p.active %}void{% endif %}"><td>{{ p.name }}</td><td class="num">₹{{ p.sale_rate }}</td><td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('lube.save_product') }}">{{ hidden() }}<input type="hidden" name="id" value="{{ p.id }}">
+<label>Name</label><input name="name" value="{{ p.name }}"><label>Unit</label><input name="unit" value="{{ p.unit }}"><label>Selling rate</label><input name="sale_rate" value="{{ p.sale_rate }}">
+<label>Reorder at</label><input name="reorder_level" value="{{ p.reorder_level }}"><label>Status</label><select name="active"><option value="1">Active</option><option value="0" {% if not p.active %}selected{% endif %}>Hidden</option></select>
+<button class="btn small">Save</button></form></details></td></tr>{% endfor %}</tbody></table></div></details></section>{% endif %}
+
+<section class="section"><header><h2>What happened on {{ d.strftime('%d %b') }}</h2>{% if can('reports') %}<a class="btn small secondary" href="{{ url_for('reports.lube_xlsx') }}">Excel</a>{% endif %}</header><div class="body flush tablewrap"><table><thead><tr><th>Product</th><th>Type</th><th class="num">Qty</th><th class="num">Amount</th><th>Details</th><th></th></tr></thead><tbody>
+{% for m in moves %}<tr class="{% if m.voided %}void{% endif %}"><td>{{ m.product_name }}</td><td>{{ {'sale':'Sold','purchase':'Arrived','adjust':'Count / adjust','return':'Return','opening':'Opening'}[m.kind] }}</td>
+<td class="num {% if m.qty < 0 %}neg{% else %}pos{% endif %}">{{ '+' if m.qty > 0 }}{{ m.qty|qty }}</td><td class="num">{{ m.amount|inr if m.amount else '' }}</td>
+<td><small>{{ m.pay_mode or '' }}{% if m.party_name %} – {{ m.party_name }}{% endif %} {{ m.remarks }} · {{ m.created_by }}{% if m.voided %} · cancelled: {{ m.void_reason }}{% endif %}</small></td>
+<td class="actions keep">{% if can('cancel_entries') and not m.voided and m.kind != 'opening' %}{{ void(url_for('day.void_lube_move', mid=m.id), back=url_for('lube.index', d=d.isoformat())) }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">Nothing recorded on this day. Lube sales are entered in Daily closing → Lube.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

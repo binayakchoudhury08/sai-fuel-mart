@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block title %}Nozzle report{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Nozzle report</h1><p>{{ start|d }} to {{ end|d }}</p></div></div>
+{% include "reports/_tabs.html" %}
+{% set extra %}<div><label>Fuel</label><select name="fuel"><option value="">All</option>{% for f in fuels %}<option {% if f.code==fuel %}selected{% endif %}>{{ f.code }}</option>{% endfor %}</select></div>{% endset %}
+{% include "reports/_range.html" %}
+<div class="stats"><div><b>{{ tot_sale|qty }}</b><span>Total sold</span></div><div><b>{{ tot_amt|inr }}</b><span>Value</span></div><div><b>{{ rows|length }}</b><span>Readings</span></div></div>
+<section class="section"><header><h2>Per nozzle</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Nozzle</th><th>Fuel</th><th class="num">Days</th><th class="num">Sold</th><th class="num">Testing</th><th class="num">Value</th></tr></thead><tbody>
+{% for n in per_nozzle %}<tr><td>{{ n.name }}</td><td>{{ n.fuel_code }}</td><td class="num">{{ n.days }}</td><td class="num">{{ n.sale|qty }}</td><td class="num">{{ n.testing|qty }}</td><td class="num">{{ n.amount|inr }}</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="section"><header><h2>All readings</h2><input type="search" placeholder="Search" data-filter="#nz" style="max-width:220px"></header><div class="body flush tablewrap"><table id="nz"><thead><tr><th>Date</th><th>Nozzle</th><th>Fuel</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Testing</th><th class="num">Sale</th><th class="num">Rate</th><th class="num">Amount</th><th>By</th></tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ url_for('day.day_view', d=r.business_date.isoformat()) }}">{{ r.business_date.strftime('%d %b') }}</a></td><td>{{ r.name }}{% if r.machine_no %} <small>DU {{ r.machine_no }}</small>{% endif %}</td><td>{{ r.fuel_code }}</td>
+<td class="num">{{ r.opening }}</td><td class="num">{{ r.closing }}</td><td class="num">{{ r.testing }}</td><td class="num"><b>{{ r.sale }}</b></td><td class="num">{{ r.rate }}</td><td class="num">{{ r.amount|inr }}</td><td><small>{{ r.updated_by }}{% if r.opening_override_reason %} · {{ r.opening_override_reason }}{% endif %}</small></td></tr>
+{% else %}<tr><td colspan="10" class="empty">No readings in this range.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

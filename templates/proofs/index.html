@@ -1,0 +1,31 @@
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Photo proofs{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Photo proofs</h1><p>Dip checks, nozzle testing and stock checks — taken live on the phone camera, stamped with time and location.</p></div>
+{% if mobile %}<a class="btn" href="{{ url_for('proofs.new') }}" style="min-height:48px">Take proof</a>{% endif %}</div>
+{% if not configured %}<div class="notice">Photo storage isn’t connected. The owner must add SUPABASE_URL, SUPABASE_SERVICE_KEY and a Storage bucket named “proofs” in Render (see the setup guide).</div>{% endif %}
+{% if mobile %}
+<section class="section"><header><h2>Take a proof now</h2><small>{{ today|d }}</small></header><div class="body">
+<div class="typegrid">{% for c in TYPES[:6] %}<a class="typebtn" href="{{ url_for('proofs.new', category=c) }}"><b>{{ c }}</b><small>{% if today_counts.get(c) %}✓ {{ today_counts[c] }} today{% else %}not yet today{% endif %}</small></a>{% endfor %}
+<a class="typebtn" href="{{ url_for('proofs.new') }}"><b>Other…</b><small>challan, bill, density</small></a></div>
+</div></section>
+{% else %}<div class="flash info">New proofs are taken on the phone (open this site or the app on the manager’s phone → Photo proofs). Here you can view them and download the PDF.</div>{% endif %}
+
+<section class="section"><header><h2>Proof register</h2>
+<form class="formrow" method="get" style="flex:1 1 100%"><div><label>Date</label><input type="date" name="d" value="{{ fd }}" max="{{ today.isoformat() }}"></div>
+<div><label>Type</label><select name="category"><option value="">All</option>{% for c in TYPES %}<option {% if c==fcat %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+<div style="flex:0"><button class="btn secondary">Show</button></div>
+<div style="flex:0"><a class="btn secondary" href="{{ url_for('proofs.pdf', d=fd or today.isoformat(), category=fcat) }}">PDF with photos</a></div></form></header>
+<div class="body"><div class="proofgrid">
+{% for r in rows %}<article class="proofcard">
+  {% if r.photo_path or r.file_url %}<a href="{{ url_for('proofs.file', pid=r.id, kind='photo') }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ url_for('proofs.file', pid=r.id, kind='photo') }}" alt="{{ r.category }} photo"></a>{% else %}<div class="nophoto">No photo</div>{% endif %}
+  <div class="pc-body">
+    <b>{{ r.category }}</b>{% if r.stock_status %} <span class="badge {{ 'stop' if r.stock_status=='No Stock' else 'locked' }}">{{ r.stock_status }}</span>{% endif %}
+    <small>{{ r.business_date|d }} · {{ r.proof_time }} · {{ r.created_by }}{% if r.capture_mode == 'live' %} · live camera{% endif %}</small>
+    {% if r.note %}<small>{{ r.note }}</small>{% endif %}
+    <div class="btnrow" style="margin-top:6px">
+      {% if r.video_path or r.video_url %}<a class="btn small secondary" href="{{ url_for('proofs.file', pid=r.id, kind='video') }}" target="_blank" rel="noopener">▶ Video</a>{% endif %}
+      {% if r.latitude %}<a class="btn small secondary" href="https://maps.google.com/?q={{ r.latitude }},{{ r.longitude }}" target="_blank" rel="noopener">Map</a>{% else %}<span class="hint">no GPS</span>{% endif %}
+    </div></div></article>
+{% else %}<p class="empty">No proofs for this selection.</p>{% endfor %}
+</div></div>{{ pager(page, pages, count, 'proofs') }}</section>
+{% endblock %}

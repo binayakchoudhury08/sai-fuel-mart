@@ -1,0 +1,82 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf, void with context %}{% block title %}Credit transport{% endblock %}
+{% block content %}
+{% set here = request.full_path %}
+<div class="pagehead"><div class="grow"><h1>Credit transport</h1><p>{{ d.strftime('%A, %d %B %Y') }} · HSD rate {{ rate|inr if rate else 'not set' }}</p></div>
+<div class="datenav"><a class="btn secondary small" href="{{ url_for('transport.index', d=prev_day.isoformat()) }}" aria-label="Previous day">‹</a>
+<input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/transport?d=__D__" aria-label="Date">
+{% if next_day %}<a class="btn secondary small" href="{{ url_for('transport.index', d=next_day.isoformat()) }}" aria-label="Next day">›</a>{% endif %}</div></div>
+
+{# ---------- 1. entry ---------- #}
+<section class="section" id="entry"><header><h2>New entry</h2></header><div class="body">
+<form method="post" action="{{ url_for('transport.add_entry') }}" data-transport>{{ hidden(url_for('transport.index', d=d.isoformat()) ~ '#entry') }}
+<input type="hidden" name="fuel_code" value="HSD">
+<div class="fields">
+  <div><label>Date</label><input type="date" name="business_date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" required></div>
+  <div><label>Transporter</label><select name="party" required data-party-select><option value="">Choose…</option>
+    {% for p in parties if p.active %}<option value="{{ p.id }}" data-vehicles="{{ p.vehicles }}">{{ p.name }}</option>{% endfor %}</select></div>
+  <div><label>Vehicle No.</label><input name="vehicle_no" autocapitalize="characters" list="tveh" data-vehicle></div>
+  <div><label>Slip No.</label><input name="slip_no"></div>
+  <div><label>Challan No.</label><input name="challan_no"></div>
+  <div><label>HSD Qty (L)</label><input name="qty" inputmode="decimal" class="big"></div>
+  <div><label>Cash Taken (₹)</label><input name="cash_taken" inputmode="decimal" class="big" placeholder="0"></div>
+</div><datalist id="tveh"></datalist>
+<div class="formrow" style="margin-top:14px;align-items:center;justify-content:space-between">
+  <p data-tpreview style="font:600 1.15rem var(--cond);margin:0"></p>
+  <button class="btn" style="min-width:160px">Save entry</button></div>
+</form></div></section>
+
+{# ---------- 2. entries of the day ---------- #}
+<section class="section" id="register"><header><h2>Entries on {{ d.strftime('%d %b %Y') }}</h2>
+<form class="formrow noprint" method="get" style="flex:1 1 100%"><input type="hidden" name="d" value="{{ d.isoformat() }}">
+  <div><label>Transporter</label><select name="party" onchange="this.form.submit()"><option value="">All</option>{% for p in parties %}<option value="{{ p.id }}" {% if p.id==pid %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+  <div><label>Search</label><input name="q" value="{{ q }}" placeholder="vehicle, slip, challan"></div>
+  <div style="flex:0"><button class="btn secondary">Show</button></div></form></header>
+<div class="body flush tablewrap"><table><thead><tr><th>SL</th><th>Transporter</th><th>Vehicle No.</th><th>Slip No.</th><th>Challan No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">HSD Amount</th><th class="num">Cash Taken</th><th class="num">Total</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr class="{% if r.voided %}void{% endif %}">
+<td><b>{{ r.sl_no or '' }}</b></td><td>{{ r.party_name }}{% if r.corrected_from %} <span class="badge">corrected</span>{% endif %}{% if r.voided %}<br><small class="keep">{{ r.void_reason }}</small>{% endif %}</td>
+<td>{{ r.vehicle_no }}</td><td>{{ r.slip_no }}</td><td>{{ r.challan_no }}</td>
+<td class="num">{{ r.qty|qty if r.kind=='fuel' else '' }}</td><td class="num">{{ r.rate if r.kind=='fuel' else '' }}</td>
+<td class="num">{{ r.fuel_amount|rs if r.fuel_amount else '' }}</td><td class="num">{{ r.cash|rs if r.cash else '' }}</td><td class="num"><b>{{ r.debit|rs }}</b></td>
+<td class="actions keep">{% if can('cancel_entries') and not r.voided %}
+<details class="void"><summary style="color:inherit">Correct</summary><form method="post" action="{{ url_for('transport.correct_entry', tid=r.id) }}">{{ csrf() }}<input type="hidden" name="_back" value="{{ here }}"><input type="hidden" name="fuel_code" value="{{ r.fuel_code or 'HSD' }}">
+<label>Vehicle No.</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Slip No.</label><input name="slip_no" value="{{ r.slip_no }}">
+<label>Challan No.</label><input name="challan_no" value="{{ r.challan_no }}"><label>HSD Qty (L)</label><input name="qty" value="{{ r.qty if r.kind=='fuel' else '' }}">
+<label>Rate</label><input name="rate" value="{{ r.rate if r.kind=='fuel' else '' }}"><label>Cash Taken</label><input name="cash_taken" value="{{ r.cash }}">
+<label>What was wrong</label><input name="reason" required><button class="btn small">Save correction</button></form></details>
+{{ void(url_for('parties.void_txn', tid=r.id), back=here) }}{% endif %}</td></tr>
+{% else %}<tr><td colspan="11" class="empty">No entries on this day.</td></tr>{% endfor %}</tbody>
+{% if rows %}<tfoot><tr><td colspan="5">Total · {{ tot.count }} entries</td><td class="num">{{ tot.qty|qty }}</td><td></td><td class="num">{{ tot.fuel_amount|rs }}</td><td class="num">{{ tot.cash|rs }}</td><td class="num">{{ tot.total|rs }}</td><td></td></tr></tfoot>{% endif %}</table></div></section>
+
+{# ---------- 3. downloads ---------- #}
+<section class="section" id="download"><header><h2>Download bills</h2></header><div class="body">
+<div class="fields" style="align-items:end">
+  <div><label>Transporter</label><select id="dlparty"><option value="">All transporters (each separately)</option>{% for p in parties %}<option value="{{ p.id }}" {% if p.id==pid %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+</div>
+<div class="grid2" style="margin-top:14px;gap:14px">
+<form method="get" action="{{ url_for('transport.download') }}" data-download data-dl class="section" style="margin:0;padding:14px">
+  <input type="hidden" name="period" value="day"><input type="hidden" name="party">
+  <h3 style="margin-bottom:8px">Day bill</h3>
+  <input type="date" name="d" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" aria-label="Day">
+  <div class="btnrow" style="margin-top:10px"><button class="btn" name="fmt" value="pdf">PDF</button><button class="btn secondary" name="fmt" value="xlsx">Excel</button></div>
+</form>
+<form method="get" action="{{ url_for('transport.download') }}" data-download data-dl class="section" style="margin:0;padding:14px">
+  <input type="hidden" name="period" value="month"><input type="hidden" name="party">
+  <h3 style="margin-bottom:8px">Month bill</h3>
+  <input type="month" name="month" value="{{ ym }}" max="{{ today.strftime('%Y-%m') }}" aria-label="Month">
+  <div class="btnrow" style="margin-top:10px"><button class="btn" name="fmt" value="pdf">PDF</button><button class="btn secondary" name="fmt" value="xlsx">Excel</button><button class="btn secondary" name="fmt" value="zip">ZIP (month + each day)</button></div>
+  <p class="hint">ZIP = month bill + every day’s bill, PDF and Excel, in a folder for each transporter.</p>
+</form></div>
+<p class="hint" style="margin-top:10px">Bills show only the entries and totals: Date, SL, Vehicle, Slip, Challan, HSD Qty, Rate, HSD Amount, Cash Taken, Total.</p>
+</div></section>
+
+{# ---------- 4. month summary ---------- #}
+<section class="section"><header><h2>{{ m1.strftime('%B %Y') }} by transporter</h2>
+<form method="get" class="formrow" style="flex:0 1 auto"><input type="hidden" name="d" value="{{ d.isoformat() }}"><div><input type="month" name="month" value="{{ ym }}" max="{{ today.strftime('%Y-%m') }}" onchange="this.form.submit()" aria-label="Month"></div></form></header>
+<div class="body flush tablewrap"><table><thead><tr><th>Transporter</th><th class="num">Days</th><th class="num">Entries</th><th class="num">HSD Qty</th><th class="num">HSD Amount</th><th class="num">Cash Taken</th><th class="num">Total</th><th></th></tr></thead><tbody>
+{% for r in month %}<tr><td><b>{{ r.name }}</b></td><td class="num">{{ r.days }}</td><td class="num">{{ r.entries }}</td><td class="num">{{ r.qty|qty }}</td><td class="num">{{ r.fuel_amount|rs }}</td><td class="num">{{ r.cash|inr }}</td><td class="num"><b>{{ r.total|rs }}</b></td>
+<td class="actions">{% set mq = {'party': r.id, 'period': 'month', 'month': ym} %}<a class="btn small secondary" href="{{ url_for('transport.download', fmt='pdf', **mq) }}">PDF</a>
+<a class="btn small secondary" href="{{ url_for('transport.download', fmt='xlsx', **mq) }}">Excel</a><a class="btn small secondary" href="{{ url_for('transport.download', fmt='zip', **mq) }}">ZIP</a></td></tr>
+{% else %}<tr><td colspan="8" class="empty">No entries in {{ m1.strftime('%B %Y') }}.</td></tr>{% endfor %}</tbody>
+{% if month %}<tfoot><tr><td colspan="3">Total</td><td class="num">{{ mtot.qty|qty }}</td><td class="num">{{ mtot.fuel_amount|rs }}</td><td class="num">{{ mtot.cash|rs }}</td><td class="num">{{ mtot.total|rs }}</td><td></td></tr></tfoot>{% endif %}</table></div></section>
+<p class="hint">Payments received and balances are in <a href="{{ url_for('parties.index') }}">Party accounts</a>.</p>
+{% endblock %}

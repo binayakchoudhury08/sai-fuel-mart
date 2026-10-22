@@ -1,0 +1,71 @@
+{% from "_modules.html" import allowed with context %}{% import "_modules.html" as M with context %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17154A">
+<title>{% block title %}{% endblock %} · {{ station_name }}</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="preload" href="/static/fonts/Barlow-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ VERSION }}">
+</head>
+<body>
+{% include "_icons.html" %}
+{% set ep = request.endpoint or '' %}
+{% if user %}
+<input type="checkbox" id="more" aria-hidden="true">
+<label class="scrim" for="more" aria-label="Close menu"></label>
+<nav class="sheet" aria-label="All sections">
+  <label class="grab" for="more" aria-label="Close menu"></label>
+  <div class="tiles">
+  {% for e, icon, label, desc, color, perm, match in M.MODULES if allowed(perm)|trim != '' %}
+    <a class="tile" href="{{ url_for(e) }}" style="--mc:var({{ color }})"><span class="modicon"><svg><use href="#i-{{ icon }}"/></svg></span><b>{{ label }}</b><small>{{ desc }}</small></a>
+  {% endfor %}
+  </div>
+  <div class="who"><span><b>{{ user.full_name or user.username }}</b> <span class="badge">{{ ROLE_LABEL[user.role] }}</span></span>
+    <span><a href="{{ url_for('auth.change_password') }}">Password</a> · <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="linkbtn">Sign out</button></form></span></div>
+</nav>
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-mark">S</span><span><b>{{ station_name }}</b><small>Pump management</small></span></a>
+    {% for e, icon, label, desc, color, perm, match in M.MODULES if allowed(perm)|trim != '' %}
+      {% if e in ('day.day_today','staff.index','reports.index','admin.settings') %}<div class="group">{{ {'day.day_today':'Daily work','staff.index':'People & proofs','reports.index':'Office','admin.settings':'Owner tools'}[e] }}</div>{% endif %}
+      <a class="nav" href="{{ url_for(e) }}" {% if ep.startswith(match) %}aria-current="page"{% endif %}><span class="ico" style="--mc:var({{ color }})"><svg><use href="#i-{{ icon }}"/></svg></span>{{ label }}</a>
+    {% endfor %}
+    <div class="who">
+      <b>{{ user.full_name or user.username }}</b> <span class="badge">{{ ROLE_LABEL[user.role] }}</span><br>
+      <a href="{{ url_for('auth.change_password') }}">Change password</a> ·
+      <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="linkbtn">Sign out</button></form>
+      <div style="margin-top:6px;font-size:.72rem;opacity:.7">Version {{ VERSION }}</div>
+    </div>
+  </nav>
+  <div>
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-mark">S</span><span><b>{{ station_name }}</b></span></a>
+      <span class="spacer"></span><span style="font-size:.8rem;opacity:.85">{{ today|d }}</span>
+    </header>
+    <main>
+      {% for gr in my_grants() %}<div class="flash info">Temporary access from the owner: you can work on <b>&nbsp;{{ gr.date_from|d }} – {{ gr.date_to|d }}&nbsp;</b> until <b>&nbsp;{{ gr.valid_until.strftime('%d %b %I:%M %p') }}</b>.{% if gr.reason %} ({{ gr.reason }}){% endif %}</div>{% endfor %}
+      {% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}
+        <div class="flash {{ cat if cat in ('success','error','info') else 'info' }}" role="status">{{ m }}</div>
+      {% endfor %}{% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<nav class="tabbar" aria-label="Quick">
+  <a href="{{ url_for('main.dashboard') }}" {% if ep=='main.dashboard' %}aria-current="page"{% endif %}><svg><use href="#i-home"/></svg>Home</a>
+  <a href="{{ url_for('day.day_today') }}" {% if ep.startswith('day.') %}aria-current="page"{% endif %}><svg><use href="#i-day"/></svg>Closing</a>
+  <a href="{{ url_for('transport.index') }}" {% if ep.startswith('transport.') %}aria-current="page"{% endif %}><svg><use href="#i-truck"/></svg>Transport</a>
+  <a href="{{ url_for('staff.index') }}" {% if ep=='staff.index' %}aria-current="page"{% endif %}><svg><use href="#i-staff"/></svg>Attendance</a>
+  <label for="more" role="button" tabindex="0"><svg><use href="#i-menu"/></svg>More</label>
+</nav>
+{% else %}
+{% block bare %}{% endblock %}
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ VERSION }}" defer></script>
+</body>
+</html>

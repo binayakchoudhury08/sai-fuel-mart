@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}User accounts{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>User accounts</h1>
+<p>Give every person their own login so the audit log shows who did what. Never share the owner login.</p></div></div>
+<div class="section"><div class="body flush tablewrap"><table>
+<thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody>
+{% for u in rows %}<tr>
+  <td><b>{{ u.username }}</b></td><td>{{ u.full_name }}</td>
+  <td><form method="post" action="{{ url_for('auth.user_update', uid=u.id) }}" class="formrow">{{ csrf() }}<input type="hidden" name="action" value="role">
+    <select name="role" onchange="this.form.submit()" style="min-width:120px">{% for r in roles %}<option value="{{ r }}" {% if r==u.role %}selected{% endif %}>{{ ROLE_LABEL[r] }}</option>{% endfor %}</select></form></td>
+  <td>{% if u.active %}<span class="badge locked">Active</span>{% else %}<span class="badge stop">Disabled</span>{% endif %}
+      {% if u.must_change_pw %}<span class="badge open">Must change password</span>{% endif %}</td>
+  <td>{{ u.last_login_at.strftime('%d %b %Y %I:%M %p') if u.last_login_at else 'Never' }}</td>
+  <td class="actions">
+    <details class="void"><summary style="color:inherit">Reset password</summary>
+      <form method="post" action="{{ url_for('auth.user_update', uid=u.id) }}">{{ csrf() }}<input type="hidden" name="action" value="reset">
+      <label>Temporary password</label><input name="password" minlength="8" required><button class="btn small">Reset</button>
+      <p class="hint">They must change it at next sign-in.</p></form></details>
+    {% if u.id != user.id %}<form method="post" action="{{ url_for('auth.user_update', uid=u.id) }}" style="display:inline">{{ csrf() }}
+      <input type="hidden" name="action" value="{{ 'disable' if u.active else 'enable' }}"><button class="btn small secondary">{{ 'Disable' if u.active else 'Enable' }}</button></form>{% endif %}
+  </td></tr>{% endfor %}
+</tbody></table></div>
+<details class="add" {% if rows|length < 2 %}open{% endif %}><summary>Add a user</summary><div class="body">
+<form method="post" action="{{ url_for('auth.user_new') }}">{{ hidden() }}
+<div class="fields">
+  <div><label>Username</label><input name="username" required autocapitalize="none"></div>
+  <div><label>Full name</label><input name="full_name"></div>
+  <div><label>Role</label><select name="role"><option value="operator">Operator – data entry</option><option value="manager">Manager – entry, cancel, reports</option><option value="owner">Owner – everything</option></select></div>
+  <div><label>Temporary password</label><input name="password" minlength="8" required></div>
+</div><p style="margin-top:12px"><button class="btn">Add user</button></p></form>
+<p class="hint"><b>Operator:</b> readings, cash, credit, payments, lube sales, expenses, attendance. Cannot cancel entries or change past days.<br>
+<b>Manager:</b> operator work plus cancelling entries, parties, stock, staff, salary and reports.<br>
+<b>Owner:</b> everything, including rates, locking days, users and the audit log.</p></div></details></div>
+{% endblock %}

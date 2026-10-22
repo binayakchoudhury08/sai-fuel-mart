@@ -1,0 +1,138 @@
+"""Postgres access. Every query runs inside `tx()` so a request either
+commits fully or not at all, and connections are always returned."""
+import os
+import threading
+from contextlib import contextmanager
+
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
+
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _dsn():
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set. Add it in Render → Environment.")
+    return url
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                kwargs = {"cursor_factory": psycopg2.extras.RealDictCursor,
+                          "connect_timeout": 15,
+                          "keepalives": 1, "keepalives_idle": 30}
+                if "sslmode" not in _dsn() and "localhost" not in _dsn() and "/tmp" not in _dsn():
+                    kwargs["sslmode"] = "require"
+                _pool = psycopg2.pool.ThreadedConnectionPool(1, 6, _dsn(), **kwargs)
+    return _pool
+
+
+_PREP = "SET LOCAL search_path TO pump, public; SET LOCAL TIME ZONE 'Asia/Kolkata'"
+
+
+def _begin(pool):
+    """Get a pooled connection and open the transaction with ONE round trip.
+    (Before: a SELECT 1 health check + rollback + two SET statements = 4 trips.)
+    A connection that died while idle fails right here, before any of the
+    caller's work ran, so it is safe to swap it for a fresh one and retry."""
+    for attempt in range(3):
+        conn = pool.getconn()
+        try:
+            if conn.closed:
+                raise psycopg2.InterfaceError("closed")
+            cur = conn.cursor()
+            cur.execute(_PREP)
+            return conn, cur
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try:
+                pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            if attempt == 2:
+                raise
+
+
+@contextmanager
+def tx():
+    """Yield a cursor in one transaction. Commit on success, roll back on error."""
+    pool = _get_pool()
+    conn, cur = _begin(pool)
+    broken = False
+    try:
+        yield cur
+        conn.commit()
+    except psycopg2.OperationalError:
+        broken = True
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    except BaseException:
+        try:
+            conn.rollback()
+        except Exception:
+            broken = True
+        raise
+    finally:
+        try:
+            pool.putconn(conn, close=broken or conn.closed)
+        except Exception:
+            pass
+
+
+def query(sql, params=None):
+    with tx() as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def one(sql, params=None):
+    with tx() as cur:
+        cur.execute(sql, params)
+        return cur.fetchone()
+
+
+def ensure_schema():
+    """Create/upgrade the pump schema — but only when schema.sql has changed since the last run.
+    On Vercel every cold start calls this, so the normal path is one quick SELECT."""
+    import hashlib
+    path = os.path.join(os.path.dirname(__file__), "schema.sql")
+    with open(path, encoding="utf-8") as f:
+        ddl = f.read()
+    version = hashlib.sha256(ddl.encode()).hexdigest()[:16]
+    try:
+        c0 = psycopg2.connect(_dsn(), connect_timeout=15,
+                              **({} if ("sslmode" in _dsn() or "/tmp" in _dsn() or "localhost" in _dsn())
+                                 else {"sslmode": "require"}))
+        try:
+            with c0.cursor() as cur:
+                cur.execute("SELECT value FROM pump.settings WHERE key='schema_version'")
+                r = cur.fetchone()
+            if r and r[0] == version:
+                return
+        finally:
+            c0.close()
+    except psycopg2.Error:
+        pass   # schema not there yet → create it below
+    conn = psycopg2.connect(_dsn(), connect_timeout=20,
+                            **({} if ("sslmode" in _dsn() or "/tmp" in _dsn() or "localhost" in _dsn())
+                               else {"sslmode": "require"}))
+    try:
+        with conn.cursor() as cur:
+            # transaction-scoped lock: released by the commit itself, so it is
+            # safe behind Supabase's transaction-mode pooler (port 6543)
+            cur.execute("SELECT pg_advisory_xact_lock(842211)")
+            cur.execute("SET LOCAL client_min_messages TO warning")
+            cur.execute(ddl)
+            cur.execute("""INSERT INTO pump.settings (key, value) VALUES ('schema_version', %s)
+                           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value""", (version,))
+            conn.commit()
+    finally:
+        conn.close()

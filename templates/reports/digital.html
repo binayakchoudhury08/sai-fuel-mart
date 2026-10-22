@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Digital collections{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Digital collections</h1><p>{{ start|d }} to {{ end|d }}</p></div></div>
+{% include "reports/_tabs.html" %}{% include "reports/_range.html" %}
+<div class="stats">{% for h in heads[1:] %}<div><b>{{ totals[loop.index]|inr }}</b><span>{{ h }}</span></div>{% endfor %}</div>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr>{% for h in heads %}<th class="{{ 'num' if not loop.first }}">{{ h }}</th>{% endfor %}</tr></thead><tbody>
+{% for r in rows %}<tr><td><a href="{{ url_for('day.day_view', d=r[0].isoformat()) }}#cash">{{ r[0]|d }}</a></td>{% for v in r[1:] %}<td class="num">{{ v|inr if v else '' }}</td>{% endfor %}</tr>
+{% else %}<tr><td colspan="{{ heads|length }}" class="empty">No digital collections in this range.</td></tr>{% endfor %}</tbody>
+<tfoot><tr>{% for v in totals %}<td class="{{ 'num' if not loop.first }}">{{ v if loop.first else v|inr }}</td>{% endfor %}</tr></tfoot></table></div></section>
+{% endblock %}
