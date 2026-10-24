@@ -36,3 +36,6 @@
   {% if page < pages %}<a class="btn small secondary" href="?{{ dict(args, page=page+1)|urlencode }}">Newer ›</a><a class="btn small secondary" href="?{{ dict(args, page=pages)|urlencode }}">Latest »</a>{% endif %}
 </nav>{% endif %}
 {%- endmacro %}
+
+{# Totals in crores with the exact rupees underneath: crx(value) #}
+{% macro crx(v) -%}<span class="crv">{{ v|cr }}</span><small class="crx">{{ v|rs }}</small>{%- endmacro %}

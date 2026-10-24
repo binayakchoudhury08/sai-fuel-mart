@@ -56,11 +56,24 @@
     {% else %}<p class="empty">No nozzles yet.</p>{% endfor %}</div></section>
 
   <div class="kpis d-kpis">
-    <div class="kpi k2" style="--mc:#22C55E"><span class="glyph">₹</span><div><span>Total Sales (Today)</span><b>{{ td.gross_sale|rs }}</b>{{ trend(kpi.sale_pct) }}</div>{{ spark(sparks.sale, '#22C55E') }}</div>
+    <div class="kpi k2" style="--mc:#22C55E"><span class="glyph">₹</span><div><span>Total Sales (Today)</span><b>{{ td.gross_sale|cr }}</b><small class="crx">{{ td.gross_sale|rs }}</small>{{ trend(kpi.sale_pct) }}</div>{{ spark(sparks.sale, '#22C55E') }}</div>
     <div class="kpi k2" style="--mc:#1D5BEB"><span class="glyph">🧾</span><div><span>Total Transactions</span><b>{{ kpi.tx }}</b>{{ trend(kpi.tx_pct) }}</div>{{ spark(sparks.tx, '#1D5BEB') }}</div>
     <div class="kpi k2" style="--mc:#8B5CF6"><span class="glyph">◔</span><div><span>Avg. Sale Amount</span><b>{{ kpi.avg|rs }}</b>{{ trend(kpi.avg_pct) }}</div>{{ spark(sparks.avg, '#8B5CF6') }}</div>
     <div class="kpi k2" style="--mc:#F59E0B"><span class="glyph">⛽</span><div><span>Fuel Dispensed</span><b>{{ kpi.litres|qty(0) }} Ltrs</b>{{ trend(kpi.litres_pct) }}</div>{{ spark(sparks.litres, '#F59E0B') }}</div>
   </div>
+
+  {% if mon and user.role == 'owner' %}<section class="panel d-month"><header><h2><span class="hico">📅</span>Monthly Summary — {{ month_nav.label }}</h2>
+      <div class="monnav"><a class="btn small secondary" href="?m={{ month_nav.prev }}" aria-label="Previous month">‹</a>
+      {% if month_nav.next %}<a class="btn small secondary" href="?m={{ month_nav.next }}" aria-label="Next month">›</a>{% endif %}</div></header>
+    <div class="mgrid">
+      <div class="mcard big"><span class="ml">Total Fuel Revenue <small>(MS + HSD + CNG)</small></span><b>{{ mon.revenue|cr }}</b>
+        <small class="mexact">{{ mon.revenue|rs }}</small>{{ trend(mon.revenue_pct)|replace('vs yesterday', 'vs last month') }}
+        <div class="msplit">{% for c in ['HSD','MS','CNG'] if c in mon.fuel %}<span><i class="f{{ c }}"></i>{{ c }} {{ mon.fuel[c][1]|cr }}</span>{% endfor %}</div></div>
+      <div class="mcard"><span class="ml">Lube Sales</span><b>{{ mon.lube|cr }}</b><small class="mexact">{{ mon.lube_qty|qty(0) }} units sold</small>{{ trend(mon.lube_pct)|replace('vs yesterday', 'vs last month') }}</div>
+      <div class="mcard"><span class="ml">HSD Sold</span><b>{{ mon.hsd|qty(0) }} L</b><small class="mexact mcr">{{ (mon.fuel.get('HSD', (0, 0))[1])|cr }}</small>{{ trend(mon.hsd_pct)|replace('vs yesterday', 'vs last month') }}</div>
+      <div class="mcard"><span class="ml">MS Sold</span><b>{{ mon.ms|qty(0) }} L</b><small class="mexact mcr">{{ (mon.fuel.get('MS', (0, 0))[1])|cr }}</small>{{ trend(mon.ms_pct)|replace('vs yesterday', 'vs last month') }}</div>
+    </div>
+    <p class="hint" style="padding:0 16px 12px;margin:0">From the daily closings (meter readings × price) for {{ mon.days }} day(s) up to {{ month_nav.to|d }}. Lube from lube sales. Only you (the owner) see this.</p></section>{% endif %}
 
   <section class="panel d-sales"><div class="ovwrap"><div>
     <header><h2>Sales Overview</h2><div class="seg" data-seg><button type="button" class="on" data-show-series="today">Today</button><button type="button" data-show-series="7d">7 Days</button><button type="button" data-show-series="30d">30 Days</button></div></header>

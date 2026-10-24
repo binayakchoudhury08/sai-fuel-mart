@@ -9,8 +9,8 @@
 <div class="fields">
   <div><label>Who</label><select name="user_id" required><option value="">Choose…</option>
     {% for u in users %}<option value="{{ u.id }}">{{ u.full_name or u.username }} ({{ ROLE_LABEL[u.role] }})</option>{% endfor %}</select></div>
-  <div><label>From date</label><input type="date" name="date_from" value="{{ pre_from }}" max="{{ today.isoformat() }}" required></div>
-  <div><label>To date</label><input type="date" name="date_to" value="{{ pre_to }}" max="{{ today.isoformat() }}" required></div>
+  <div><label>From date</label><input type="date" name="date_from" value="{{ pre_from }}" required></div>
+  <div><label>To date</label><input type="date" name="date_to" value="{{ pre_to }}" required></div>
   <div><label>Valid for</label><select name="valid_hours" data-validfor>
     <option value="24">1 day</option><option value="48" selected>2 days</option><option value="72">3 days</option>
     <option value="168">7 days</option><option value="custom">Until a date &amp; time…</option></select></div>
@@ -28,6 +28,7 @@
   <label class="check wide"><input type="checkbox" name="open_locked" value="1" checked> Open the locked days in this range (including old-system days). They lock again automatically when the access ends.</label>
   <div class="wide"><label>Reason (kept in the audit log)</label><input name="reason" required placeholder="e.g. correct transporter entries imported from the old app"></div>
 </div>
+<p class="hint">For an attendance stand-in you can choose future dates (e.g. the manager’s leave next week); it stays valid until the end of the last date and the “Valid for” box is ignored.</p>
 <p style="margin-top:12px"><button class="btn">Give access</button></p>
 </form></div></section>
 

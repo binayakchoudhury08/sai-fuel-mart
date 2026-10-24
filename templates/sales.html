@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Sales / Transactions{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager, crx with context %}{% block title %}Sales / Transactions{% endblock %}
 {% block content %}
 <section class="section"><div class="body">
 <form method="get" class="formrow filters">
@@ -14,6 +14,6 @@
 {% for r in rows %}<tr><td>{% if a != b %}<small class="muted">{{ r.d.strftime('%d %b') }}</small> {% endif %}{{ r.at.astimezone(IST).strftime('%I:%M %p') if r.at else '—' }}</td>
 <td>{{ r.nozzle }}</td><td>{{ r.fuel }}</td><td class="num">{{ r.litres|qty if r.litres is not none else '—' }}</td><td class="num">₹ {{ r.amount|inr(symbol=False) }}</td><td>{{ r.mode }}</td></tr>
 {% else %}<tr><td colspan="6" class="empty">Nothing recorded for this selection.</td></tr>{% endfor %}</tbody>
-{% if rows %}<tfoot><tr><td colspan="3">{{ count }} entries · meter + lube sales</td><td class="num">{{ litres|qty }} L</td><td class="num">{{ total|rs }}</td><td></td></tr></tfoot>{% endif %}</table></div>
+{% if rows %}<tfoot><tr><td colspan="3">{{ count }} entries · meter + lube sales</td><td class="num">{{ litres|qty }} L</td><td class="num">{{ crx(total) }}</td><td></td></tr></tfoot>{% endif %}</table></div>
 {{ pager(page, pages, count, 'entries') }}</section>
 {% endblock %}

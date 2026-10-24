@@ -134,7 +134,22 @@ def grant_for(d=None, perm=None):
 
 def role_has(perm):
     r = role()
+    if perm == "attendance_photo" and r and current_user() and current_user().get("id") == attendance_backup_id():
+        return True
     return bool(r) and (r == "owner" or perm in role_perms().get(r, set()))
+
+
+def attendance_backup_id():
+    """The one person the owner named as permanent backup for photo attendance (cached per request)."""
+    if "att_backup" not in g:
+        g.att_backup = None
+        try:
+            from . import db as _db
+            r = _db.one("SELECT value FROM settings WHERE key='attendance_backup_user'")
+            g.att_backup = int(r["value"]) if r and r["value"] and r["value"].isdigit() else None
+        except Exception:
+            pass
+    return g.att_backup
 
 
 def has(perm):
@@ -142,6 +157,8 @@ def has(perm):
     if not r:
         return False
     if r == "owner":
+        return True
+    if perm == "attendance_photo" and current_user() and current_user().get("id") == attendance_backup_id():
         return True
     return perm in role_perms().get(r, set()) or grant_for(perm=perm) is not None
 

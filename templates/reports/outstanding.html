@@ -1,7 +1,9 @@
-{% extends "base.html" %}{% block title %}Outstanding{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import crx with context %}{% block title %}Outstanding{% endblock %}
 {% block content %}
 <div class="pagehead"><div class="grow"><h1>Outstanding balances</h1><p>As on {{ today|d }}, from every entry.</p></div><div class="btnrow"><a class="btn secondary" href="?format=pdf">PDF</a><a class="btn secondary" href="?format=xlsx">Excel</a></div></div>
 {% include "reports/_tabs.html" %}
+{% set due = rows|map(attribute='balance')|select('gt', 0)|sum %}
+<div class="stats"><div><b class="neg">{{ crx(due) }}</b><span>Total to collect</span></div><div><b>{{ rows|selectattr('balance', 'gt', 0)|list|length }}</b><span>Parties with dues</span></div></div>
 <section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Party</th><th>Mobile</th><th class="num">Balance</th><th class="num">Limit</th><th>Last payment</th><th class="num">Days since</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><a href="{{ url_for('parties.detail', pid=r.id) }}">{{ r.name }}</a>{% if not r.active %} <span class="badge">inactive</span>{% endif %}</td><td>{{ r.mobile }}</td>
 <td class="num {% if r.balance > 0 %}neg{% endif %}"><b>{{ r.balance|inr }}</b></td><td class="num">{{ r.credit_limit|inr if r.credit_limit else '' }}</td>

@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "3.5.0"
+VERSION = "3.6.2"
 
 
 def _secret_key():
@@ -199,8 +199,8 @@ def create_app():
                     g.station_name = "Sai Fuel Mart"
         return g.station_name
 
-    from .util import rs
-    app.jinja_env.filters.update(inr=inr, qty=qty, d=fmt_date, rs=rs)
+    from .util import crore, rs
+    app.jinja_env.filters.update(inr=inr, qty=qty, d=fmt_date, rs=rs, cr=crore)
 
     def back():
         ref = request.form.get("_back") or request.referrer

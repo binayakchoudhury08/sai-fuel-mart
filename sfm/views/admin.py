@@ -453,12 +453,20 @@ def access():
                 d2 = parse_date(request.form.get("date_to"), "To date")
                 if d2 < d1:
                     d1, d2 = d2, d1
-                if d2 > today():
-                    raise UserError("Dates cannot be in the future.")
+                only_att = set(perms) == {"attendance_photo"}
+                if d2 > today() and not only_att:
+                    raise UserError("Dates cannot be in the future (except for an attendance stand-in).")
+                if only_att and d2 > today() + td(days=60):
+                    raise UserError("Plan an attendance stand-in at most 60 days ahead.")
                 if (d2 - d1).days > 400:
                     raise UserError("Choose 400 days or less.")
                 hours = request.form.get("valid_hours", "48")
-                if hours == "custom":
+                if only_att:   # a stand-in stays valid until the end of the last delegated day
+                    until = datetime.combine(d2, datetime.max.time()).replace(microsecond=0, tzinfo=IST)
+                    hours = None
+                if hours is None:
+                    pass
+                elif hours == "custom":
                     try:
                         until = datetime.strptime(request.form.get("valid_until", ""), "%Y-%m-%dT%H:%M").replace(tzinfo=IST)
                     except ValueError:
@@ -467,13 +475,13 @@ def access():
                     until = now_ist() + td(hours=max(1, min(720, int(hours or 48))))
                 if until <= now_ist():
                     raise UserError("The end time must be in the future.")
-                if until > now_ist() + td(days=30):
+                if until > now_ist() + td(days=30) and not only_att:
                     raise UserError("Access can be given for at most 30 days at a time.")
                 reason = clean(request.form.get("reason"), 300)
                 if not reason:
                     raise UserError("Write the reason (it is kept in the audit log).")
                 reopened = []
-                if request.form.get("open_locked") == "1":
+                if request.form.get("open_locked") == "1" and not only_att:
                     cur.execute("""UPDATE days SET status='open' WHERE business_date BETWEEN %s AND %s
                                    AND status='locked' RETURNING business_date""", (d1, d2))
                     reopened = sorted(r["business_date"] for r in cur.fetchall())

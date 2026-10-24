@@ -7,6 +7,7 @@
 <div class="stats"><div><b class="pos">{{ present }}</b><span>Present</span></div><div><b class="{{ 'neg' if total - present else '' }}">{{ total - present }}</b><span>Not marked (absent)</span></div>
 <div><b>{{ total }}</b><span>Staff</span></div></div>
 
+{% if my_standin %}<div class="flash success">You are the attendance stand-in from {{ my_standin.date_from|d }} to {{ my_standin.date_to|d }}. Same rules: today only, live photo, once per person.</div>{% elif backup_id == user.id %}<div class="flash success">You are the backup person for attendance.</div>{% endif %}
 {% if user.role != 'owner' %}<div class="flash {{ 'info' if in_window else 'error' }}">{% if not is_today %}You can only mark attendance for today.{% elif in_window %}Check-in is open until {{ rules.end }} today. Each person is marked once, by live photo. Not marked by {{ rules.end }} = Absent.{% else %}Check-in is open {{ rules.start }}–{{ rules.end }} only. Anyone not marked is Absent; only the owner can change it.{% endif %}</div>{% endif %}
 {% if can('attendance_photo') and not mobile %}<div class="flash info">Live photos are taken on the phone: open this page in the app or on the manager’s phone.</div>{% endif %}
 {% if can('attendance_photo') and not storage %}<div class="notice">Photo storage isn’t set up yet (Supabase Storage). Ask the owner.</div>{% endif %}
@@ -53,12 +54,19 @@
 {% endif %}
 
 {% if user.role == 'owner' %}
-<section class="section"><details class="add" style="border-top:0"><summary>Check-in hours (owner)</summary><div class="body">
+<section class="section"><details class="add" style="border-top:0"><summary>Attendance rules, backup &amp; stand-in (owner)</summary><div class="body">
 <form method="post" action="{{ url_for('staff.attendance_rules_save') }}" class="formrow">{{ csrf() }}
   <div><label>Check-in opens</label><input type="time" name="start" value="{{ rules.start }}"></div>
   <div><label>Check-in closes</label><input type="time" name="end" value="{{ rules.end }}"></div>
   <div style="flex:0"><button class="btn">Save</button></div></form>
-<p class="hint">Managers: today only, once per person, by live photo, inside these hours. Only you can change, replace or delete attendance on any day.</p></div></details></section>
+<p class="hint">Managers: today only, once per person, by live photo, inside these hours. Only you can change, replace or delete attendance on any day.</p>
+<hr style="border:0;border-top:1px solid var(--line-2);margin:14px 0">
+<form method="post" action="{{ url_for('staff.attendance_backup_save') }}" class="formrow">{{ csrf() }}
+  <div><label>Backup person (always allowed, for sudden absences)</label><select name="user_id"><option value="">— nobody —</option>
+    {% for u in users %}<option value="{{ u.id }}" {% if u.id == backup_id %}selected{% endif %}>{{ u.full_name or u.username }} ({{ ROLE_LABEL[u.role] }})</option>{% endfor %}</select></div>
+  <div style="flex:0"><button class="btn secondary">Save backup</button></div></form>
+<p class="hint">Planned leave? Give a stand-in for those dates in <a href="{{ url_for('admin.access') }}">Settings → Temporary Access → “Take attendance (stand-in)”</a> — future dates allowed; it ends by itself.</p>
+{% if standins %}<p style="margin-top:8px"><b>Stand-ins:</b> {% for x in standins %}{{ x.full_name or x.username }} ({{ x.date_from.strftime('%d %b') }}–{{ x.date_to.strftime('%d %b') }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}</div></details></section>
 {% endif %}
 
 {% if can('staff_manage') %}

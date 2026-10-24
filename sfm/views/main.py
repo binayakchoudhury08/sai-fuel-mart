@@ -178,7 +178,39 @@ def dashboard():
                      "litres": r["sale_qty"] if r["saved"] else None,
                      "active": bool(r["saved"] and r["sale_qty"] and r["sale_qty"] > 0)}
                     for r in td["nozzles"] if r["nozzle"]["active"]][:4]
+    # ---- monthly summary (from the daily closings): fuel revenue in crores, lube, HSD & MS litres
+    from ..util import month_bounds
+    try:
+        m1, m2 = month_bounds(request.args.get("m") or t0.strftime("%Y-%m"))
+    except Exception:
+        m1, m2 = month_bounds(t0.strftime("%Y-%m"))
+    m2 = min(m2, t0) if m1 <= t0 else m2
+    pm1, pm2 = month_bounds((m1 - timedelta(days=1)).strftime("%Y-%m"))
+    def month_totals(a, b):
+        with db.tx() as cur:
+            cur.execute("""SELECT n.fuel_code AS f, COALESCE(SUM(r.closing - r.opening - r.testing),0) AS l,
+                                  COALESCE(SUM((r.closing - r.opening - r.testing) * r.rate),0) AS amt
+                           FROM nozzle_readings r JOIN nozzles n ON n.id = r.nozzle_id
+                           WHERE r.business_date BETWEEN %s AND %s GROUP BY 1""", (a, b))
+            fuel = {x["f"]: (Decimal(x["l"]), Decimal(x["amt"]).quantize(Decimal("1"))) for x in cur.fetchall()}
+            cur.execute("""SELECT COALESCE(SUM(amount),0) AS amt, COALESCE(SUM(-qty),0) AS q FROM lube_moves
+                           WHERE NOT voided AND kind='sale' AND business_date BETWEEN %s AND %s""", (a, b))
+            lb = cur.fetchone()
+            cur.execute("SELECT COUNT(DISTINCT business_date) AS n FROM nozzle_readings WHERE business_date BETWEEN %s AND %s", (a, b))
+            days = cur.fetchone()["n"]
+        rev = sum((v[1] for v in fuel.values()), ZERO)
+        return {"fuel": fuel, "revenue": rev, "lube": Decimal(lb["amt"]), "lube_qty": Decimal(lb["q"]),
+                "hsd": fuel.get("HSD", (ZERO, ZERO))[0], "ms": fuel.get("MS", (ZERO, ZERO))[0], "days": days}
+    from ..security import role as _role
+    mon = None
+    if _role() == "owner":          # the monthly summary is for the owner only
+        mon, prev = month_totals(m1, m2), month_totals(pm1, pm2)
+        for k in ("revenue", "lube", "hsd", "ms"):
+            mon[k + "_pct"] = pct(mon[k], prev[k])
+    month_nav = {"label": m1.strftime("%B %Y"), "prev": (m1 - timedelta(days=1)).strftime("%Y-%m"),
+                 "next": (m2 + timedelta(days=1)).strftime("%Y-%m") if m2 < t0 else None, "to": m2}
     return render_template("dashboard.html", td=td, counts=counts, week=week, wk_max=wk_max, lt_max=lt_max,
+                           mon=mon, month_nav=month_nav,
                            charts=charts, sparks=sparks, nozzle_cards=nozzle_cards, prices=prices, activity=activity,
                            latest=latest, att_today=att_today, IST=IST,
                            kpi=kpi, mix=mix, mix_total=mix_total, top_alerts=top_alerts, wx=_weather_cfg(), chart=chart, peak=peak, dues=dues[:6],

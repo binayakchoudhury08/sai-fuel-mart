@@ -24,12 +24,14 @@ def attendance_rules(cur):
 
 def check_photo_rules(cur, d, kind="in", sid=None):
     """Raises UserError when a photo mark is not allowed now. Owner: always allowed (and may replace)."""
-    from ..security import role
+    from ..security import grant_for, role, role_has
     if role() == "owner":
         return
     now = now_ist()
     if d != now.date():
         raise UserError("Attendance can only be marked for today.")
+    if not role_has("attendance_photo") and not grant_for(d, "attendance_photo"):
+        raise UserError("Your stand-in access for attendance does not cover today.")
     r = attendance_rules(cur)
     if kind == "in":
         hm = now.strftime("%H:%M")
@@ -68,9 +70,17 @@ def index():
     hm = now_ist().strftime("%H:%M")
     in_window = d == today() and rules["start"] <= hm < rules["end"]
     is_today = d == today()
+    from ..security import attendance_backup_id, grant_for
+    my_standin = grant_for(today(), "attendance_photo")
+    users = db.query("SELECT id, username, full_name, role FROM users WHERE active AND role <> 'owner' ORDER BY full_name, username")
+    backup_id = attendance_backup_id()
+    standins = db.query("""SELECT a.date_from, a.date_to, u.full_name, u.username FROM access_grants a JOIN users u ON u.id=a.user_id
+                           WHERE a.revoked_at IS NULL AND a.valid_until > NOW() AND a.perms = 'attendance_photo'
+                             AND a.date_to >= CURRENT_DATE ORDER BY a.date_from""")
     return render_template("staff/index.html", d=d, staff=staff, marks=marks, STATUS=STATUS, next_code=nxt,
                            present=present, total=len(active), rules=rules, in_window=in_window,
-                           mobile=is_mobile(), storage=storage_ready(), station=_station(), is_today=is_today)
+                           mobile=is_mobile(), storage=storage_ready(), station=_station(), is_today=is_today,
+                           my_standin=my_standin, users=users, backup_id=backup_id, standins=standins)
 
 
 def _station():
@@ -382,3 +392,25 @@ def void_payment(pid):
     if back and back.startswith("/") and not back.startswith("//"):
         return redirect(back)
     return redirect(url_for("staff.salary", m=p["for_month"]))
+
+
+
+@bp.route("/staff/attendance/backup", methods=["POST"])
+@login_required("owner")
+def attendance_backup_save():
+    uid = request.form.get("user_id") or ""
+    with db.tx() as cur:
+        if uid:
+            cur.execute("SELECT username, full_name FROM users WHERE id=%s AND active AND role <> 'owner'", (int(uid),))
+            u = cur.fetchone()
+            if not u:
+                raise UserError("Choose an active login.")
+            cur.execute("""INSERT INTO settings (key, value) VALUES ('attendance_backup_user', %s)
+                           ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", (uid,))
+            audit(cur, "update", "settings", "attendance_backup", f"Attendance backup person: {u['full_name'] or u['username']}")
+            flash(f"{u['full_name'] or u['username']} can now always take photo attendance (same rules as the manager).", "success")
+        else:
+            cur.execute("DELETE FROM settings WHERE key='attendance_backup_user'")
+            audit(cur, "update", "settings", "attendance_backup", "Attendance backup person removed")
+            flash("Attendance backup person removed.", "success")
+    return redirect(url_for("staff.index"))

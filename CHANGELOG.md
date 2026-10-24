@@ -1,5 +1,32 @@
 # Sai Fuel Mart — changes
 
+## 3.6.2
+
+Attendance cover when the manager is away
+- Stand-in (planned leave): Settings → Temporary Access → "Take attendance (stand-in)" for a person and dates —
+  future dates allowed (up to 60 days ahead); valid until the end of the last date; ends by itself.
+- Backup person (sudden absence): Attendance → "Attendance rules, backup & stand-in (owner)" → choose one login who
+  can always take photo attendance.
+- Both follow the same rules as the manager: phone only, live photo only, today only, 6–12, once per person.
+
+Totals in crores
+- Dashboard Total Sales and report totals (Reports, Outstanding, Credit register, Sales / Transactions) show ₹ x.xx Cr
+  with the exact rupees underneath.
+
+App
+- Android app 3.6.2 (version code 6), same signing key; ANDROID_STUDIO_GUIDE.md explains building and signing.
+
+## 3.6.1
+- Monthly Summary is shown (and calculated) only on the owner's dashboard — not for Admin, Manager or Staff.
+- Lube Sales, HSD Sold and MS Sold amounts are shown in crores (₹ x.xx Cr), like Total Fuel Revenue.
+
+## 3.6.0
+
+Dashboard → Monthly Summary (‹ › to change month)
+- Total Fuel Revenue (MS + HSD + CNG) in crores (₹ 1.24 Cr), the exact rupee amount and the split per fuel,
+  worked out from the daily closings (meter readings × price).
+- Lube Sales for the month (₹ and units), HSD Sold (litres) and MS Sold (litres); each with % vs last month.
+
 ## 3.5.0
 
 Settings is the single home for owner tools

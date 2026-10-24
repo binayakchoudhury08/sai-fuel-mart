@@ -1,4 +1,4 @@
-{% extends "base.html" %}{% from "_macros.html" import status_badge, money with context %}{% block title %}Reports{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import status_badge, money, crx with context %}{% block title %}Reports{% endblock %}
 {% block content %}
 {% macro trend(p) -%}{% if p is not none %}<span class="trend {{ 'up' if p >= 0 else 'down' }}">{{ '↑' if p >= 0 else '↓' }} {{ p|abs }}%</span>{% else %}<span class="muted">—</span>{% endif %}{%- endmacro %}
 <section class="section"><div class="body" style="padding-bottom:6px">
@@ -15,7 +15,7 @@
 </form></div></section>
 
 <div class="kpis kpis3">
-  <div class="kpi"><span>Total Sales</span><b>{{ summary.sales|rs }}</b>{{ trend(summary.sales_pct) }} <span class="muted">vs previous period</span></div>
+  <div class="kpi"><span>Total Sales</span><b>{{ summary.sales|cr }}</b><small class="crx">{{ summary.sales|rs }}</small>{{ trend(summary.sales_pct) }} <span class="muted">vs previous period</span></div>
   <div class="kpi"><span>Total Litres</span><b>{{ summary.litres|qty(0) }} L</b>{{ trend(summary.litres_pct) }} <span class="muted">vs previous period</span></div>
   <div class="kpi"><span>Total Transactions</span><b>{{ summary.tx }}</b>{{ trend(summary.tx_pct) }} <span class="muted">vs previous period</span></div>
 </div>
@@ -31,9 +31,9 @@
 </svg></div></section>
 
 <h2 style="margin:18px 0 10px">Day by day <small class="muted" style="font-weight:500">{{ start|d }} – {{ end|d }}</small></h2>
-<div class="stats"><div><b>{{ tot.gross_sale|inr }}</b><span>Total sale</span></div>
+<div class="stats"><div><b>{{ crx(tot.gross_sale) }}</b><span>Total sale</span></div>
 {% for f in fuels if tot.qty[f.code] %}<div><b>{{ tot.qty[f.code]|qty }}</b><span>{{ f.code }} {{ f.unit }}</span></div>{% endfor %}
-<div><b>{{ tot.credit|inr }}</b><span>Credit given</span></div><div><b>{{ tot.payments|inr }}</b><span>Payments received</span></div>
+<div><b>{{ crx(tot.credit) }}</b><span>Credit given</span></div><div><b>{{ crx(tot.payments) }}</b><span>Payments received</span></div>
 <div><b class="{% if tot.difference < 0 %}neg{% elif tot.difference > 0 %}pos{% endif %}">{{ tot.difference|inr }}</b><span>Net cash short/excess ({{ tot.short_days }} short day{{ 's' if tot.short_days != 1 }})</span></div></div>
 <section class="section"><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Status</th>{% for f in fuels %}<th class="num">{{ f.code }}</th>{% endfor %}<th class="num">Total sale</th><th class="num">Digital</th><th class="num">Credit</th><th class="num">Received</th><th class="num">Expenses</th><th class="num">Expected cash</th><th class="num">Counted</th><th class="num">Short/excess</th></tr></thead><tbody>
 {% for r in rows %}<tr><td><a href="{{ url_for('day.day_view', d=r.date.isoformat()) }}">{{ r.date.strftime('%d %b') }}</a></td><td>{{ status_badge(r.status) }}</td>
@@ -41,5 +41,5 @@
 <td class="num">{{ r.gross_sale|inr }}</td><td class="num">{{ r.digital|inr }}</td><td class="num">{{ r.credit|inr }}</td><td class="num">{{ r.payments|inr }}</td><td class="num">{{ r.expenses|inr }}</td>
 <td class="num">{{ r.expected_cash|inr }}</td><td class="num">{{ r.counted|inr if r.counted is not none else '—' }}</td><td class="num">{{ money(r.difference, True) }}</td></tr>
 {% else %}<tr><td colspan="12" class="empty">No data in this range.</td></tr>{% endfor %}</tbody>
-{% if rows %}<tfoot><tr><td colspan="2">Total</td>{% for f in fuels %}<td class="num">{{ tot.qty[f.code]|qty }}</td>{% endfor %}<td class="num">{{ tot.gross_sale|inr }}</td><td class="num">{{ tot.digital|inr }}</td><td class="num">{{ tot.credit|inr }}</td><td class="num">{{ tot.payments|inr }}</td><td class="num">{{ tot.expenses|inr }}</td><td class="num">{{ tot.expected_cash|inr }}</td><td></td><td class="num">{{ money(tot.difference, True) }}</td></tr></tfoot>{% endif %}</table></div></section>
+{% if rows %}<tfoot><tr><td colspan="2">Total</td>{% for f in fuels %}<td class="num">{{ tot.qty[f.code]|qty }}</td>{% endfor %}<td class="num">{{ crx(tot.gross_sale) }}</td><td class="num">{{ crx(tot.digital) }}</td><td class="num">{{ crx(tot.credit) }}</td><td class="num">{{ crx(tot.payments) }}</td><td class="num">{{ crx(tot.expenses) }}</td><td class="num">{{ crx(tot.expected_cash) }}</td><td></td><td class="num">{{ money(tot.difference, True) }}</td></tr></tfoot>{% endif %}</table></div></section>
 {% endblock %}

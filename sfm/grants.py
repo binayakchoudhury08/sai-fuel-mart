@@ -7,9 +7,11 @@ from flask import g
 from . import db
 
 PRESET_NOTES = {
+    "att_delegate": "Stand-in for the manager: take today’s attendance by live photo on these dates (same rules: 6–12, once, phone only)",
     "old_days": "Daily closing, credit transport slips, payments, lube, tanks, salary, and cancel/correct entries",
 }
 PRESETS = {
+    "att_delegate": ("Take attendance (stand-in)", ["attendance_photo"]),
     "old_days": ("Correct old / imported days",
                  ["closing_enter", "transport_enter", "payments", "tanks", "lube_stock", "salary",
                   "cancel_entries", "rate_override", "bills", "accounts_view"]),

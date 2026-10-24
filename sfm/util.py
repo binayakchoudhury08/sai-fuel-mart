@@ -59,6 +59,12 @@ def rupee(d):
     return Decimal(d or 0).quantize(Decimal("1"), rounding=ROUND_HALF_UP).quantize(PAISA)
 
 
+def crore(value):
+    """₹ in crores, two decimals: 12403550 → '₹ 1.24 Cr'."""
+    v = Decimal(value or 0) / Decimal(10000000)
+    return f"₹ {v.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f} Cr"
+
+
 def rs(value, symbol=True):
     """Whole-rupee display: ₹9,082"""
     return inr(value, symbol=symbol, decimals=0)
