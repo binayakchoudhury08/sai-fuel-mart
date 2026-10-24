@@ -1,5 +1,6 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}User accounts{% endblock %}
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Settings{% endblock %}
 {% block content %}
+{{ settings_tabs('users') }}
 <div class="pagehead"><div class="grow"><h1>User accounts</h1>
 <p>Give every person their own login so the audit log shows who did what. Never share the owner login.</p></div></div>
 <div class="section"><div class="body flush tablewrap"><table>

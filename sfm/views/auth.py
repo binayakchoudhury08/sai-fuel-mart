@@ -27,6 +27,14 @@ def _safe_next(nxt):
     return url_for("main.dashboard")
 
 
+def _has_login_photo():
+    try:
+        r = db.one("SELECT value FROM settings WHERE key='login_photo_path'")
+        return bool(r and r["value"])
+    except Exception:
+        return False
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     has_users = db.one("SELECT COUNT(*) AS n FROM users")["n"] > 0
@@ -64,7 +72,7 @@ def login():
                              f"{LOCK_MINUTES} minutes.") if lock else "Wrong username or password."
         if not error:
             return redirect(_safe_next(request.args.get("next")))
-    return render_template("auth/login.html", error=error, username=username)
+    return render_template("auth/login.html", error=error, username=username, login_photo=_has_login_photo())
 
 
 @bp.route("/logout", methods=["POST", "GET"])

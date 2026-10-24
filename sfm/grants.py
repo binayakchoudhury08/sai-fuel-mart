@@ -8,15 +8,11 @@ from . import db
 
 PRESET_NOTES = {
     "old_days": "Daily closing, credit transport slips, payments, lube, tanks, salary, and cancel/correct entries",
-    "att_photo": "Mark staff present with a live photo on these dates",
-    "att_manual": "Mark present / absent / leave / off without a photo on these dates",
 }
 PRESETS = {
     "old_days": ("Correct old / imported days",
                  ["closing_enter", "transport_enter", "payments", "tanks", "lube_stock", "salary",
                   "cancel_entries", "rate_override", "bills", "accounts_view"]),
-    "att_photo": ("Attendance with live photo", ["attendance_photo"]),
-    "att_manual": ("Attendance without photo (mark / change any status)", ["attendance_manual"]),
 }
 _last_sweep = {"t": 0.0}
 

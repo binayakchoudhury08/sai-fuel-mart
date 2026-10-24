@@ -30,41 +30,41 @@ OLD, OUT = T - timedelta(days=6), T - timedelta(days=7)
 for d in (OLD, OUT):
     sql("INSERT INTO pump.days (business_date, status, is_legacy) VALUES (%s,'locked',TRUE) ON CONFLICT (business_date) DO UPDATE SET status='locked', is_legacy=TRUE", (d,))
 slip = lambda u, d, s, **kw: u.post("/transport/entry", dict({"party": svt, "business_date": d.isoformat(), "qty": "10", "slip_no": s}, **kw))
+exp = lambda u, d, tag: u.post(f"/day/{d.isoformat()}/expense", {"amount": "10", "description": tag, "category": "General", "from_counter": "1"})
+nexp = lambda tag: sql("SELECT COUNT(*) FROM pump.expenses WHERE description=%s", (tag,))[0][0]
 
 print("Temporary access")
-r = slip(mgr, OLD, "G0")
-check("Only the owner can change entries older" in txt(r) or "locked" in txt(r), "before: manager blocked on an old, locked (old-system) day")
+exp(mgr, OLD, "G0")
+check(nexp("G0") == 0, "before: manager blocked on an old, locked (old-system) day")
 r = owner.post("/settings/access", {"action": "create", "user_id": mid, "preset_old_days": "1", "date_from": OLD.isoformat(),
                                     "date_to": OLD.isoformat(), "valid_hours": "48", "open_locked": "1", "reason": "fix imported SVT slips"})
 check("can now work on" in txt(r) and sql("SELECT status FROM pump.days WHERE business_date=%s", (OLD,))[0][0] == "open",
       "owner gives 2-day access for that date → locked old-system day opened")
 h = txt(mgr.get("/dashboard"))
 check("Temporary access from the owner" in h, "manager sees a banner with dates and end time")
-r = slip(mgr, OLD, "G1")
-check("saved" in txt(r) and sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='G1'")[0][0] == 1, "manager corrects the old day within the access")
-r = slip(mgr, OUT, "G2")
-check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='G2'")[0][0] == 0, "a date outside the access stays blocked")
+exp(mgr, OLD, "G1")
+check(nexp("G1") == 1, "manager corrects the old day within the access")
+exp(mgr, OUT, "G2")
+check(nexp("G2") == 0, "a date outside the access stays blocked")
 h = txt(mgr.get(f"/day/{OLD.isoformat()}"))
 check('name="closing_' in h and "disabled" not in h.split('name="closing_')[1][:80], "Daily closing of that old day is editable for the manager")
 gid = sql("SELECT id FROM pump.access_grants ORDER BY id DESC LIMIT 1")[0][0]
 owner.post("/settings/access", {"action": "revoke", "id": gid})
 check(sql("SELECT status FROM pump.days WHERE business_date=%s", (OLD,))[0][0] == "locked", "owner stops the access → the day locks again at once")
-r = slip(mgr, OLD, "G3")
-check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='G3'")[0][0] == 0, "after stopping, the manager is blocked again")
+exp(mgr, OLD, "G3")
+check(nexp("G3") == 0, "after stopping, the manager is blocked again")
 owner.post("/settings/access", {"action": "create", "user_id": mid, "preset_old_days": "1", "date_from": OLD.isoformat(),
                                 "date_to": OLD.isoformat(), "valid_hours": "24", "open_locked": "1", "reason": "short"})
 sql("UPDATE pump.access_grants SET valid_until = NOW() - interval '1 minute' WHERE revoked_at IS NULL")
 owner.get("/settings/access")
 check(sql("SELECT status FROM pump.days WHERE business_date=%s", (OLD,))[0][0] == "locked", "when the time runs out, the day locks again automatically")
 check(sql("SELECT COUNT(*) FROM pump.audit_log WHERE entity='access_grant'")[0][0] >= 4, "giving, stopping and ending are all in the audit log")
-r = owner.post("/settings/access", {"action": "create", "user_id": mid, "preset_att_photo": "1", "date_from": (T - timedelta(days=5)).isoformat(),
-                                    "date_to": (T - timedelta(days=5)).isoformat(), "valid_hours": "72", "reason": "attendance catch-up"})
+
 sid = sql("SELECT id FROM pump.staff WHERE active ORDER BY id LIMIT 1")[0][0]
 ph = U("mgr2", "Mgr@123456x", ua="Mozilla/5.0 (Linux; Android 14) Chrome/129 Mobile Safari/537.36")
 with ph.c.session_transaction() as x: x["_csrf"] = "t"
 r = ph.c.post("/staff/attendance/start", data={"_csrf": "t", "staff_id": sid, "work_date": (T - timedelta(days=5)).isoformat()}, headers=ph.h)
-check("previous" not in (r.json or {}).get("error", "") and "between" not in (r.json or {}).get("error", ""),
-      f"attendance access lets the manager mark 5 days back (rule check passed: {r.json.get('error')})")
+check("only be marked for today" in (r.json or {}).get("error", ""), "manager cannot mark attendance for an earlier day")
 check(mgr.get("/settings/access").status_code == 403, "only the owner opens Temporary access")
 
 print("Whole-rupee credit slips")
@@ -82,4 +82,32 @@ pdf = owner.get(f"/transport/download?party={svt}&period=day&d={T.isoformat()}&f
 open("/tmp/rbill.pdf", "wb").write(pdf)
 t = subprocess.run(["pdftotext", "-layout", "/tmp/rbill.pdf", "-"], capture_output=True, text=True).stdout
 check("9,082" in t and "9,082.00" not in t and "100.50" in t and "90.37" in t, "bill: whole-rupee amounts; litres and rate keep decimals")
+print("Credit transport: never locked within 31 days")
+adm = U("adm", "Adm@123456x")
+L17 = T - timedelta(days=17)
+sql("INSERT INTO pump.days (business_date, status) VALUES (%s,'locked') ON CONFLICT (business_date) DO UPDATE SET status='locked'", (L17,))
+r = slip(mgr, L17, "TL1", rate="90")
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='TL1' AND NOT voided")[0][0] == 1, "manager adds a slip 17 days back on a LOCKED day")
+r = slip(mgr, T - timedelta(days=40), "TL2", rate="90")
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='TL2'")[0][0] == 1, "manager can add a slip 40 days back too (any date)")
+slip(owner, T - timedelta(days=40), "TL3", rate="90")
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='TL3'")[0][0] == 1, "the owner can go further back")
+tid = sql("SELECT id FROM pump.party_txns WHERE slip_no='TL1'")[0][0]
+r = adm.post(f"/transport/entry/{tid}/correct", {"qty": "12", "rate": "90", "slip_no": "TL1", "reason": "qty was 12"})
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='TL1' AND NOT voided AND qty=12")[0][0] == 1, "admin edits the slip on the locked day")
+tid2 = sql("SELECT id FROM pump.party_txns WHERE slip_no='TL1' AND NOT voided")[0][0]
+mgr.post(f"/party-txn/{tid2}/void", {"reason": "duplicate slip"})
+check(sql("SELECT COUNT(*) FROM pump.party_txns WHERE slip_no='TL1' AND NOT voided")[0][0] == 0, "manager deletes the slip (kept in history)")
+check(sql("SELECT status FROM pump.days WHERE business_date=%s", (L17,))[0][0] == "locked", "the day's closing itself stays locked")
+r = exp(mgr, L17, "TL-exp")
+check(nexp("TL-exp") == 0, "other entries on that locked day are still blocked")
+print("Attendance: photo only, except the owner")
+k_ = sql("INSERT INTO pump.settings(key,value) VALUES ('attendance_start','00:00'),('attendance_end','23:59') ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value")
+sid = sql("SELECT id FROM pump.staff WHERE active ORDER BY id LIMIT 1")[0][0]
+for who, u in (("admin", adm), ("manager", mgr)):
+    r = u.post("/staff/attendance", {"work_date": T.isoformat(), f"st_{sid}": "P"}, follow=False)
+    check(r.status_code == 403, f"{who} cannot mark present without a photo")
+r = owner.post("/staff/attendance", {"work_date": T.isoformat(), f"st_{sid}": "P", "reason": "owner"})
+check(sql("SELECT status FROM pump.attendance WHERE staff_id=%s AND work_date=%s", (sid, T))[0][0] == "P", "the owner can mark without a photo")
+check("attendance_manual" not in txt(owner.get("/settings/permissions")), "'mark without photo' can't be given to anyone in Permissions")
 print(); print("FAILED:" if FAILS else "ALL V3.1 CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]

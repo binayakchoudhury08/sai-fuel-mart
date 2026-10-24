@@ -6,13 +6,13 @@
 
 {% macro csrf() -%}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{%- endmacro %}
 
-{% macro void(action, label="Cancel", back=None, what="entry") -%}
+{% macro void(action, label="Cancel", back=None, what="entry", verb=None) -%}
 <details class="void"><summary>{{ label }}</summary>
 <form method="post" action="{{ action }}">
   {{ csrf() }}{% if back %}<input type="hidden" name="_back" value="{{ back }}">{% endif %}
-  <label>Why cancel this {{ what }}?</label>
+  <label>Why {{ (verb or 'cancel')|lower }} this {{ what }}?</label>
   <input name="reason" required maxlength="200" placeholder="e.g. typed wrong amount">
-  <button class="btn danger small" type="submit">Cancel {{ what }}</button>
+  <button class="btn danger small" type="submit">{{ verb or 'Cancel' }} {{ what }}</button>
   <p class="hint">It stays on record, struck through.</p>
 </form></details>
 {%- endmacro %}

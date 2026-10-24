@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% from "_head.html" import head %}{% block title %}Alerts{% endblock %}
+{% block content %}
+<div class="pagehead">{{ head('bell', '--c-proofs', 'Alerts', 'The system checks your books, tanks, credit and stock by itself. Tap an alert to fix it.') }}
+{% if user.role == 'owner' %}<a class="btn secondary" href="{{ url_for('main.automation_settings') }}">Alert rules</a>{% endif %}</div>
+<div class="stats"><div><b class="neg">{{ items|selectattr('sev','equalto','high')|list|length }}</b><span>Urgent</span></div>
+<div><b style="color:var(--warn)">{{ items|selectattr('sev','equalto','medium')|list|length }}</b><span>Soon</span></div>
+<div><b style="color:var(--info)">{{ items|selectattr('sev','equalto','low')|list|length }}</b><span>For info</span></div></div>
+<section class="section"><div class="body flush">
+{% for a in items %}<a class="alert-row" href="{{ a.link }}"><span class="sev {{ a.sev }}">{{ '!' if a.sev=='high' else ('•' if a.sev=='medium' else 'i') }}</span>
+<span><b>{{ a.title }}</b><small>{{ a.area }} · {{ a.detail }}</small></span></a>
+{% else %}<p class="empty">✓ Nothing needs attention right now.</p>{% endfor %}
+</div></section>
+{% endblock %}

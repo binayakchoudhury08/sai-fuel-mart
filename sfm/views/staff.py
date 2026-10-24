@@ -15,31 +15,37 @@ STAFF_PAY_MODES = ["Cash from counter", "Cash by owner", "Bank transfer", "UPI"]
 
 
 def attendance_rules(cur):
-    """Owner's rules for photo attendance: how many past days and which hours."""
+    """Photo attendance window (owner can change the hours): check-in TODAY ONLY, 06:00–12:00 by default."""
     from ..security import get_setting
-    try:
-        back = max(0, min(7, int(get_setting(cur, "attendance_back_days", "2") or 2)))
-    except ValueError:
-        back = 2
-    start = get_setting(cur, "attendance_start", "05:00") or "05:00"
-    end = get_setting(cur, "attendance_end", "23:59") or "23:59"
-    return {"back": back, "start": start, "end": end}
+    start = get_setting(cur, "attendance_start", "06:00") or "06:00"
+    end = get_setting(cur, "attendance_end", "12:00") or "12:00"
+    return {"back": 0, "start": start, "end": end}
 
 
-def check_photo_rules(cur, d):
-    """Raises UserError if a photo attendance for date d is not allowed right now (owner bypasses)."""
-    from ..security import grant_for, role
-    if role() == "owner" or grant_for(d, "attendance_photo"):
+def check_photo_rules(cur, d, kind="in", sid=None):
+    """Raises UserError when a photo mark is not allowed now. Owner: always allowed (and may replace)."""
+    from ..security import role
+    if role() == "owner":
         return
-    r = attendance_rules(cur)
     now = now_ist()
-    if d > now.date():
-        raise UserError("You cannot mark attendance for a future date.")
-    if d < now.date() - timedelta(days=r["back"]):
-        raise UserError(f"Attendance can only be marked for today and the previous {r['back']} day(s).")
-    hm = now.strftime("%H:%M")
-    if not (r["start"] <= hm <= r["end"]):
-        raise UserError(f"Attendance can be marked only between {r['start']} and {r['end']}.")
+    if d != now.date():
+        raise UserError("Attendance can only be marked for today.")
+    r = attendance_rules(cur)
+    if kind == "in":
+        hm = now.strftime("%H:%M")
+        if not (r["start"] <= hm < r["end"] if r["end"] != "23:59" else r["start"] <= hm):
+            raise UserError(f"Check-in is open only from {r['start']} to {r['end']}. After that the person stays absent; "
+                            "only the owner can change it.")
+    if sid:
+        cur.execute("SELECT status, captured_at, checkout_at FROM attendance WHERE staff_id=%s AND work_date=%s", (sid, d))
+        a = cur.fetchone()
+        if kind == "in" and a:
+            raise UserError("Attendance for this person is already marked today. Only the owner can change it.")
+        if kind == "out":
+            if not a or a["status"] not in ("P", "H"):
+                raise UserError("This person has not checked in today.")
+            if a["checkout_at"]:
+                raise UserError("Check-out is already recorded. Only the owner can change it.")
 
 
 @bp.route("/staff")
@@ -59,11 +65,12 @@ def index():
     nxt = f"EMP{int(last['emp_code'][3:]) + 1:03d}" if last else "EMP001"
     active = [x for x in staff if x["active"]]
     present = sum(1 for x in active if marks.get(x["id"]) and marks[x["id"]]["status"] in ("P", "H"))
-    from ..security import grant_for
-    in_window = (d >= today() - timedelta(days=rules["back"]) and d <= today()) or bool(grant_for(d, "attendance_photo"))
+    hm = now_ist().strftime("%H:%M")
+    in_window = d == today() and rules["start"] <= hm < rules["end"]
+    is_today = d == today()
     return render_template("staff/index.html", d=d, staff=staff, marks=marks, STATUS=STATUS, next_code=nxt,
                            present=present, total=len(active), rules=rules, in_window=in_window,
-                           mobile=is_mobile(), storage=storage_ready(), station=_station())
+                           mobile=is_mobile(), storage=storage_ready(), station=_station(), is_today=is_today)
 
 
 def _station():
@@ -82,12 +89,19 @@ def attendance_start():
         return jsonify({"ok": False, "error": "Attendance photos are taken on a phone."}), 400
     try:
         d = parse_date(request.form.get("work_date"))
+        kind = "out" if request.form.get("kind") == "out" else "in"
         with db.tx() as cur:
-            check_photo_rules(cur, d)
+            check_photo_rules(cur, d, kind, int(request.form.get("staff_id") or 0))
             cur.execute("SELECT name FROM staff WHERE id=%s AND active", (int(request.form.get("staff_id") or 0),))
             s = cur.fetchone()
             if not s:
                 raise UserError("Choose the staff member.")
+            if request.form.get("kind") == "out":
+                cur.execute("SELECT status FROM attendance WHERE staff_id=%s AND work_date=%s",
+                            (int(request.form.get("staff_id")), d))
+                a = cur.fetchone()
+                if not a or a["status"] not in ("P", "H"):
+                    raise UserError(f"{s['name']} has not checked in on this day.")
         if not storage_ready():
             raise UserError("Photo storage is not set up yet. Ask the owner.")
         return jsonify({"ok": True, **issue_capture("attendance", s["name"])})
@@ -116,13 +130,21 @@ def attendance_photo():
             raise UserError("This photo was not taken just now. Take a fresh photo.")
         ppath, _, _, _ = check_capture(request.form.get("ticket"))
         with db.tx() as cur:
-            check_photo_rules(cur, d)
+            check_photo_rules(cur, d, "out" if request.form.get("kind") == "out" else "in", sid)
             cur.execute("SELECT * FROM staff WHERE id=%s AND active", (sid,))
             s = cur.fetchone()
             if not s:
                 raise UserError("Choose the staff member.")
             cur.execute("SELECT * FROM attendance WHERE staff_id=%s AND work_date=%s", (sid, d))
             old = cur.fetchone()
+            if request.form.get("kind") == "out":
+                if not old or old["status"] not in ("P", "H"):
+                    raise UserError(f"{s['name']} has not checked in on this day.")
+                cur.execute("""UPDATE attendance SET checkout_at=%s, checkout_photo_path=%s, updated_by=%s, updated_at=NOW()
+                               WHERE staff_id=%s AND work_date=%s""", (taken, ppath, current_user()["username"], sid, d))
+                audit(cur, "update", "attendance", sid, f"{s['name']} {d}: checked out by live photo at {taken:%I:%M %p}",
+                      business_date=d)
+                return jsonify({"ok": True, "name": s["name"]})
             cur.execute("""INSERT INTO attendance (staff_id, work_date, status, updated_by, photo_path, captured_at,
                                                    latitude, longitude, marked_via, note)
                            VALUES (%s,%s,'P',%s,%s,%s,%s,%s,'photo','')
@@ -143,10 +165,11 @@ def attendance_photo():
 def attendance_photo_file(sid, d):
     from flask import abort
     from .. import storage
-    row = db.one("SELECT photo_path FROM attendance WHERE staff_id=%s AND work_date=%s", (sid, parse_date(d)))
-    if not row or not row["photo_path"]:
+    row = db.one("SELECT photo_path, checkout_photo_path FROM attendance WHERE staff_id=%s AND work_date=%s", (sid, parse_date(d)))
+    path = (row or {}).get("checkout_photo_path" if request.args.get("kind") == "out" else "photo_path")
+    if not path:
         abort(404)
-    link = storage.signed_download(row["photo_path"], 600)
+    link = storage.signed_download(path, 600)
     if not link:
         abort(404)
     return redirect(link)
@@ -155,22 +178,16 @@ def attendance_photo_file(sid, d):
 @bp.route("/staff/attendance/rules", methods=["POST"])
 @login_required("owner")
 def attendance_rules_save():
-    try:
-        back = int(request.form.get("back") or 2)
-    except ValueError:
-        back = 2
-    back = max(0, min(7, back))
-    start = (request.form.get("start") or "05:00")[:5]
-    end = (request.form.get("end") or "23:59")[:5]
+    start = (request.form.get("start") or "06:00")[:5]
+    end = (request.form.get("end") or "12:00")[:5]
     if not (len(start) == 5 and len(end) == 5 and start < end):
         raise UserError("Choose a start time earlier than the end time.")
     with db.tx() as cur:
-        for k, v in (("attendance_back_days", str(back)), ("attendance_start", start), ("attendance_end", end)):
+        for k, v in (("attendance_start", start), ("attendance_end", end)):
             cur.execute("""INSERT INTO settings (key, value) VALUES (%s,%s)
                            ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", (k, v))
-        audit(cur, "update", "settings", "attendance_rules",
-              f"Photo attendance: today + {back} previous day(s), between {start} and {end}")
-    flash(f"Rules saved: managers can mark today and {back} previous day(s), between {start} and {end}.", "success")
+        audit(cur, "update", "settings", "attendance_rules", f"Photo check-in window: today only, {start}–{end}")
+    flash(f"Check-in window saved: today only, {start} to {end}.", "success")
     return redirect(url_for("staff.index"))
 
 
@@ -217,15 +234,12 @@ def save():
 
 
 @bp.route("/staff/attendance", methods=["POST"])
-@login_required("attendance_manual")
+@login_required("owner")
 def save_attendance():
-    """Mark or change attendance without a photo (owner, or whoever the owner allows)."""
+    """Mark or change attendance without a photo — OWNER ONLY. Everyone else marks present only with a live photo."""
     d = parse_date(request.form.get("work_date"))
     if d > today():
         raise UserError("You cannot mark attendance for a future date.")
-    from ..security import grant_for, role_has
-    if not role_has("attendance_manual") and not grant_for(d, "attendance_manual"):
-        raise UserError("Your temporary access does not cover this date.")
     valid = {k for k, _ in STATUS} | {""}
     reason = clean(request.form.get("reason"), 200)
     n = 0

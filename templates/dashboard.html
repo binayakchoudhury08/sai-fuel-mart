@@ -1,69 +1,153 @@
-{% extends "base.html" %}{% from "_macros.html" import status_badge with context %}{% import "_modules.html" as M with context %}{% from "_modules.html" import allowed with context %}
-{% block title %}Home{% endblock %}
+{% extends "base.html" %}{% block title %}Dashboard{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><span class="modicon" style="--mc:var(--c-closing)"><svg><use href="#i-home"/></svg></span>
-<div><h1>Namaste, {{ (user.full_name or user.username).split(' ')[0] }}</h1><p>{{ today.strftime('%A, %d %B %Y') }} · today’s closing is {{ status_badge(td.status) }}</p></div></div></div>
+{% macro trend(p) -%}{% if p is not none %}<span class="trend {{ 'up' if p >= 0 else 'down' }}">{{ '↑' if p >= 0 else '↓' }} {{ p|abs }}%</span> <span class="muted">vs yesterday</span>{% else %}<span class="muted">— vs yesterday</span>{% endif %}{%- endmacro %}
+{% macro spark(vals, color) -%}{% set mx = (vals|max) or 1 %}{% set n = vals|length %}
+<svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-hidden="true">
+  <defs><linearGradient id="sg{{ color[1:] }}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{ color }}" stop-opacity=".28"/><stop offset="1" stop-color="{{ color }}" stop-opacity="0"/></linearGradient></defs>
+  {% set pts %}{% for v in vals %}{{ (loop.index0 * 120 / ((n - 1) or 1))|round(1) }},{{ (31 - (v / mx) * 27)|round(1) }} {% endfor %}{% endset %}
+  <polygon points="0,34 {{ pts }}120,34" fill="url(#sg{{ color[1:] }})"/><polyline points="{{ pts }}" fill="none" stroke="{{ color }}" stroke-width="1.8" stroke-linejoin="round"/>
+</svg>{%- endmacro %}
+{% macro chart(data, id, hidden=False) -%}{% set mx = (data|map(attribute='sale')|max) or 1 %}{% set tmx = (data|map(attribute='tx')|max) or 1 %}{% set n = data|length %}{% set w = 560 / n %}
+<svg class="ovchart" data-series="{{ id }}" {% if hidden %}hidden{% endif %} viewBox="0 0 620 230" role="img" aria-label="Sales and transactions">
+  <g class="grid">{% for k in range(6) %}{% set y = 196 - k * 34 %}<line x1="48" x2="612" y1="{{ y }}" y2="{{ y }}"/><text x="42" y="{{ y + 4 }}" text-anchor="end">{{ ((mx * k / 5) / 1000)|round(0)|int }}K</text>{% endfor %}</g>
+  {% for p in data %}{% set h = (p.sale / mx * 170) %}{% set x = 54 + loop.index0 * w %}
+    <rect x="{{ x + w * 0.22 }}" y="{{ 196 - h }}" width="{{ w * 0.56 }}" height="{{ h }}" rx="3" fill="#1D5BEB"><title>{{ p.label }}: ₹{{ '{:,.0f}'.format(p.sale) }} · {{ p.tx }} transactions</title></rect>
+    {% if n <= 12 or loop.index0 % 3 == 0 %}<text x="{{ x + w / 2 }}" y="216" text-anchor="middle">{{ p.label }}</text>{% endif %}{% endfor %}
+  <polyline fill="none" stroke="#22C55E" stroke-width="2.4" points="{% for p in data %}{{ 54 + loop.index0 * w + w / 2 }},{{ 190 - (p.tx / tmx * 150) }} {% endfor %}"/>
+  {% for p in data %}<circle cx="{{ 54 + loop.index0 * w + w / 2 }}" cy="{{ 190 - (p.tx / tmx * 150) }}" r="3.4" fill="#fff" stroke="#22C55E" stroke-width="2"/>{% endfor %}
+</svg>{%- endmacro %}
+{% macro nozzlepic(fuel) -%}{% set c = {'HSD':'#1D5BEB','MS':'#16A34A','CNG':'#0EA5E9'}.get(fuel, '#1D5BEB') %}
+<svg class="npic" viewBox="0 0 64 88" aria-hidden="true">
+  <defs><linearGradient id="nb{{ fuel }}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1E293B"/><stop offset=".5" stop-color="#475569"/><stop offset="1" stop-color="#0F172A"/></linearGradient>
+    <linearGradient id="nc{{ fuel }}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{{ c }}"/><stop offset="1" stop-color="#0A1A3F"/></linearGradient></defs>
+  <rect width="64" height="88" rx="10" fill="#0B1530"/><rect x="6" y="8" width="52" height="72" rx="8" fill="url(#nc{{ fuel }})" opacity=".35"/>
+  <path d="M30 4 C34 14 40 16 40 26" fill="none" stroke="#111827" stroke-width="6" stroke-linecap="round"/>
+  <path d="M22 26 h26 a6 6 0 0 1 6 6 v18 a6 6 0 0 1-6 6 h-6 l-4 22 h-10 l2-22 h-8 a6 6 0 0 1-6-6 v-18 a6 6 0 0 1 6-6z" fill="url(#nb{{ fuel }})"/>
+  <rect x="24" y="31" width="22" height="9" rx="3" fill="{{ c }}"/><path d="M25 56 q-6 6 -2 12" fill="none" stroke="#94A3B8" stroke-width="2.4"/>
+</svg>{%- endmacro %}
+{% macro tankpic(code, pct) -%}{% set c = {'MS':'#F59E0B','HSD':'#16A34A','CNG':'#0EA5E9'}.get(code, '#2563EB') %}{% set p = (pct or 0)|float %}
+<svg class="tpic" viewBox="0 0 70 70" aria-hidden="true">
+  <defs><linearGradient id="tm{{ code }}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#94A3B8"/><stop offset=".45" stop-color="#F1F5F9"/><stop offset="1" stop-color="#64748B"/></linearGradient></defs>
+  <ellipse cx="35" cy="60" rx="28" ry="6" fill="#0F172A" opacity=".15"/>
+  <rect x="9" y="14" width="52" height="44" rx="6" fill="url(#tm{{ code }})"/>
+  <rect x="9" y="{{ 58 - p * 0.44 }}" width="52" height="{{ p * 0.44 }}" rx="5" fill="{{ c }}" opacity=".55"/>
+  <ellipse cx="35" cy="14" rx="26" ry="5" fill="#CBD5E1"/><rect x="30" y="5" width="10" height="7" rx="2" fill="#64748B"/>
+  <g stroke="#64748B" stroke-width="1"><line x1="22" y1="15" x2="22" y2="58"/><line x1="48" y1="15" x2="48" y2="58"/></g>
+</svg>{%- endmacro %}
 
-{% if needs_setup and can('setup') %}<div class="notice"><b>Finish setup first:</b> add fuel rates, tanks and nozzles in <a href="{{ url_for('admin.settings') }}">Settings</a>.</div>{% endif %}
-{% if pending and can('day_lock') %}<div class="notice"><b>{{ pending|length }} earlier day(s) waiting for you to verify:</b>
-{% for p in pending %}<a href="{{ url_for('day.day_view', d=p.business_date.isoformat()) }}">{{ p.business_date.strftime('%d %b') }}</a>{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+{% set hour = now.hour %}
+<div class="dash">
+  <section class="hero d-hero {{ 'photo' if wx.photo }}" {% if wx.photo %}style="background-image:linear-gradient(90deg,rgba(5,14,38,.78) 0%,rgba(5,14,38,.25) 60%,rgba(5,14,38,.1) 100%),url('{{ url_for('main.banner') }}')"{% endif %}>
+    {% if not wx.photo %}{% include "_scene.html" %}{% endif %}
+    <div class="copy"><h1>{{ 'Good Morning' if hour < 12 else ('Good Afternoon' if hour < 17 else 'Good Evening') }},<br>{{ (user.full_name or user.username).split(' ')[0] }} 👋</h1>
+      <p class="tag">Here’s what’s happening at your station today.</p></div>
+    <div class="weather" data-weather data-lat="{{ wx.lat }}" data-lng="{{ wx.lng }}">
+      <div class="wrow"><span class="wicon" data-wicon>⛅</span><b data-temp>{{ '—°C' if wx.lat else now.strftime('%I:%M %p') }}</b></div>
+      <small data-sky>{{ 'Loading…' if wx.lat else now.strftime('%A') }}</small>{% if wx.place %}<small>📍 {{ wx.place }}</small>{% endif %}</div>
+  </section>
 
-{% if can('closing_enter') %}
-<section class="section"><header><h2>Today’s work</h2><small>Do them in this order. Tap a step to open it.</small></header><div class="body">
-<div class="checklist">
-  {% set rd = td.readings_needed and td.readings_done == td.readings_needed %}
-  <a class="step {{ 'done' if rd else 'todo' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#readings"><span class="no">{{ '✓' if rd else '1' }}</span>
-    <span class="t"><b>Meter readings</b><small>{{ td.readings_done }} of {{ td.readings_needed }} nozzles entered</small></span><span class="badge {{ 'locked' if rd else 'open' }}">{{ 'Done' if rd else 'To do' }}</span></a>
-  {% if can('transport_enter') %}<a class="step {{ 'done' if counts.slips else '' }}" href="{{ url_for('transport.index') }}#entry"><span class="no">{{ '✓' if counts.slips else '2' }}</span>
-    <span class="t"><b>Credit transport slips</b><small>{{ counts.slips }} slip(s) entered today</small></span><span class="badge {{ 'locked' if counts.slips else '' }}">{{ counts.slips }} slips</span></a>{% endif %}
-  {% set ck = td.recon_ok %}
-  <a class="step {{ 'done' if (ck and td.recon) else ('bad' if not ck else '') }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#credit"><span class="no">{{ '✓' if (ck and td.recon) else ('!' if not ck else '3') }}</span>
-    <span class="t"><b>Credit check</b><small>{% if not td.recon %}No credit today yet{% elif ck %}Closing totals match Credit transport{% else %}Totals don’t match yet — open to see which transporter{% endif %}</small></span>
-    <span class="badge {{ 'locked' if (ck and td.recon) else ('stop' if not ck else '') }}">{{ 'Matched' if (ck and td.recon) else ('Mismatch' if not ck else '—') }}</span></a>
-  {% set cc = td.counted_cash is not none %}
-  <a class="step {{ 'done' if cc else '' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#cash"><span class="no">{{ '✓' if cc else '4' }}</span>
-    <span class="t"><b>Digital collections &amp; cash count</b><small>{% if cc %}Counted {{ td.counted_cash|inr }} · expected {{ td.expected_cash|inr }}{% else %}Count the drawer at the end of the day{% endif %}</small></span><span class="badge {{ 'locked' if cc else '' }}">{{ 'Done' if cc else 'Later' }}</span></a>
-  {% if can('attendance_photo') or can('attendance_manual') %}{% set at = counts.staff and counts.present >= counts.staff %}
-  <a class="step {{ 'done' if at else '' }}" href="{{ url_for('staff.index') }}"><span class="no">{{ '✓' if at else '5' }}</span>
-    <span class="t"><b>Attendance (live photo)</b><small>{{ counts.present }} of {{ counts.staff }} staff marked present</small></span><span class="badge {{ 'locked' if at else 'open' }}">{{ counts.present }}/{{ counts.staff }}</span></a>{% endif %}
-  {% set sb = td.status in ('submitted','locked') %}
-  <a class="step {{ 'done' if sb else '' }}" href="{{ url_for('day.day_view', d=today.isoformat()) }}#finish"><span class="no">{{ '✓' if sb else '6' }}</span>
-    <span class="t"><b>Submit the day</b><small>{{ 'Submitted — the owner verifies and locks it' if sb else 'After everything above is done' }}</small></span>{{ status_badge(td.status) }}</a>
-</div></div></section>
-{% endif %}
+  <section class="panel d-nozzles"><header><h2><span class="hico">⛽</span>Live Nozzle Status</h2><a href="{{ url_for('main.nozzles') }}">All Nozzles ›</a></header>
+    <div class="ngrid">{% for n in nozzle_cards %}
+      <div class="ncard">{{ nozzlepic(n.fuel) }}
+        <div><b>{{ n.name }}</b><span class="fuel">{{ n.fuel }}</span>
+          <span class="nst {{ 'run' if n.active else 'idle' }}">● {{ 'Active' if n.active else 'Idle' }}</span>
+          <span class="np">₹ {{ n.rate or '—' }}/{{ 'kg' if n.fuel == 'CNG' else 'L' }}</span><span class="nl">{{ (n.litres|qty(1)) if n.litres is not none else '0.0' }} {{ 'kg' if n.fuel == 'CNG' else 'L' }}</span>
+          <a class="nbtn" href="{{ url_for('main.nozzles') }}">View Details</a></div></div>
+    {% else %}<p class="empty">No nozzles yet.</p>{% endfor %}</div></section>
 
-<div class="stats">
-  <div><b>{{ td.gross_sale|inr }}</b><span>Sales today so far</span></div>
-  <div><b>{{ td.expected_cash|inr }}</b><span>Cash expected in drawer</span></div>
-  {% if can('reports') %}<div><b class="{% if week_diff < 0 %}neg{% elif week_diff > 0 %}pos{% endif %}">{{ week_diff|inr }}</b><span>Cash short/excess, last {{ week_diff_days }} day(s)</span></div>{% endif %}
-  {% if can('accounts_view') %}<div><b>{{ total_due|inr }}</b><span>To collect from {{ due_count }} part{{ 'y' if due_count==1 else 'ies' }}</span></div>{% endif %}
+  <div class="kpis d-kpis">
+    <div class="kpi k2" style="--mc:#22C55E"><span class="glyph">₹</span><div><span>Total Sales (Today)</span><b>{{ td.gross_sale|rs }}</b>{{ trend(kpi.sale_pct) }}</div>{{ spark(sparks.sale, '#22C55E') }}</div>
+    <div class="kpi k2" style="--mc:#1D5BEB"><span class="glyph">🧾</span><div><span>Total Transactions</span><b>{{ kpi.tx }}</b>{{ trend(kpi.tx_pct) }}</div>{{ spark(sparks.tx, '#1D5BEB') }}</div>
+    <div class="kpi k2" style="--mc:#8B5CF6"><span class="glyph">◔</span><div><span>Avg. Sale Amount</span><b>{{ kpi.avg|rs }}</b>{{ trend(kpi.avg_pct) }}</div>{{ spark(sparks.avg, '#8B5CF6') }}</div>
+    <div class="kpi k2" style="--mc:#F59E0B"><span class="glyph">⛽</span><div><span>Fuel Dispensed</span><b>{{ kpi.litres|qty(0) }} Ltrs</b>{{ trend(kpi.litres_pct) }}</div>{{ spark(sparks.litres, '#F59E0B') }}</div>
+  </div>
+
+  <section class="panel d-sales"><div class="ovwrap"><div>
+    <header><h2>Sales Overview</h2><div class="seg" data-seg><button type="button" class="on" data-show-series="today">Today</button><button type="button" data-show-series="7d">7 Days</button><button type="button" data-show-series="30d">30 Days</button></div></header>
+    <div class="legend2" style="padding:0 18px"><span><i style="background:#1D5BEB"></i>Sales (₹)</span><span><i style="background:#22C55E"></i>Transactions</span></div>
+    <div class="body chart">{{ chart(charts.today, 'today') }}{{ chart(charts['7d'], '7d', True) }}{{ chart(charts['30d'], '30d', True) }}</div></div>
+    <div class="fdist"><h3>Fuel Distribution</h3>
+      {% set lit = [] %}{% for c, b in td.by_fuel.items() %}{% if b.qty %}{% set _ = lit.append((c, b.qty|float, {'HSD':'#1D5BEB','MS':'#22C55E','CNG':'#F59E0B'}.get(c,'#8B5CF6'))) %}{% endif %}{% endfor %}
+      {% set ltot = lit|sum(attribute=1) %}
+      <svg viewBox="0 0 160 160" class="donut"><circle cx="80" cy="80" r="58" fill="none" stroke="#EEF2F9" stroke-width="20"/>
+        {% set ns = namespace(off=0) %}{% for name, q, col in lit %}{% set len = (q / ltot * 364.42) if ltot else 0 %}
+        <circle cx="80" cy="80" r="58" fill="none" stroke="{{ col }}" stroke-width="20" stroke-dasharray="{{ len }} {{ 364.42 - len }}" stroke-dashoffset="{{ -ns.off }}" transform="rotate(-90 80 80)"/>{% set ns.off = ns.off + len %}{% endfor %}
+        <text x="80" y="74" text-anchor="middle" class="dl">Total</text><text x="80" y="94" text-anchor="middle" class="dv">{{ '{:,.0f}'.format(ltot) }} Ltrs</text></svg>
+      <ul>{% for name, q, col in lit %}<li><i style="background:{{ col }}"></i>{{ name }}<span>{{ (q / ltot * 100)|round|int if ltot else 0 }}%</span></li>{% else %}<li class="muted">No meter readings yet today.</li>{% endfor %}</ul>
+    </div></div></section>
+
+  <section class="panel d-activity"><header><h2>Recent Activity</h2>{% if can('audit') %}<a href="{{ url_for('admin.audit_log') }}">View All</a>{% endif %}</header>
+    <div class="actlist">{% for a in activity %}
+      <div class="act"><span class="aic {{ a.entity }}">{{ {'party_txn':'🚚','day':'📅','nozzle_reading':'⛽','lube_move':'🛢️','attendance':'👤','proof':'📷','day_credit':'✓','tank_dip':'🧪','settings':'⚙'}.get(a.entity, '•') }}</span>
+        <div><b>{{ a.summary|truncate(70) }}</b><small>{{ a.at.astimezone(IST).strftime('%I:%M %p') }} · {{ a.username }}</small></div></div>
+    {% else %}<p class="empty">No activity yet.</p>{% endfor %}</div></section>
+
+  <section class="panel d-alerts"><header><h2>Alerts &amp; Notifications</h2><a href="{{ url_for('main.alerts') }}">View All</a></header>
+    {% for a in top_alerts %}<a class="alert-row" href="{{ a.link }}"><span class="sev {{ a.sev }}">{{ '!' if a.sev=='high' else ('•' if a.sev=='medium' else 'i') }}</span><span><b>{{ a.title }}</b><small>{{ a.detail }}</small></span></a>
+    {% else %}<p class="empty">✓ Nothing needs attention.</p>{% endfor %}</section>
+
+  <section class="panel d-tx"><header><h2>Sales / Transactions</h2><a href="{{ url_for('main.sales') }}">View All</a></header>
+    <div class="tablewrap"><table class="mini"><thead><tr><th>Time</th><th>Nozzle</th><th>Fuel</th><th class="num">Litres</th><th class="num">Amount</th><th>Mode</th><th>Status</th></tr></thead><tbody>
+    {% for r in latest %}<tr><td>{{ r.at.astimezone(IST).strftime('%I:%M %p') if r.at else '—' }}</td><td>{{ r.nozzle|truncate(14) }}</td><td>{{ r.fuel }}</td><td class="num">{{ r.litres|qty if r.litres is not none else '—' }}</td><td class="num">{{ r.amount|rs }}</td><td>{{ r.mode|truncate(16) }}</td><td><span class="badge locked">Completed</span></td></tr>
+    {% else %}<tr><td colspan="7" class="empty">Nothing recorded today yet.</td></tr>{% endfor %}</tbody></table></div></section>
+
+  <section class="panel d-tanks"><header><h2>Tank Level Monitoring</h2><a href="{{ url_for('tanks.index') }}">View All</a></header>
+    <div class="tgrid">{% for r in tanks %}{% set c = {'MS':'#F59E0B','HSD':'#16A34A','CNG':'#0EA5E9'}.get(r.tank.fuel_code, '#2563EB') %}
+      <div class="tcard"><div class="thd"><div><b>{{ r.tank.name }}</b><small>Level</small><span style="color:{{ c }}">● {{ (r.fill_pct ~ '%') if r.fill_pct is not none else '—' }}</span></div>{{ tankpic(r.tank.fuel_code, r.fill_pct) }}</div>
+        <div class="levelbar"><i style="width:{{ r.fill_pct or 0 }}%;background:{{ c }}"></i></div>
+        <dl><dt>Capacity</dt><dd>{{ r.tank.capacity_l|qty(0) }} L</dd><dt>Current</dt><dd>{{ (r.actual|qty(0)) if r.actual is not none else '—' }} L</dd></dl></div>
+    {% else %}<p class="empty">No tanks set up.</p>{% endfor %}</div></section>
+
+  <section class="panel d-quick"><header><h2>Quick Actions</h2></header>
+    <div class="qlist">
+      {% if can('closing_enter') %}<a href="{{ url_for('day.day_view', d=today.isoformat()) }}"><span>📋</span>Start Daily Closing</a>{% endif %}
+      {% if can('transport_enter') %}<a href="{{ url_for('transport.index') }}#entry"><span>🚚</span>Add Credit Slip</a>{% endif %}
+      {% if can('reports') %}<a href="{{ url_for('reports.index') }}"><span>📊</span>View Reports</a>{% endif %}
+      {% if can('attendance_photo') %}<a href="{{ url_for('staff.index') }}"><span>👤</span>Manage Attendance</a>{% endif %}
+      {% if can('reports') %}<a href="{{ url_for('reports.digital') }}"><span>💳</span>Digital Collection</a>{% endif %}
+      {% if can('setup') %}<a href="{{ url_for('admin.settings') }}"><span>⚙</span>Settings</a>{% endif %}
+    </div></section>
+
+  <section class="panel d-att"><header><h2>Employee / Attendance</h2><a href="{{ url_for('staff.index') }}">View All</a></header>
+    <div class="tablewrap"><table class="mini"><thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Status</th><th>Check In</th><th>Check Out</th></tr></thead><tbody>
+    {% for a in att_today %}<tr><td>{{ a.name }}</td><td>{{ a.designation or 'Staff' }}</td><td>{{ a.shift or '—' }}</td>
+      <td>{% if a.status in ('P','H') %}<span class="badge locked">Present</span>{% elif a.status %}<span class="badge submitted">{{ {'A':'Absent','L':'Leave','O':'Off'}.get(a.status, a.status) }}</span>{% else %}<span class="badge stop">Absent</span>{% endif %}</td>
+      <td>{{ a.captured_at.astimezone(IST).strftime('%I:%M %p') if a.captured_at else '—' }}</td><td>{{ a.checkout_at.astimezone(IST).strftime('%I:%M %p') if a.checkout_at else '—' }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No staff yet.</td></tr>{% endfor %}</tbody></table></div></section>
+
+  <section class="panel d-prices"><header><h2>Fuel Prices</h2>{% if can('setup') %}<a href="{{ url_for('admin.settings') }}#rates">Edit Prices</a>{% endif %}</header>
+    <div class="tablewrap"><table class="mini"><thead><tr><th>Fuel</th><th class="num">Price (₹)</th><th>Updated</th></tr></thead><tbody>
+    {% for p in prices %}<tr><td>{{ p.fuel_code }} <small class="muted">/{{ 'kg' if p.fuel_code == 'CNG' else 'L' }}</small></td><td class="num"><b>{{ p.rate }}</b></td><td>{{ p.effective_from.strftime('%d %b') }}</td></tr>{% else %}<tr><td colspan="3" class="empty">No prices set.</td></tr>{% endfor %}
+    </tbody></table></div></section>
+
+  <section class="panel d-links"><header><h2>Quick Links</h2></header>
+    <div class="qgrid">
+      {% if can('reports') %}<a href="{{ url_for('reports.index') }}"><span>📊</span>Reports</a>{% endif %}
+      <a href="{{ url_for('tanks.index') }}"><span>🛢️</span>Tank Details</a>
+      <a href="{{ url_for('main.nozzles') }}"><span>⛽</span>Nozzle Status</a>
+      {% if can('attendance_photo') or can('staff_manage') %}<a href="{{ url_for('staff.index') }}"><span>👤</span>Attendance</a>{% endif %}
+      {% if can('setup') %}<a href="{{ url_for('admin.settings') }}"><span>⚙</span>Settings</a>{% endif %}
+      <a href="{{ url_for('proofs.index') }}"><span>📷</span>Photo Proofs</a>
+    </div></section>
+
+  <section class="d-app"><div class="appcard"><div class="phone"><span class="pscreen"><b>{{ station_name }}</b><i></i><i></i><i></i></span></div>
+    <div><h3>Manage your station on the go!</h3><p>Real-time data, alerts, reports and live-photo attendance — anytime, anywhere.</p>
+    <a class="btn small" href="/static/app/SaiFuelMart.apk" download>⬇ Download Android app</a></div></div></section>
 </div>
-
-<div class="tiles">
-{% for e, icon, label, desc, color, perm, match in M.MODULES[1:] if allowed(perm)|trim != '' %}
-  <a class="tile" href="{{ url_for(e) }}" style="--mc:var({{ color }})"><span class="modicon"><svg><use href="#i-{{ icon }}"/></svg></span><b>{{ label }}</b><small>{{ desc }}</small></a>
-{% endfor %}
-</div>
-
-<div class="grid2">
-  {% if can('reports') %}<section class="section"><header><h2>Sales, last 14 days</h2></header><div class="body">
-    <div class="bars">{% for c in chart %}
-      <a class="bar {% if c.date == today %}today{% elif c.diff is not none and c.diff < 0 %}short{% endif %}" href="{{ url_for('day.day_view', d=c.date.isoformat()) }}" title="{{ c.date|d }}: {{ c.sale|inr }}">
-        <i style="height:{{ (c.sale / peak * 100)|round(1) if c.sale else 0 }}%"></i><small class="muted">{{ c.date.day }}</small></a>{% endfor %}</div>
-    <div class="legend"><span><i style="background:#5B5BF7"></i>Sale</span><span><i style="background:#E0384F"></i>Cash short</span><span><i style="background:#0EA5A4"></i>Today</span></div>
-  </div></section>{% endif %}
-  <section class="section"><header><h2>Tanks</h2><a class="btn small secondary" href="{{ url_for('tanks.index') }}">Open</a></header>
-  <div class="body">{% for r in tanks %}<div style="margin-bottom:12px">
-    <div class="formrow" style="justify-content:space-between;align-items:center"><b>{{ r.tank.name }}</b>
-      <span>{% if r.actual is not none %}{{ r.actual|qty(0) }} L{% if r.fill_pct is not none %} · {{ r.fill_pct }}%{% endif %}{% if days_left.get(r.tank.id) %} · ~{{ days_left[r.tank.id] }} days{% endif %}{% else %}<span class="muted">No dip today</span>{% endif %}
-      {% if r.dip and r.dip.source=='atg' %} <span class="badge locked">ATG {{ r.dip.updated_at.strftime('%I:%M %p') }}</span>{% endif %}{% if r.receipt_mismatch %} <span class="badge stop">tanker not recorded</span>{% endif %}</span></div>
-    {% if r.fill_pct is not none %}<div class="meterbar {% if r.fill_pct < 20 %}low{% endif %}" style="margin-top:6px"><i style="width:{{ [r.fill_pct,100]|min }}%"></i></div>{% endif %}
-  </div>{% else %}<p class="muted">No tanks set up.</p>{% endfor %}</div></section>
-  {% if can('accounts_view') %}<section class="section"><header><h2>Highest dues</h2><a class="btn small secondary" href="{{ url_for('parties.index') }}">All</a></header>
-  <div class="body flush">{% if dues %}<table><tbody>{% for p in dues %}<tr><td><a href="{{ url_for('parties.detail', pid=p.id) }}"><b>{{ p.name }}</b></a><br><small>{% if p.last_payment %}Last paid {{ p.last_payment|d }}{% else %}No payment yet{% endif %}</small></td>
-    <td class="num neg"><b>{{ p.balance|inr }}</b></td></tr>{% endfor %}</tbody></table>{% else %}<p class="empty">No one owes anything.</p>{% endif %}</div></section>{% endif %}
-  <section class="section"><header><h2>Lube to reorder</h2><a class="btn small secondary" href="{{ url_for('lube.index') }}">Open</a></header>
-  <div class="body flush">{% if lube %}<table><tbody>{% for p in lube %}<tr><td>{{ p.name }}</td><td class="num {% if p.stock <= 0 %}neg{% endif %}">{{ p.stock|qty }} {{ p.unit }}</td></tr>{% endfor %}</tbody></table>
-  {% else %}<p class="empty">Every product is above its reorder level.</p>{% endif %}</div></section>
-</div>
+<script>
+(function(){
+  document.querySelectorAll("[data-seg]").forEach(function(seg){
+    seg.addEventListener("click", function(e){ var b = e.target.closest("button[data-show-series]"); if (!b) return;
+      seg.querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x === b); });
+      document.querySelectorAll(".ovchart").forEach(function(c){ c.hidden = c.dataset.series !== b.dataset.showSeries; });
+    });
+  });
+  var w = document.querySelector("[data-weather]"); if (!w || !w.dataset.lat) return;
+  var codes = {0:["Clear","☀️"],1:["Mainly clear","🌤️"],2:["Partly Cloudy","⛅"],3:["Cloudy","☁️"],45:["Fog","🌫️"],48:["Fog","🌫️"],51:["Drizzle","🌦️"],61:["Rain","🌧️"],63:["Rain","🌧️"],65:["Heavy rain","🌧️"],80:["Showers","🌦️"],95:["Thunderstorm","⛈️"]};
+  fetch("https://api.open-meteo.com/v1/forecast?latitude=" + encodeURIComponent(w.dataset.lat) + "&longitude=" + encodeURIComponent(w.dataset.lng) + "&current=temperature_2m,weather_code&timezone=Asia%2FKolkata")
+    .then(function(r){ return r.json(); }).then(function(j){ var c = codes[j.current.weather_code] || ["", "🌡️"];
+      w.querySelector("[data-temp]").textContent = Math.round(j.current.temperature_2m) + "°C"; w.querySelector("[data-sky]").textContent = c[0]; w.querySelector("[data-wicon]").textContent = c[1]; })
+    .catch(function(){});
+})();
+</script>
 {% endblock %}

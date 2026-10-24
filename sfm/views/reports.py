@@ -45,6 +45,41 @@ def index():
     tot["qty"] = {f["code"]: sum((r["qty"].get(f["code"], ZERO) for r in rows), ZERO) for f in fl}
     tot["difference"] = sum((r["difference"] for r in rows if r["difference"] is not None), ZERO)
     tot["short_days"] = sum(1 for r in rows if r["difference"] is not None and r["difference"] < 0)
+    fuel_f = request.args.get("fuel") or ""
+    span = (end - start).days + 1
+    pstart, pend = start - timedelta(days=span), start - timedelta(days=1)
+    with db.tx() as cur:
+        def by_fuel(a, b):
+            cur.execute("""SELECT n.fuel_code AS f, SUM(r.closing - r.opening - r.testing) AS l,
+                                  SUM((r.closing - r.opening - r.testing) * r.rate) AS amt
+                           FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
+                           WHERE r.business_date BETWEEN %s AND %s GROUP BY 1""", (a, b))
+            out = {x["f"]: (Decimal(x["l"] or 0), Decimal(x["amt"] or 0)) for x in cur.fetchall()}
+            cur.execute("""SELECT COALESCE(SUM(-qty),0) AS l, COALESCE(SUM(amount),0) AS amt FROM lube_moves
+                           WHERE NOT voided AND kind='sale' AND business_date BETWEEN %s AND %s""", (a, b))
+            x = cur.fetchone()
+            out["Lube"] = (Decimal(x["l"]), Decimal(x["amt"]))
+            return out
+        def txns(a, b):
+            cur.execute("""SELECT (SELECT COUNT(*) FROM party_txns WHERE NOT voided AND kind IN ('fuel','cash_advance','payment')
+                                    AND business_date BETWEEN %s AND %s)
+                                + (SELECT COUNT(*) FROM lube_moves WHERE NOT voided AND kind='sale' AND business_date BETWEEN %s AND %s) AS n""",
+                        (a, b, a, b))
+            return cur.fetchone()["n"]
+        cur_f, prev_f = by_fuel(start, end), by_fuel(pstart, pend)
+        tx_now, tx_prev = txns(start, end), txns(pstart, pend)
+    pick = (lambda d: {k: v for k, v in d.items() if k == fuel_f}) if fuel_f else (lambda d: d)
+    cf, pf = pick(cur_f), pick(prev_f)
+    def pct(a, b):
+        return None if not b else ((Decimal(a) - Decimal(b)) / Decimal(b) * 100).quantize(Decimal("1"))
+    sales_now = sum((v[1] for v in cf.values()), ZERO); sales_prev = sum((v[1] for v in pf.values()), ZERO)
+    lit_now = sum((v[0] for k, v in cf.items() if k != "Lube"), ZERO); lit_prev = sum((v[0] for k, v in pf.items() if k != "Lube"), ZERO)
+    summary = {"sales": sales_now, "sales_pct": pct(sales_now, sales_prev), "litres": lit_now, "litres_pct": pct(lit_now, lit_prev),
+               "tx": tx_now, "tx_pct": pct(tx_now, tx_prev)}
+    order = ["HSD", "MS", "CNG", "Lube"]
+    bars = [(k, cf[k][1], cf[k][0]) for k in order if k in cf] + [(k, v[1], v[0]) for k, v in cf.items() if k not in order]
+    bmax_amt = max((b[1] for b in bars), default=ZERO) or Decimal(1)
+    bmax_l = max((b[2] for b in bars), default=ZERO) or Decimal(1)
     if request.args.get("format") == "xlsx":
         heads = ["Date", "Status"] + [f"{f['code']} qty" for f in fl] + [
             "Fuel sale", "Lube sale", "Total sale", "Digital", "Credit given", "Payments recd",
@@ -59,7 +94,8 @@ def index():
                          as_attachment=True, download_name=f"Sales {start:%d%m%y}-{end:%d%m%y}.xlsx")
     if request.args.get("format") == "pdf":
         return sales_pdf()
-    return render_template("reports/index.html", rows=rows, tot=tot, start=start, end=end, fuels=fl)
+    return render_template("reports/index.html", summary=summary, bars=bars, bmax_amt=bmax_amt, bmax_l=bmax_l,
+                           fuel_f=fuel_f, tab=request.args.get("tab", "sales"), rows=rows, tot=tot, start=start, end=end, fuels=fl)
 
 
 @bp.route("/reports/outstanding")

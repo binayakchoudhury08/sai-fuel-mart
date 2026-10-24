@@ -1,5 +1,89 @@
 # Sai Fuel Mart — changes
 
+## 3.5.0
+
+Settings is the single home for owner tools
+- Tabs: Station Info · Fuel Prices · Payment Methods · Users · Permissions · Temporary Access · Automation · Photos ·
+  System. The sidebar has Settings ▾ (same tabs) and Audit Log; no separate owner pages.
+
+Attendance (strict)
+- Photo only for everyone except the owner. Check-in TODAY ONLY, 6:00 AM – 12:00 PM (owner can change the hours),
+  once per person; check-out once. Not marked by 12:00 PM = Absent.
+- Managers/Admins cannot edit, replace or delete a mark. The owner can change anything on any day (manual status,
+  retake photo). Attendance is no longer offered in Temporary Access.
+
+Credit transport
+- Slips can be added, edited and deleted on ANY date (old-system days and locked days included).
+
+Design #2 (owner's second reference)
+- Top bar: search (transporters, vehicle/slip/challan numbers, nozzles, tanks, staff, lube, pages), light/dark switch,
+  date | time, alerts, profile with role.
+- Sidebar: Reports ▾ and Settings ▾ sub-menus; station status card (your banner photo, Online, last updated).
+- Dashboard: greeting banner + weather; Live Nozzle Status cards; KPI cards with icon and 7-day mini trend;
+  Sales Overview with Today / 7 Days / 30 Days and transactions line; Fuel Distribution (litres); Recent Activity
+  (daily work only); Alerts & Notifications; Sales / Transactions; Tank Level Monitoring; Quick Actions;
+  Employee / Attendance; Fuel Prices; Quick Links; Android app card (download from the site).
+- Dark mode for the whole site (remembered on each device).
+
+## 3.4.0
+
+Credit transport is never locked
+- Slips can be added, edited and deleted for any date in the last 31 days, even when that day's Daily closing is
+  locked (the database allows exactly this; every other entry on a locked day stays blocked). The owner can go further back.
+- Managers and Admins edit and delete slips by default (Permissions → "Cancel or correct entries").
+  Deleted slips are hidden from the list but kept in history ("Show deleted").
+- A typed rate is used when no fuel price was saved for an old date.
+
+Attendance: photo only
+- Managers and Admins mark Present only with a live photo. Marking/changing attendance without a photo is
+  owner-only and can no longer be given to anyone in Permissions or Temporary access.
+
+Photo proofs
+- Phone: big "Take Proof" button and type cards that show ✓ when done today.
+- Register: date with ‹ ›, type chips with counts, photo gallery with type/time/by on the photo, 📍 and ▶ badges.
+- Tap a photo: large viewer with all details, Map, Video, full size, ‹ › / swipe through the day.
+- Camera: icons per type, edge-to-edge dark viewfinder; the bottom bar hides while taking the photo.
+
+## 3.3.0 — layout exactly as the owner's reference design
+
+- Sidebar: Dashboard · Daily Closing · Nozzle Management · Tank Level · Credit Transport · Lube Stock · Attendance ·
+  Reports · Settings · Digital Collection; other tools under "Management"; static station logo card at the bottom.
+- Top bar: ☰ (collapses the sidebar on computers, opens the menu on phones), page title, date | time, alerts bell,
+  user menu (change password, sign out).
+- Dashboard: banner with greeting, station name and tagline, weather card; Total Sales (Today), Total Transactions,
+  Avg. Sale Amount, Fuel Dispensed (all vs yesterday); Sales Overview (Last 7 Days); Fuel Type Sales donut.
+  Settings → Station Info → "Station photo" puts your own station photo in the banner.
+- Nozzle Management: HSD (High Speed Diesel), MS (Petrol), CNG groups; Ready, price per litre, status dot.
+- Tank Level: tabs (Overview, Stock Check, ATG Readings, Tanker Receipts, History); cards with level bar, capacity, current.
+- Sales / Transactions: meter sales, credit slips, lube bills, digital collections and payments with date, fuel and
+  payment-mode filters, Export to Excel and pages.
+- Reports: Sales / Stock / Credit / Attendance tabs, date range + fuel filter + Generate, totals vs previous period,
+  sales chart by fuel.
+- Employee Attendance: date, Add Employee, table with Check In / Check Out.
+- Settings tabs: Station Info · Fuel Prices (one row per fuel with its own Update) · Payment Methods · System.
+- New sign-in page: animated scene of an attendant filling a car with diesel (meter counting, fuel flowing) and
+  rotating cards about what the system does; sign-in card on the side.
+
+## 3.2.0
+
+New design (as per the owner's reference)
+- Navy sidebar with blue active item and a station card; white content with glass cards that lift on hover.
+- Top bar on every page: title, date and time, alerts bell with count, signed-in user.
+- Dashboard: hero banner (original forecourt illustration, live weather for your place), KPI cards with
+  "vs yesterday", 7-day sales chart (amount bars + litres line), fuel-type donut, Today's work, alerts, tank cards.
+- Tanks: cards with an animated liquid level in the fuel's colour (MS amber, HSD green, CNG sky, lube blue).
+- New Nozzles page: every nozzle with status, today's price and today's sale.
+- Attendance as a table with Check in / Check out (both by live photo).
+- Settings in tabs: Station info, Fuel prices, Tanks & nozzles, Payment methods, System.
+- Phones: two KPI cards per row, bell in the top bar.
+
+Automation
+- Alerts centre (bell + Alerts page) checks by itself: tank low / days of stock left, tanker not recorded, ATG not
+  synced, overdue daily closings, credit mismatches, cash shortages, parties over limit or not paying, lube to
+  reorder, days waiting for verification, missing dip-check photo. Each person sees only what they can act on.
+- Automation page (owner): set every limit; daily job at 6:00 AM (Vercel Cron) ends expired temporary access and,
+  if switched on, auto-locks clean days (all readings, credit matched, cash within tolerance). "Run now" button.
+
 ## 3.1.1
 
 Photo storage fixed

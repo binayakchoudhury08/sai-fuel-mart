@@ -13,6 +13,10 @@ SETTING_KEYS = {
     "station_name": ("Pump name", 80), "station_address": ("Address", 200), "station_phone": ("Phone", 30),
     "station_gstin": ("GSTIN", 15), "backdate_days": ("Back-date window (days)", 3),
     "cash_tolerance": ("Cash difference allowed (₹)", 8),
+    "brand_tagline": ("Tagline under the name (e.g. HPCL dealer · Tukuda)", 60),
+    "station_place": ("Place shown on Home (e.g. Tukuda, Angul)", 60),
+    "station_lat": ("Latitude for weather (e.g. 20.84)", 12),
+    "station_lng": ("Longitude for weather (e.g. 85.10)", 12),
 }
 
 
@@ -534,3 +538,11 @@ def storage_check():
     return render_template("admin/storage.html", base=base, bucket=bucket, kind=storage.key_kind(key) if key else "",
                            has_url=bool(base), has_key=bool(key), info=info, err=err, steps=steps,
                            bucket_from_env=bool(os.environ.get("SUPABASE_BUCKET", "").strip()))
+
+
+
+@bp.route("/settings/branding")
+@login_required("owner")
+def branding():
+    """Owner shortcut: the photo slots live in Settings → Station Info."""
+    return redirect(url_for("admin.settings") + "#photo")

@@ -1,31 +1,72 @@
-{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Photo proofs{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Photo Proofs{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>Photo proofs</h1><p>Dip checks, nozzle testing and stock checks — taken live on the phone camera, stamped with time and location.</p></div>
-{% if mobile %}<a class="btn" href="{{ url_for('proofs.new') }}" style="min-height:48px">Take proof</a>{% endif %}</div>
+{% set ICON = {'MS Dip Check':'⛽','HSD Dip Check':'🛢️','MS Nozzle Testing':'🧪','HSD Nozzle Testing':'🧪','Stock Check':'📦','Tanker Challan':'🚚','Meter Reading':'🔢','Density Check':'⚗️','Cash Deposit':'💰','Expense Bill':'🧾','General':'📷'} %}
 {% if not configured %}<div class="notice">Photo storage isn’t connected yet.{% if user.role == 'owner' %} <a href="{{ url_for('admin.storage_check') }}">Open the photo storage check</a>.{% else %} Ask the owner.{% endif %}</div>{% endif %}
-{% if mobile %}
-<section class="section"><header><h2>Take a proof now</h2><small>{{ today|d }}</small></header><div class="body">
-<div class="typegrid">{% for c in TYPES[:6] %}<a class="typebtn" href="{{ url_for('proofs.new', category=c) }}"><b>{{ c }}</b><small>{% if today_counts.get(c) %}✓ {{ today_counts[c] }} today{% else %}not yet today{% endif %}</small></a>{% endfor %}
-<a class="typebtn" href="{{ url_for('proofs.new') }}"><b>Other…</b><small>challan, bill, density</small></a></div>
-</div></section>
-{% else %}<div class="flash info">New proofs are taken on the phone (open this site or the app on the manager’s phone → Photo proofs). Here you can view them and download the PDF.</div>{% endif %}
 
-<section class="section"><header><h2>Proof register</h2>
-<form class="formrow" method="get" style="flex:1 1 100%"><div><label>Date</label><input type="date" name="d" value="{{ fd }}" max="{{ today.isoformat() }}"></div>
-<div><label>Type</label><select name="category"><option value="">All</option>{% for c in TYPES %}<option {% if c==fcat %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
-<div style="flex:0"><button class="btn secondary">Show</button></div>
-<div style="flex:0"><a class="btn secondary" href="{{ url_for('proofs.pdf', d=fd or today.isoformat(), category=fcat) }}">PDF with photos</a></div></form></header>
-<div class="body"><div class="proofgrid">
-{% for r in rows %}<article class="proofcard">
-  {% if r.photo_path or r.file_url %}<a href="{{ url_for('proofs.file', pid=r.id, kind='photo') }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ url_for('proofs.file', pid=r.id, kind='photo') }}" alt="{{ r.category }} photo"></a>{% else %}<div class="nophoto">No photo</div>{% endif %}
-  <div class="pc-body">
-    <b>{{ r.category }}</b>{% if r.stock_status %} <span class="badge {{ 'stop' if r.stock_status=='No Stock' else 'locked' }}">{{ r.stock_status }}</span>{% endif %}
-    <small>{{ r.business_date|d }} · {{ r.proof_time }} · {{ r.created_by }}{% if r.capture_mode == 'live' %} · live camera{% endif %}</small>
-    {% if r.note %}<small>{{ r.note }}</small>{% endif %}
-    <div class="btnrow" style="margin-top:6px">
-      {% if r.video_path or r.video_url %}<a class="btn small secondary" href="{{ url_for('proofs.file', pid=r.id, kind='video') }}" target="_blank" rel="noopener">▶ Video</a>{% endif %}
-      {% if r.latitude %}<a class="btn small secondary" href="https://maps.google.com/?q={{ r.latitude }},{{ r.longitude }}" target="_blank" rel="noopener">Map</a>{% else %}<span class="hint">no GPS</span>{% endif %}
-    </div></div></article>
-{% else %}<p class="empty">No proofs for this selection.</p>{% endfor %}
-</div></div>{{ pager(page, pages, count, 'proofs') }}</section>
+{% if mobile and can('proofs') %}
+<a class="takeproof" href="{{ url_for('proofs.new') }}"><span>📷</span><div><b>Take Proof</b><small>Live camera · stamped with time &amp; location</small></div></a>
+<div class="typegrid proofquick">{% for c in TYPES[:6] %}<a class="typebtn" href="{{ url_for('proofs.new', category=c) }}"><span class="pi">{{ ICON[c] }}</span><b>{{ c }}</b>
+  <small class="{{ 'pos' if today_counts.get(c) else '' }}">{% if today_counts.get(c) %}✓ {{ today_counts[c] }} today{% else %}Not taken today{% endif %}</small></a>{% endfor %}</div>
+{% elif can('proofs') %}<div class="flash info">Proofs are taken on the phone (Photo Proofs → Take Proof). Here you can view them and download the PDF.</div>{% endif %}
+
+<section class="section"><div class="body proofbar">
+  <div class="datenav"><a class="btn secondary small" href="?{{ dict(request.args.to_dict(), d=prev_day.isoformat(), page=1)|urlencode }}" aria-label="Previous day">‹</a>
+    <input type="date" value="{{ dd.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/proofs?d=__D__" aria-label="Date">
+    {% if next_day %}<a class="btn secondary small" href="?{{ dict(request.args.to_dict(), d=next_day.isoformat(), page=1)|urlencode }}" aria-label="Next day">›</a>{% endif %}</div>
+  <div class="chips"><a class="chip {{ 'on' if not fcat }}" href="?d={{ dd.isoformat() }}">All <i>{{ day_counts.values()|sum }}</i></a>
+    {% for c, n in day_counts.items() %}<a class="chip {{ 'on' if c == fcat }}" href="?d={{ dd.isoformat() }}&category={{ c|urlencode }}">{{ ICON.get(c,'📷') }} {{ c }} <i>{{ n }}</i></a>{% endfor %}</div>
+  <a class="btn secondary" href="{{ url_for('proofs.pdf', d=dd.isoformat(), category=fcat) }}">⬇ PDF with photos</a>
+</div></section>
+
+<div class="proofgrid">
+{% for r in rows %}{% set has_photo = r.photo_path or r.file_url %}
+<button type="button" class="proofcard pc2" data-lb
+  data-img="{{ url_for('proofs.file', pid=r.id, kind='photo') if has_photo else '' }}" data-title="{{ ICON.get(r.category,'📷') }} {{ r.category }}"
+  data-when="{{ r.business_date|d }} · {{ r.proof_time }}" data-by="{{ r.created_by }}" data-status="{{ r.stock_status }}" data-note="{{ r.note }}"
+  data-gps="{{ (r.latitude ~ ',' ~ r.longitude) if r.latitude else '' }}" data-acc="{{ r.gps_accuracy_m or '' }}"
+  data-video="{{ url_for('proofs.file', pid=r.id, kind='video') if (r.video_path or r.video_url) else '' }}" data-live="{{ 'Live camera' if r.capture_mode=='live' else ('Phone camera' if r.capture_mode else 'Old app') }}">
+  {% if has_photo %}<img loading="lazy" src="{{ url_for('proofs.file', pid=r.id, kind='photo') }}" alt="{{ r.category }}">{% else %}<span class="nophoto">No photo</span>{% endif %}
+  <span class="pbadges">{% if r.video_path or r.video_url %}<i>▶</i>{% endif %}{% if r.latitude %}<i>📍</i>{% endif %}</span>
+  <span class="pover"><b>{{ ICON.get(r.category,'📷') }} {{ r.category }}</b><small>{{ r.proof_time }} · {{ r.created_by }}{% if r.stock_status %} · {{ r.stock_status }}{% endif %}</small></span>
+</button>
+{% else %}<div class="section" style="grid-column:1/-1"><p class="empty">No proofs for {{ dd|d }}{% if fcat %} ({{ fcat }}){% endif %}.</p></div>{% endfor %}
+</div>
+{{ pager(page, pages, count, 'proofs') }}
+
+<dialog class="lightbox" id="lightbox">
+  <div class="lbwrap">
+    <button type="button" class="lbclose" data-lbclose aria-label="Close">✕</button>
+    <button type="button" class="lbnav prev" data-lbprev aria-label="Previous">‹</button>
+    <img id="lbimg" alt="">
+    <button type="button" class="lbnav next" data-lbnext aria-label="Next">›</button>
+    <div class="lbinfo"><h3 id="lbtitle"></h3><dl id="lbdl"></dl>
+      <div class="btnrow"><a class="btn small secondary" id="lbmap" target="_blank" rel="noopener">📍 Map</a><a class="btn small secondary" id="lbvideo" target="_blank" rel="noopener">▶ Video</a>
+      <a class="btn small secondary" id="lbopen" target="_blank" rel="noopener">Open full size</a></div></div>
+  </div>
+</dialog>
+<script>
+(function(){
+  var cards = Array.prototype.slice.call(document.querySelectorAll("[data-lb]")), dlg = document.getElementById("lightbox"); if (!dlg || !cards.length) return;
+  var i = 0, $ = function(id){ return document.getElementById(id); };
+  function esc(s){ var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+  function show(n){ i = (n + cards.length) % cards.length; var c = cards[i].dataset;
+    $("lbimg").src = c.img || ""; $("lbimg").hidden = !c.img; $("lbtitle").textContent = c.title;
+    var rows = [["Taken", c.when], ["By", c.by], ["Capture", c.live]];
+    if (c.status) rows.push(["Stock status", c.status]); if (c.note) rows.push(["Note", c.note]);
+    rows.push(["Location", c.gps ? c.gps + (c.acc ? " (±" + c.acc + " m)" : "") : "not available"]);
+    $("lbdl").innerHTML = rows.map(function(r){ return "<dt>" + r[0] + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("");
+    $("lbmap").hidden = !c.gps; if (c.gps) $("lbmap").href = "https://maps.google.com/?q=" + c.gps;
+    $("lbvideo").hidden = !c.video; if (c.video) $("lbvideo").href = c.video;
+    $("lbopen").hidden = !c.img; $("lbopen").href = c.img || "#";
+  }
+  cards.forEach(function(c, n){ c.addEventListener("click", function(){ show(n); dlg.showModal(); }); });
+  dlg.querySelector("[data-lbclose]").onclick = function(){ dlg.close(); };
+  dlg.querySelector("[data-lbprev]").onclick = function(){ show(i - 1); };
+  dlg.querySelector("[data-lbnext]").onclick = function(){ show(i + 1); };
+  dlg.addEventListener("click", function(e){ if (e.target === dlg) dlg.close(); });
+  document.addEventListener("keydown", function(e){ if (!dlg.open) return; if (e.key === "ArrowLeft") show(i - 1); if (e.key === "ArrowRight") show(i + 1); });
+  var x0 = null; dlg.addEventListener("touchstart", function(e){ x0 = e.touches[0].clientX; }, {passive: true});
+  dlg.addEventListener("touchend", function(e){ if (x0 === null) return; var dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 50) show(i + (dx < 0 ? 1 : -1)); x0 = null; });
+})();
+</script>
 {% endblock %}

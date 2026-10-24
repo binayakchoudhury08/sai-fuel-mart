@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "3.1.1"
+VERSION = "3.5.0"
 
 
 def _secret_key():
@@ -72,7 +72,7 @@ def create_app():
         g.user = None
         if (request.endpoint in ("static", "service_worker", "health")
                 or (request.endpoint or "").startswith(("api.", "api_v1."))
-                or request.path.startswith("/api/v1/") or request.path == "/api/tank-sync"):
+                or request.path.startswith("/api/v1/") or request.path in ("/api/tank-sync", "/api/cron/daily")):
             return
         uid = session.get("uid")
         if uid:
@@ -140,8 +140,46 @@ def create_app():
     @app.context_processor
     def inject():
         from .security import active_grants
-        return {"csrf_token": csrf_token, "form_token": new_form_token, "user": g.get("user"),
-                "my_grants": active_grants,
+        def alert_count():
+            """Bell badge: recounted at most every 2 minutes per signed-in session."""
+            import time as _t
+            if not g.get("user"):
+                return 0
+            if _t.time() - float(session.get("ac_at", 0)) > 120:
+                try:
+                    from .automation import compute
+                    with db.tx() as cur:
+                        session["ac"] = len(compute(cur, can))
+                except Exception:
+                    session["ac"] = 0
+                session["ac_at"] = _t.time()
+            return session.get("ac", 0)
+        def brand_tagline():
+            if "brand_tagline" not in g:
+                try:
+                    r = db.one("SELECT value FROM settings WHERE key='brand_tagline'")
+                    g.brand_tagline = (r["value"] if r else "") or "Fuel station"
+                except Exception:
+                    g.brand_tagline = "Fuel station"
+            return g.brand_tagline
+        def station_place():
+            if "station_place" not in g:
+                try:
+                    r = db.one("SELECT value FROM settings WHERE key='station_place'")
+                    g.station_place = (r["value"] if r else "") or ""
+                except Exception:
+                    g.station_place = ""
+            return g.station_place
+        def banner_set():
+            if "banner_set" not in g:
+                try:
+                    r = db.one("SELECT value FROM settings WHERE key='banner_photo_path'")
+                    g.banner_set = bool(r and r["value"])
+                except Exception:
+                    g.banner_set = False
+            return g.banner_set
+        return {"banner_set": banner_set, "station_place": station_place, "brand_tagline": brand_tagline, "csrf_token": csrf_token, "form_token": new_form_token, "user": g.get("user"),
+                "my_grants": active_grants, "alert_count": alert_count, "now": __import__("sfm.util", fromlist=["now_ist"]).now_ist(),
                 "can": can, "today": today(), "ROLE_LABEL": ROLE_LABEL, "VERSION": VERSION,
                 "station_name": _station_name()}
 

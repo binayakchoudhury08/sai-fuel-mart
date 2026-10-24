@@ -121,7 +121,7 @@ def _own_path(url):
 @bp.route("/proofs")
 @login_required()
 def index():
-    d = request.args.get("d") or ""
+    d = request.args.get("d") or today().isoformat()
     cat = request.args.get("category") or ""
     sql, p = "SELECT * FROM proofs WHERE TRUE", []
     if d:
@@ -141,9 +141,14 @@ def index():
         rows = cur.fetchall()
         cur.execute("""SELECT category, COUNT(*) AS n FROM proofs WHERE business_date=%s GROUP BY category""", (today(),))
         today_counts = {r["category"]: r["n"] for r in cur.fetchall()}
+        cur.execute("""SELECT category, COUNT(*) AS n FROM proofs WHERE business_date=%s GROUP BY category ORDER BY category""",
+                    (parse_date(d),))
+        day_counts = {r["category"]: r["n"] for r in cur.fetchall()}
     return render_template("proofs/index.html", rows=rows, TYPES=PROOF_TYPES, fd=d, fcat=cat, mobile=is_mobile(),
                            configured=storage_ready(), page=page, pages=max(1, -(-n // 60)), count=n,
-                           today_counts=today_counts)
+                           today_counts=today_counts, day_counts=day_counts, dd=parse_date(d),
+                           prev_day=parse_date(d) - timedelta(days=1),
+                           next_day=parse_date(d) + timedelta(days=1) if parse_date(d) < today() else None)
 
 
 @bp.route("/proofs/new")

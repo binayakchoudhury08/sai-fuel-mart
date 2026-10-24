@@ -9,7 +9,8 @@
     <a class="btn secondary small" href="{{ url_for('day.day_view', d=prev_day.isoformat()) }}" aria-label="Previous day">‹</a>
     <input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/day/__D__" aria-label="Choose date">
     {% if next_day %}<a class="btn secondary small" href="{{ url_for('day.day_view', d=next_day.isoformat()) }}" aria-label="Next day">›</a>{% endif %}
-    <a class="btn secondary small" href="{{ url_for('day.print_day', d=d.isoformat()) }}">Print</a></div></div>
+    <a class="btn secondary small" href="{{ url_for('day.print_day', d=d.isoformat()) }}">Print</a>
+    <a class="btn secondary small" href="{{ url_for('main.sales', **{'from': d.isoformat(), 'to': d.isoformat()}) }}">Sales / Transactions</a></div></div>
 </div>
 {% set st_read = 'done' if (t.readings_needed and t.readings_done == t.readings_needed) else ('warn' if t.readings_done else '') %}
 {% set st_cash = 'done' if t.counted_cash is not none else '' %}

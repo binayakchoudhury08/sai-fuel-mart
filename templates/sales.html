@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% from "_macros.html" import pager with context %}{% block title %}Sales / Transactions{% endblock %}
+{% block content %}
+<section class="section"><div class="body">
+<form method="get" class="formrow filters">
+  <div style="flex:2 1 260px"><label>Dates</label><div class="formrow" style="gap:6px;flex-wrap:nowrap"><input type="date" name="from" value="{{ a.isoformat() }}" max="{{ today.isoformat() }}"><span class="muted">–</span><input type="date" name="to" value="{{ b.isoformat() }}" max="{{ today.isoformat() }}"></div></div>
+  <div><label>Fuel type</label><select name="fuel"><option value="">All Fuel Types</option>{% for f in ['HSD','MS','CNG','Lube'] %}<option {% if f==fuel %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></div>
+  <div><label>Payment mode</label><select name="mode"><option value="">All Payment Modes</option><option value="Counter" {% if mode=='Counter' %}selected{% endif %}>Counter sale (meter)</option>
+    <option value="Credit" {% if mode=='Credit' %}selected{% endif %}>Credit</option><option value="Cash" {% if mode=='Cash' %}selected{% endif %}>Cash (lube)</option>
+    {% for m in modes %}<option {% if m==mode %}selected{% endif %}>{{ m }}</option>{% endfor %}<option value="Payments" {% if mode=='Payments' %}selected{% endif %}>Payments received</option></select></div>
+  <div style="flex:0"><button class="btn secondary">Show</button></div>
+  <div style="flex:0"><a class="btn" href="?{{ dict(request.args.to_dict(), format='xlsx')|urlencode }}">⬇ Export</a></div>
+</form></div>
+<div class="body flush tablewrap"><table class="saletable"><thead><tr><th>Time</th><th>Nozzle</th><th>Fuel Type</th><th class="num">Litres</th><th class="num">Amount</th><th>Payment Mode</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{% if a != b %}<small class="muted">{{ r.d.strftime('%d %b') }}</small> {% endif %}{{ r.at.astimezone(IST).strftime('%I:%M %p') if r.at else '—' }}</td>
+<td>{{ r.nozzle }}</td><td>{{ r.fuel }}</td><td class="num">{{ r.litres|qty if r.litres is not none else '—' }}</td><td class="num">₹ {{ r.amount|inr(symbol=False) }}</td><td>{{ r.mode }}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">Nothing recorded for this selection.</td></tr>{% endfor %}</tbody>
+{% if rows %}<tfoot><tr><td colspan="3">{{ count }} entries · meter + lube sales</td><td class="num">{{ litres|qty }} L</td><td class="num">{{ total|rs }}</td><td></td></tr></tfoot>{% endif %}</table></div>
+{{ pager(page, pages, count, 'entries') }}</section>
+{% endblock %}

@@ -25,6 +25,7 @@ Replace your repo's files with the contents of `1-website-for-github`. Commit an
 | `SUPABASE_URL` | `https://<project>.supabase.co` |
 | `SUPABASE_SERVICE_KEY` | the NEW service_role key |
 | `TANK_SYNC_SECRET` | the same secret your ATG bookmarklet sends |
+| `CRON_SECRET` | any long random text — lets the daily 6 AM automation run (Vercel sends it automatically) |
 
 4. **Deploy**. Open the address Vercel gives (e.g. `https://sai-fuel-mart.vercel.app`) and sign in with your
    existing username and password.
@@ -55,6 +56,12 @@ the phone to this bucket through one-time links and shown only to signed-in user
 Menu → **Temporary access** → choose the person → dates (e.g. 1–30 Sep) → **Correct old / imported days** →
 valid for 2 or 3 days → reason → **Give access**. Locked and old-system days in that range open for them and lock
 again by themselves when the time ends. Press **Stop now** to end it early. Attendance catch-up works the same way.
+
+## 5c. New in 3.2
+- Settings → Station info: **Tagline** (e.g. "HPCL dealer · Fueling your trust"), **Place** and **Latitude/Longitude**
+  (for the weather on the dashboard).
+- Menu → **Automation**: set alert limits and switch on auto-lock of clean days. Add `CRON_SECRET` in Vercel and
+  redeploy so the 6 AM job runs by itself.
 
 ## 6. Daily routine (what to teach the team)
 Open **Home → Today's work** and follow the steps in order:

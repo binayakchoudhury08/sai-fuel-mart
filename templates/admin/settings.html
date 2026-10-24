@@ -1,21 +1,33 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Settings{% endblock %}
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Settings
+{% endblock %}
 {% block content %}
 {% set owner = can('setup') %}
 <div class="pagehead"><div class="grow"><h1>Settings</h1>{% if not owner %}<p>Only the owner can change these.</p>{% endif %}</div></div>
+{{ settings_tabs('station', inpage=True) }}
 {% if owner and legacy_available and not legacy_done %}<div class="notice"><b>Old data found.</b> Bring your transporters, balances, nozzles, staff and history from the old app: <a href="{{ url_for('admin.import_legacy') }}">Import old data</a>.</div>{% endif %}
 {% if legacy_done %}<p class="hint">Old data imported on {{ legacy_done }}.</p>{% endif %}
 
-<section class="section" id="rates"><header><h2>Fuel rates</h2><small>Today: {% for c, r in current.items() %}{{ c }} ₹{{ r }}{{ ' · ' if not loop.last }}{% else %}not set{% endfor %}</small></header>
-{% if owner %}<div class="body"><form method="post" action="{{ url_for('admin.save_rates') }}">{{ hidden() }}<div class="fields">
-<div><label>New rates apply from</label><input type="date" name="effective_from" value="{{ today.isoformat() }}" required></div>
+<section class="section" id="rates" data-tab="prices"><header><h2>Fuel Prices</h2><small>Today: {% for c, r in current.items() %}{{ c }} ₹{{ r }}{{ ' · ' if not loop.last }}{% else %}not set{% endfor %}</small></header>
+{% if owner %}<div class="body">
+{% set UNIT = {'CNG':'kg'} %}
+{% for f in fuels if f.active %}<form method="post" action="{{ url_for('admin.save_rates') }}" class="pricerow">{{ hidden() }}
+  <input type="hidden" name="effective_from" value="{{ today.isoformat() }}">
+  <label for="rate_{{ f.code }}">{{ f.code }} (₹/{{ UNIT.get(f.code, 'L') }})</label>
+  <input id="rate_{{ f.code }}" name="rate_{{ f.code }}" inputmode="decimal" value="{{ current.get(f.code, '') }}" required>
+  <button class="btn">Update</button></form>{% endfor %}
+<div class="pricerow"><label>Lube</label><span class="muted">Each lube product has its own price in <a href="{{ url_for('lube.index') }}">Lube Stock</a>.</span></div>
+<details class="add" style="margin-top:12px;border:1px solid var(--line-2);border-radius:10px"><summary>Set prices from another date</summary><div class="body">
+<form method="post" action="{{ url_for('admin.save_rates') }}">{{ hidden() }}<div class="fields">
+<div><label>Apply from</label><input type="date" name="effective_from" value="{{ today.isoformat() }}" required></div>
 {% for f in fuels if f.active %}<div><label>{{ f.name }} (₹/{{ f.unit }})</label><input name="rate_{{ f.code }}" inputmode="decimal" placeholder="{{ current.get(f.code, '') }}"></div>{% endfor %}
-</div><p class="hint">Old days keep the rate that applied to them. Readings already saved on or after this date are re-priced.</p>
-<p style="margin-top:10px"><button class="btn">Save rates</button></p></form></div>{% endif %}
-<div class="body flush tablewrap"><table><thead><tr><th>From</th><th>Fuel</th><th class="num">Rate</th><th>Set by</th></tr></thead><tbody>
+</div><p class="hint">Old days keep the price that applied to them. Readings already saved on or after this date are re-priced.</p>
+<p style="margin-top:10px"><button class="btn">Save prices</button></p></form></div></details></div>{% endif %}
+<h3 style="margin:6px 18px 10px">Price history</h3><div class="body flush tablewrap"><table><thead><tr><th>From</th><th>Fuel</th><th class="num">Rate</th><th>Set by</th></tr></thead><tbody>
 {% for r in rate_hist %}<tr><td>{{ r.effective_from|d }}</td><td>{{ r.fuel_code }}</td><td class="num">{{ r.rate|inr }}</td><td><small>{{ r.created_by }}</small></td></tr>{% else %}<tr><td colspan="4" class="empty">No rates yet.</td></tr>{% endfor %}</tbody></table></div></section>
 
 
-{% if owner %}<section class="section" id="history"><header><h2>Old data editing</h2></header><div class="body stack">
+{% if owner %}{% if user.role == 'owner' %}<section class="section" data-tab="system"><div class="body btnrow"><a class="btn secondary" href="{{ url_for('admin.storage_check') }}">Photo storage check</a><a class="btn secondary" href="{{ url_for('admin.audit_log') }}">Audit Log</a></div></section>{% endif %}
+<section class="section" id="history" data-tab="system"><header><h2>Old data editing</h2></header><div class="body stack">
 <p>Who may reopen locked days and change old (including imported) days is set in <a href="{{ url_for('admin.permissions') }}">Permissions</a>.</p>
 <p class="hint">Reopen or lock a whole date range at once. Every reopen, correction and lock is kept in the audit log with the reason.</p>
 <form method="post" action="{{ url_for('admin.history_settings') }}" class="fields">{{ csrf() }}
@@ -24,14 +36,27 @@
   <div class="wide btnrow"><button class="btn secondary" name="action" value="reopen">Reopen these days for corrections</button>
   <button class="btn" name="action" value="lock">Lock these days</button></div></form>
 </div></section>{% endif %}
-{% if user.role == 'owner' %}<div class="flash info">Photos not saving or not opening? <a href="{{ url_for('admin.storage_check') }}">&nbsp;Open the photo storage check</a>.</div>{% endif %}
-<section class="section" id="general"><header><h2>Pump details &amp; rules</h2></header><div class="body">
+{% if user.role == 'owner' %}<section class="section" id="photo" data-tab="photos"><header><h2>Photos</h2></header><div class="body">
+<div class="grid2">
+{% for slot, key, label, hint in [('banner','banner_photo_path','Dashboard banner photo','Wide photo of the station (landscape, e.g. 1600 × 600).'),
+                                  ('login','login_photo_path','Sign-in page photo','Photo of an attendant filling a vehicle (landscape or square).')] %}
+<div class="photoslot">
+  <div class="pv">{% if st.get(key) %}<img src="{{ url_for('main.banner') if slot=='banner' else url_for('main.login_photo') }}" alt="{{ label }}">{% else %}<span class="muted">No photo yet</span>{% endif %}</div>
+  <b>{{ label }}</b><small class="muted">{{ hint }} JPG/PNG/WEBP under 4 MB.</small>
+  <form method="post" action="{{ url_for('main.banner_upload') }}" enctype="multipart/form-data" class="formrow" style="margin-top:8px">{{ csrf() }}
+    <input type="hidden" name="slot" value="{{ slot }}"><div><input type="file" name="photo" accept="image/jpeg,image/png,image/webp" required></div>
+    <div style="flex:0"><button class="btn">Upload</button></div></form>
+  {% if st.get(key) %}<form method="post" action="{{ url_for('main.banner_upload') }}" style="margin-top:6px">{{ csrf() }}<input type="hidden" name="slot" value="{{ slot }}"><input type="hidden" name="action" value="remove"><button class="btn small secondary">Remove</button></form>{% endif %}
+</div>{% endfor %}
+</div>
+<p class="hint" style="margin-top:10px">Use your own photos or ones you have the right to use. They are stored privately in your Supabase Storage.</p></div></section>{% endif %}
+<section class="section" id="general" data-tab="station"><header><h2>Pump details &amp; rules</h2></header><div class="body">
 <form method="post" action="{{ url_for('admin.save_general') }}">{{ csrf() }}<div class="fields">
 {% for k, (label, lim) in keys.items() %}<div {% if k=='station_address' %}class="wide"{% endif %}><label>{{ label }}</label><input name="{{ k }}" value="{{ st.get(k,'') }}" maxlength="{{ lim }}" {% if not owner %}disabled{% endif %}></div>{% endfor %}
 </div><p class="hint">Back-date window: how many past days managers and operators may still change. Cash difference allowed: shows green on the cash board within this amount.</p>
 {% if owner %}<p style="margin-top:10px"><button class="btn">Save</button></p>{% endif %}</form></div></section>
 
-<section class="section" id="tanks"><header><h2>Tanks</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Name</th><th>Fuel</th><th class="num">Capacity L</th><th>Status</th>{% if owner %}<th></th>{% endif %}</tr></thead><tbody>
+<section class="section" id="tanks" data-tab="station"><header><h2>Tanks</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Name</th><th>Fuel</th><th class="num">Capacity L</th><th>Status</th>{% if owner %}<th></th>{% endif %}</tr></thead><tbody>
 {% for t in tanks %}<tr class="{% if not t.active %}void{% endif %}"><td>{{ t.name }}</td><td>{{ t.fuel_name }}</td><td class="num">{{ t.capacity_l|qty(0) }}</td><td>{{ 'Active' if t.active else 'Hidden' }}</td>
 {% if owner %}<td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('admin.save_tank') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ t.id }}">
 <label>Name</label><input name="name" value="{{ t.name }}"><label>Fuel</label><select name="fuel_code">{% for f in fuels %}<option {% if f.code==t.fuel_code %}selected{% endif %}>{{ f.code }}</option>{% endfor %}</select>
@@ -41,7 +66,7 @@
 <div><label>Name</label><input name="name" required placeholder="HSD tank 2"></div><div><label>Fuel</label><select name="fuel_code">{% for f in fuels %}<option>{{ f.code }}</option>{% endfor %}</select></div>
 <div><label>Capacity (L)</label><input name="capacity_l" inputmode="decimal"></div><div style="flex:0"><button class="btn">Add</button></div></form></div></details>{% endif %}</section>
 
-<section class="section" id="nozzles"><header><h2>Nozzles</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Order</th><th>Nozzle</th><th>DU / machine</th><th>Fuel</th><th>Tank</th><th>Status</th>{% if owner %}<th></th>{% endif %}</tr></thead><tbody>
+<section class="section" id="nozzles" data-tab="station"><header><h2>Nozzles</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Order</th><th>Nozzle</th><th>DU / machine</th><th>Fuel</th><th>Tank</th><th>Status</th>{% if owner %}<th></th>{% endif %}</tr></thead><tbody>
 {% for n in nozzles %}<tr class="{% if not n.active %}void{% endif %}"><td>{{ n.sort }}</td><td>{{ n.name }}</td><td>{{ n.machine_no }}</td><td>{{ n.fuel_code }}</td><td>{{ n.tank_name or '—' }}</td><td>{{ 'Active' if n.active else 'Hidden' }}</td>
 {% if owner %}<td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('admin.save_nozzle') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ n.id }}">
 <label>Name</label><input name="name" value="{{ n.name }}"><label>DU / machine</label><input name="machine_no" value="{{ n.machine_no }}">
@@ -57,14 +82,14 @@
 <p class="hint">The first day’s opening reading is typed once on the Daily closing page; after that it always comes from the previous closing.</p>
 <p style="margin-top:10px"><button class="btn">Add nozzle</button></p></form></div></details>{% endif %}</section>
 
-<section class="section" id="modes"><header><h2>Digital collection types</h2></header><div class="body flush tablewrap"><table><tbody>
+<section class="section" id="modes" data-tab="payments"><header><h2>Digital collection types</h2></header><div class="body flush tablewrap"><table><tbody>
 {% for m in modes %}<tr class="{% if not m.active %}void{% endif %}"><td>{{ m.name }}</td><td class="actions keep">{% if owner %}<form method="post" action="{{ url_for('admin.save_mode') }}" class="btnrow" style="justify-content:flex-end">{{ csrf() }}<input type="hidden" name="id" value="{{ m.id }}"><input type="hidden" name="name" value="{{ m.name }}"><input type="hidden" name="active" value="{{ '0' if m.active else '1' }}"><button class="btn small secondary">{{ 'Hide' if m.active else 'Show' }}</button></form>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% if owner %}<details class="add"><summary>Add collection type</summary><div class="body"><form method="post" action="{{ url_for('admin.save_mode') }}" class="formrow">{{ csrf() }}<div><label>Name</label><input name="name" required placeholder="Paytm"></div><div style="flex:0"><button class="btn">Add</button></div></form></div></details>{% endif %}</section>
 
-<section class="section" id="fuels"><header><h2>Fuels</h2></header><div class="body flush tablewrap"><table><tbody>{% for f in fuels %}<tr class="{% if not f.active %}void{% endif %}"><td>{{ f.code }}</td><td>{{ f.name }}</td><td>{{ f.unit }}</td></tr>{% endfor %}</tbody></table></div>
+<section class="section" id="fuels" data-tab="station"><header><h2>Fuels</h2></header><div class="body flush tablewrap"><table><tbody>{% for f in fuels %}<tr class="{% if not f.active %}void{% endif %}"><td>{{ f.code }}</td><td>{{ f.name }}</td><td>{{ f.unit }}</td></tr>{% endfor %}</tbody></table></div>
 {% if owner %}<details class="add"><summary>Add or change a fuel</summary><div class="body"><form method="post" action="{{ url_for('admin.save_fuel') }}" class="formrow">{{ csrf() }}
 <div><label>Code</label><input name="code" required placeholder="XP95"></div><div><label>Name</label><input name="name" required placeholder="Power petrol"></div><div><label>Unit</label><input name="unit" value="L"></div>
 <div><label>Status</label><select name="active"><option value="1">Active</option><option value="0">Hidden</option></select></div><div style="flex:0"><button class="btn">Save</button></div></form></div></details>{% endif %}</section>
-{% if owner %}<section class="section"><div class="body btnrow"><a class="btn secondary" href="{{ url_for('reports.backup') }}">Download full backup</a>
+{% if owner %}<section class="section" data-tab="system"><div class="body btnrow"><a class="btn secondary" href="{{ url_for('reports.backup') }}">Download full backup</a>
 <span class="hint">Do this at least once a week and keep the file safe.</span></div></section>{% endif %}
 {% endblock %}

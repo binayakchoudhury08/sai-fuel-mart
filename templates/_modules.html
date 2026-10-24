@@ -1,20 +1,23 @@
-{# One list of sections used by the sidebar, the phone "More" sheet and the Home tiles. #}
+{# Sidebar = the 10 sections of the design, in this order. Everything else sits under "Management". #}
 {% set MODULES = [
-  ('main.dashboard',  'home',  'Home',            'Today at a glance',              '--c-closing',   '',                    'main.dashboard'),
-  ('day.day_today',   'day',   'Daily closing',   'Readings, cash, credit, submit', '--c-closing',   'closing_enter',       'day.'),
-  ('transport.index', 'truck', 'Credit transport','Slip entries & bills',           '--c-transport', 'transport_enter|bills','transport.'),
-  ('parties.index',   'wallet','Party accounts',  'Balances & payments',            '--c-accounts',  'accounts_view',       'parties.'),
-  ('lube.index',      'oil',   'Lube stock',      'Stock notebook',                 '--c-lube',      '',                    'lube.'),
-  ('tanks.index',     'tank',  'Tanks',           'Dips, tankers, ATG',             '--c-tanks',     'tanks',               'tanks.'),
-  ('staff.index',     'staff', 'Attendance',      'Live photo attendance',          '--c-staff',     'attendance_photo|attendance_manual|staff_manage', 'staff.index'),
-  ('staff.salary',    'rupee', 'Salary',          'Salary sheet',                   '--c-staff',     'salary',              'staff.salary'),
-  ('proofs.index',    'cam',   'Photo proofs',    'Dip & nozzle proofs',            '--c-proofs',    '',                    'proofs.'),
-  ('reports.index',   'chart', 'Reports',         'Sales, bills, analytics',        '--c-reports',   'reports',             'reports.'),
-  ('admin.settings',  'cog',   'Settings',        'Rates, nozzles, tanks',          '--c-settings',  'setup',               'admin.settings'),
-  ('auth.users',      'users', 'Users',           'Logins & passwords',             '--c-settings',  'users',               'auth.users'),
-  ('admin.permissions','shield','Permissions',    'Who can do what',                '--c-settings',  'owner',               'admin.permissions'),
-  ('admin.access',    'shield','Temporary access','Let someone edit old days',      '--c-settings',  'owner',               'admin.access'),
-  ('admin.audit_log', 'log',   'Audit log',       'Every change',                   '--c-settings',  'audit',               'admin.audit'),
+  ('main.dashboard',   'home',  'Dashboard',          'Today at a glance',           '--c-closing',   '',                    'main.dashboard'),
+  ('day.day_today',    'day',   'Daily Closing',      'Readings, cash, credit',      '--c-closing',   'closing_enter',       'day.'),
+  ('main.nozzles',     'pump',  'Nozzle Management',  'Nozzle status & prices',      '--c-closing',   '',                    'main.nozzles'),
+  ('tanks.index',      'tank',  'Tank Level',         'Tanks, tankers, ATG',         '--c-tanks',     'tanks|reports',       'tanks.'),
+  ('transport.index',  'truck', 'Credit Transport',   'Slip entries & bills',        '--c-transport', 'transport_enter|bills','transport.'),
+  ('lube.index',       'oil',   'Lube Stock',         'Stock notebook',              '--c-lube',      '',                    'lube.'),
+  ('staff.index',      'staff', 'Attendance',         'Live photo attendance',       '--c-staff',     'attendance_photo|attendance_manual|staff_manage', 'staff.index'),
+  ('reports.index',    'chart', 'Reports',            'Sales, stock, credit',        '--c-reports',   'reports',             'reports.'),
+  ('admin.settings',   'cog',   'Settings',           'Station, prices, payments',   '--c-settings',  'setup',               'admin.settings'),
+  ('reports.digital',  'wallet','Digital Collection', 'PhonePe, card, UPI…',         '--c-accounts',  'reports',             'reports.digital'),
+] %}
+{% set EXTRA = [
+  ('main.sales',       'log',   'Sales / Transactions','Every sale & slip',           '--c-closing',   'closing_enter|reports','main.sales'),
+  ('parties.index',    'wallet','Party Accounts',     'Balances & payments',         '--c-accounts',  'accounts_view',       'parties.'),
+  ('staff.salary',     'rupee', 'Salary',             'Salary sheet',                '--c-staff',     'salary',              'staff.salary'),
+  ('proofs.index',     'cam',   'Photo Proofs',       'Dip & nozzle proofs',         '--c-proofs',    '',                    'proofs.'),
+  ('main.alerts',      'bell',  'Alerts',             'Things that need attention',  '--c-proofs',    '',                    'main.alerts'),
+  ('admin.audit_log',  'log',   'Audit Log',          'Every change',                '--c-settings',  'audit',               'admin.audit'),
 ] %}
 {% macro allowed(perm) -%}
 {%- if not perm -%}1{%- else -%}{%- for p in perm.split('|') -%}{%- if can(p) -%}1{%- endif -%}{%- endfor -%}{%- endif -%}

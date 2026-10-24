@@ -1,7 +1,8 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Temporary access{% endblock %}
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Settings{% endblock %}
 {% block content %}
+{{ settings_tabs('access') }}
 <div class="pagehead">{{ head('shield', '--c-settings', 'Temporary access', 'Let one person change chosen dates — including locked and old-system days — until a time you set.') }}
-<a class="btn secondary" href="{{ url_for('admin.permissions') }}">Permissions</a></div>
+</div>
 
 <section class="section"><header><h2><span class="n">+</span>Give temporary access</h2></header><div class="body">
 <form method="post">{{ hidden() }}<input type="hidden" name="action" value="create">

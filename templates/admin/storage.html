@@ -1,5 +1,6 @@
-{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Photo storage{% endblock %}
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Settings{% endblock %}
 {% block content %}
+{{ settings_tabs('system') }}
 <div class="pagehead">{{ head('cam', '--c-proofs', 'Photo storage', 'Where proof and attendance photos are kept (Supabase Storage).') }}</div>
 <section class="section"><header><h2>Check</h2></header><div class="body flush tablewrap"><table><tbody>
 <tr><td>SUPABASE_URL set in Vercel</td><td>{% if has_url %}<span class="match ok">✓ {{ base }}</span>{% else %}<span class="match bad">✗ missing — add it in Vercel → Settings → Environment Variables</span>{% endif %}</td></tr>

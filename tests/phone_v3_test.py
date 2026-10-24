@@ -23,7 +23,7 @@ async def main():
         await pg.click("#camshoot"); await pg.wait_for_function("!document.getElementById('camsave').disabled", timeout=8000)
         await pg.screenshot(path="/tmp/v3_att_cam.png")
         await pg.click("#camsave"); await pg.wait_for_load_state("load"); await pg.wait_for_timeout(1500)
-        card = pg.locator(".staffcard", has_text=name)
+        card = pg.locator("tr", has_text=name)
         print(f"attendance: {name} →", await card.locator(".badge").first.inner_text(), "| photo shown:", await card.locator("img.face").count() == 1)
         await pg.screenshot(path="/tmp/v3_att_after.png", full_page=True)
         # proof with direct upload

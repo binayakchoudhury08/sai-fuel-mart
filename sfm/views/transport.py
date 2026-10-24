@@ -8,7 +8,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, s
 from .. import db
 from ..exports import (bill_filename, transport_bill_pdf, transport_bill_xlsx, transport_zip, workbook_bytes,
                        report_pdf)
-from ..security import (assert_writable, audit, can, claim_form_token, current_user, login_required, role)
+from ..security import (assert_transport_writable, assert_writable, audit, can, claim_form_token, current_user, login_required, role)
 from ..services import (PAY_MODES, fuels, next_sl_no, party_balance, party_balances, rates_for,
                         register_totals, settings_map, transport_register)
 from ..util import ZERO, UserError, clean, inr, money, parse_date, rupee, to_dec, today
@@ -74,7 +74,12 @@ def index():
         rate = rates_for(cur, d).get("HSD")
     tot = register_totals(rows)
     mtot = {k: sum((Decimal(r[k]) for r in month), ZERO) for k in ("qty", "fuel_amount", "cash", "total")}
+    from ..security import TRANSPORT_DAYS
+    show_deleted = request.args.get("deleted") == "1"
+    deleted_count = sum(1 for r in rows if r["voided"])
     return render_template("transport/index.html", parties=parties, rows=rows, tot=tot, d=d, ym=m1.strftime("%Y-%m"),
+                           show_deleted=show_deleted, deleted_count=deleted_count,
+                           min_date=today() - timedelta(days=3650),
                            month=month, mtot=mtot, m1=m1, pid=pid, q=q, rate=rate, PAY_MODES=PAY_MODES,
                            prev_day=d - timedelta(days=1), next_day=d + timedelta(days=1) if d < today() else None)
 
@@ -156,10 +161,11 @@ def create_entry(cur, form, d, sl_no=None, corrected_from=None):
     rate = ZERO
     if q > 0 or amt_in > 0:
         rates = rates_for(cur, d)
-        if not rates.get(code):
+        typed = form.get("rate") and can("rate_override")
+        if not rates.get(code) and not typed:
             raise UserError(f"No {code} rate is set for {d.strftime('%d %b %Y')}. Set it in Settings → Fuel rates.")
-        rate = rates[code]
-        if form.get("rate") and can("rate_override"):
+        rate = rates.get(code) or ZERO
+        if typed:
             rate = to_dec(form.get("rate"), "Rate")
             if rate <= 0:
                 raise UserError("Rate must be more than zero.")
@@ -199,7 +205,7 @@ def add_entry(party_id=None):
         form["party"] = str(party_id)
     with db.tx() as cur:
         claim_form_token(cur)
-        assert_writable(cur, d)
+        assert_transport_writable(cur, d)
         cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
         r, p = create_entry(cur, form, d)
         audit(cur, "create", "transport_entry", r["id"],
@@ -227,7 +233,7 @@ def correct_entry(tid):
         if not old or old["voided"] or old["kind"] not in ("fuel", "cash_advance"):
             raise UserError("Entry not found or already cancelled.")
         d = old["business_date"]
-        assert_writable(cur, d)
+        assert_transport_writable(cur, d)
         cur.execute("""UPDATE party_txns SET voided=TRUE, void_reason=%s, voided_by=%s, voided_at=NOW() WHERE id=%s""",
                     (f"Corrected: {reason}", current_user()["username"], tid))
         form = dict(request.form)

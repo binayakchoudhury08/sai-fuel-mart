@@ -216,3 +216,46 @@
   more.addEventListener("change", function(){ if (more.checked) history.pushState({sheet:1}, ""); });
   window.addEventListener("popstate", function(){ if (more.checked) more.checked = false; });
 })();
+
+
+/* ☰ : collapse the sidebar on computers, open the menu sheet on phones; remembered on this device */
+(function(){
+  var b = document.querySelector("[data-hamb]"); if (!b) return;
+  try { if (localStorage.getItem("rail-min") === "1") document.body.classList.add("rail-min"); } catch (e) {}
+  b.addEventListener("click", function(){
+    if (window.matchMedia("(max-width:900px)").matches) { var m = document.getElementById("more"); if (m) m.checked = !m.checked; return; }
+    document.body.classList.toggle("rail-min");
+    try { localStorage.setItem("rail-min", document.body.classList.contains("rail-min") ? "1" : "0"); } catch (e) {}
+  });
+  document.addEventListener("click", function(e){
+    var d = document.querySelector(".usermenu[open]"); if (d && !d.contains(e.target)) d.removeAttribute("open");
+  });
+})();
+
+
+/* Tabs: <nav data-tabs><a data-show="group" href="#id">…</a></nav> and elements with data-tab="group".
+   The address #id opens the tab that holds that element. */
+(function(){
+  var nav = document.querySelector("[data-tabs]"); if (!nav) return;
+  var links = nav.querySelectorAll("a[data-show]"); if (!links.length) return;
+  function show(group){
+    document.querySelectorAll("[data-tab]").forEach(function(el){ el.hidden = el.dataset.tab !== group; });
+    links.forEach(function(a){ a.classList.toggle("on", a.dataset.show === group); });
+  }
+  nav.addEventListener("click", function(e){ var a = e.target.closest("a[data-show]"); if (!a) return; e.preventDefault();
+    show(a.dataset.show); history.replaceState(null, "", a.getAttribute("href")); });
+  var h = (location.hash || "").slice(1), el = h && document.getElementById(h), holder = el && (el.closest("[data-tab]") || el);
+  show(holder && holder.dataset.tab ? holder.dataset.tab : links[0].dataset.show);
+})();
+
+/* links to a closed <details id=…> open it */
+(function(){ function open(){ var el = location.hash && document.getElementById(location.hash.slice(1)); if (el && el.tagName === "DETAILS") { el.open = true; el.scrollIntoView({block:"start"}); } }
+  window.addEventListener("hashchange", open); open(); })();
+
+/* ☀/☾ light–dark, remembered on this device */
+(function(){
+  try { if (localStorage.getItem("theme") === "dark") document.body.classList.add("dark"); } catch (e) {}
+  var b = document.querySelector("[data-theme-toggle]"); if (!b) return;
+  b.addEventListener("click", function(){ document.body.classList.toggle("dark");
+    try { localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light"); } catch (e) {} });
+})();

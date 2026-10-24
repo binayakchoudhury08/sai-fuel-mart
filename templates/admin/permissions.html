@@ -1,7 +1,7 @@
-{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Permissions{% endblock %}
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Settings{% endblock %}
 {% block content %}
-<div class="pagehead">{{ head('shield', '--c-settings', 'Permissions', 'You (the owner) decide what Admin, Manager and Staff can do. You can always do everything.') }}
-<a class="btn" href="{{ url_for('admin.access') }}">Temporary access…</a></div>
+{{ settings_tabs('perms') }}
+<div class="pagehead">{{ head('shield', '--c-settings', 'Permissions', 'You (the owner) decide what Admin, Manager and Staff can do. You can always do everything.') }}</div>
 <form method="post">{{ csrf() }}
 {% for group, items in groups.items() %}
 <section class="section"><header><h2>{{ group }}</h2></header><div class="body flush tablewrap"><table class="permgrid">

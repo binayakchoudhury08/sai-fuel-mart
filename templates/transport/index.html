@@ -11,7 +11,7 @@
 <form method="post" action="{{ url_for('transport.add_entry') }}" data-transport>{{ hidden(url_for('transport.index', d=d.isoformat()) ~ '#entry') }}
 <input type="hidden" name="fuel_code" value="HSD">
 <div class="fields">
-  <div><label>Date</label><input type="date" name="business_date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" required></div>
+  <div><label>Date</label><input type="date" name="business_date" value="{{ d.isoformat() }}" min="{{ min_date.isoformat() }}" max="{{ today.isoformat() }}" required></div>
   <div><label>Transporter</label><select name="party" required data-party-select><option value="">Choose…</option>
     {% for p in parties if p.active %}<option value="{{ p.id }}" data-vehicles="{{ p.vehicles }}">{{ p.name }}</option>{% endfor %}</select></div>
   <div><label>Vehicle No.</label><input name="vehicle_no" autocapitalize="characters" list="tveh" data-vehicle></div>
@@ -30,20 +30,22 @@
 <form class="formrow noprint" method="get" style="flex:1 1 100%"><input type="hidden" name="d" value="{{ d.isoformat() }}">
   <div><label>Transporter</label><select name="party" onchange="this.form.submit()"><option value="">All</option>{% for p in parties %}<option value="{{ p.id }}" {% if p.id==pid %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
   <div><label>Search</label><input name="q" value="{{ q }}" placeholder="vehicle, slip, challan"></div>
-  <div style="flex:0"><button class="btn secondary">Show</button></div></form></header>
+  <div style="flex:0"><button class="btn secondary">Show</button></div>
+  <div style="flex:0">{% if deleted_count %}<a class="btn small secondary" href="?{{ dict(request.args.to_dict(), deleted='0' if show_deleted else '1')|urlencode }}">{{ 'Hide' if show_deleted else 'Show' }} deleted ({{ deleted_count }})</a>{% endif %}</div></form></header>
+<div class="body" style="padding:8px 18px 0"><p class="hint" style="margin:0">Slips can be added, edited or deleted for any date — including old-system days and days whose closing is locked. Deleted entries stay in the history.</p></div>
 <div class="body flush tablewrap"><table><thead><tr><th>SL</th><th>Transporter</th><th>Vehicle No.</th><th>Slip No.</th><th>Challan No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">HSD Amount</th><th class="num">Cash Taken</th><th class="num">Total</th><th></th></tr></thead><tbody>
-{% for r in rows %}<tr class="{% if r.voided %}void{% endif %}">
+{% for r in rows if (not r.voided or show_deleted) %}<tr class="{% if r.voided %}void{% endif %}">
 <td><b>{{ r.sl_no or '' }}</b></td><td>{{ r.party_name }}{% if r.corrected_from %} <span class="badge">corrected</span>{% endif %}{% if r.voided %}<br><small class="keep">{{ r.void_reason }}</small>{% endif %}</td>
 <td>{{ r.vehicle_no }}</td><td>{{ r.slip_no }}</td><td>{{ r.challan_no }}</td>
 <td class="num">{{ r.qty|qty if r.kind=='fuel' else '' }}</td><td class="num">{{ r.rate if r.kind=='fuel' else '' }}</td>
 <td class="num">{{ r.fuel_amount|rs if r.fuel_amount else '' }}</td><td class="num">{{ r.cash|rs if r.cash else '' }}</td><td class="num"><b>{{ r.debit|rs }}</b></td>
 <td class="actions keep">{% if can('cancel_entries') and not r.voided %}
-<details class="void"><summary style="color:inherit">Correct</summary><form method="post" action="{{ url_for('transport.correct_entry', tid=r.id) }}">{{ csrf() }}<input type="hidden" name="_back" value="{{ here }}"><input type="hidden" name="fuel_code" value="{{ r.fuel_code or 'HSD' }}">
+<details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('transport.correct_entry', tid=r.id) }}">{{ csrf() }}<input type="hidden" name="_back" value="{{ here }}"><input type="hidden" name="fuel_code" value="{{ r.fuel_code or 'HSD' }}">
 <label>Vehicle No.</label><input name="vehicle_no" value="{{ r.vehicle_no }}"><label>Slip No.</label><input name="slip_no" value="{{ r.slip_no }}">
 <label>Challan No.</label><input name="challan_no" value="{{ r.challan_no }}"><label>HSD Qty (L)</label><input name="qty" value="{{ r.qty if r.kind=='fuel' else '' }}">
 <label>Rate</label><input name="rate" value="{{ r.rate if r.kind=='fuel' else '' }}"><label>Cash Taken</label><input name="cash_taken" value="{{ r.cash }}">
-<label>What was wrong</label><input name="reason" required><button class="btn small">Save correction</button></form></details>
-{{ void(url_for('parties.void_txn', tid=r.id), back=here) }}{% endif %}</td></tr>
+<label>What was wrong (kept in history)</label><input name="reason" required><button class="btn small">Save correction</button></form></details>
+{{ void(url_for('parties.void_txn', tid=r.id), label='Delete', back=here, what='entry', verb='Delete') }}{% endif %}</td></tr>
 {% else %}<tr><td colspan="11" class="empty">No entries on this day.</td></tr>{% endfor %}</tbody>
 {% if rows %}<tfoot><tr><td colspan="5">Total · {{ tot.count }} entries</td><td class="num">{{ tot.qty|qty }}</td><td></td><td class="num">{{ tot.fuel_amount|rs }}</td><td class="num">{{ tot.cash|rs }}</td><td class="num">{{ tot.total|rs }}</td><td></td></tr></tfoot>{% endif %}</table></div></section>
 

@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% from "_settings_tabs.html" import settings_tabs with context %}{% from "_macros.html" import csrf with context %}{% from "_head.html" import head %}{% block title %}Settings{% endblock %}
+{% block content %}
+{{ settings_tabs('auto') }}
+<div class="pagehead">{{ head('bolt', '--c-settings', 'Automation', 'Rules for the automatic alerts, and the daily job that runs by itself every morning at 6 AM.') }}</div>
+<form method="post">{{ csrf() }}
+<section class="section"><header><h2>Alert rules</h2></header><div class="body flush tablewrap"><table><tbody>
+{% for k, label, d, unit in RULES %}<tr><td>{{ label }}</td><td style="width:180px"><input name="{{ k }}" value="{{ R[k] }}" inputmode="decimal"></td><td class="muted">{{ unit }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="section"><header><h2>Daily automatic job</h2>{% if cron_ready %}<span class="badge locked">Scheduled · 6:00 AM</span>{% else %}<span class="badge open">Add CRON_SECRET in Vercel to schedule</span>{% endif %}</header><div class="body stack">
+<label class="check"><input type="checkbox" name="auto_lock_enabled" value="1" {% if R.auto_lock_enabled %}checked{% endif %}> Auto-lock clean days: submitted days older than the number of days above where every reading is entered, credit matches Credit transport and the cash difference is within the allowed amount</label>
+<p class="hint">Every day the job also ends expired temporary access (locking those days again). Each run is written to the audit log.</p>
+{% if last %}<p><b>Last run:</b> {{ last.at }} — {{ last.access_ended }} access(es) ended, {{ last.auto_locked|length }} day(s) auto-locked{% if last.auto_locked %} ({{ last.auto_locked|join(', ') }}){% endif %}.</p>{% else %}<p class="muted">Not run yet.</p>{% endif %}
+</div></section>
+<p><button class="btn">Save rules</button></p></form>
+<form method="post" style="margin-top:10px">{{ csrf() }}<input type="hidden" name="action" value="run"><button class="btn secondary">Run the daily job now</button></form>
+{% endblock %}

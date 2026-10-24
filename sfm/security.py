@@ -27,8 +27,7 @@ PERMISSIONS = [
     ("payments", "Receive payments from parties", "Daily work", {"operator", "manager", "admin"}),
     ("tanks", "Tank dips and tanker receipts", "Daily work", {"operator", "manager", "admin"}),
     ("proofs", "Take photo proofs", "Daily work", {"operator", "manager", "admin"}),
-    ("attendance_photo", "Mark attendance with a live staff photo", "Staff", {"manager", "admin"}),
-    ("attendance_manual", "Mark or change attendance without a photo (absent → present, leave, off)", "Staff", {"admin"}),
+    ("attendance_photo", "Mark attendance with a live staff photo (the only way for anyone except the owner)", "Staff", {"manager", "admin"}),
     ("salary", "Pay salary / advance / bonus and see the salary sheet", "Staff", {"manager", "admin"}),
     ("staff_manage", "Add and edit staff", "Staff", {"manager", "admin"}),
     ("lube_stock", "Add lube stock, products and stock counts", "Stock", {"manager", "admin"}),
@@ -246,6 +245,17 @@ def get_setting(cur, key, default=""):
     cur.execute("SELECT value FROM settings WHERE key=%s", (key,))
     r = cur.fetchone()
     return r["value"] if r else default
+
+
+TRANSPORT_DAYS = 31
+
+
+def assert_transport_writable(cur, d):
+    """Credit transport slips: any date in the last 31 days, whatever the Daily closing status.
+    Only the owner can go further back."""
+    if d > today():
+        raise UserError("You cannot enter credit transport for a future date.")
+    # any past date — including days imported from the old system — whatever the Daily closing status
 
 
 def managers_edit_history(cur):

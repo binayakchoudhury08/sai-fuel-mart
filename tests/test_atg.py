@@ -87,9 +87,9 @@ check(api.get("/api/tank-status").status_code == 401, "live feed needs login")
 r = cl.get("/api/tank-status")
 check(r.status_code == 200 and len(r.json["tanks"]) == 2 and r.json["tanks"][0]["stock"] is not None, "live feed returns both tanks")
 h = cl.get(f"/tanks?d={T.isoformat()}").get_data(as_text=True)
-for txt in ["Detailed live readings", "Gain this month", "data-sync", "Density at 15", "745.10", "Stock now"]:
+for txt in ["Detailed live readings", "Gain this month", "data-sync", "Density at 15", "745.10", "Current", "levelbar"]:
     check(txt in h, f"tank page shows '{txt}'")
-check(cl.get("/dashboard").status_code == 200 and "ATG" in cl.get("/dashboard").get_data(as_text=True), "dashboard shows ATG reading time")
+check(cl.get("/dashboard").status_code == 200 and "ATG" in cl.get("/tanks").get_data(as_text=True), "dashboard opens; Tank Level shows the ATG reading time")
 check(cl.get("/reports/tanks?format=xlsx").status_code == 200, "tank report Excel")
 
 print("Edge cases")

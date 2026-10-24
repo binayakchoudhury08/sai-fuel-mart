@@ -500,3 +500,55 @@ CREATE TABLE IF NOT EXISTS pump.access_grants (
     CHECK (date_to >= date_from)
 );
 CREATE INDEX IF NOT EXISTS access_grants_user_idx ON pump.access_grants (user_id, valid_until);
+
+-- v3.2: attendance check-out by live photo
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS checkout_at TIMESTAMPTZ;
+ALTER TABLE pump.attendance ADD COLUMN IF NOT EXISTS checkout_photo_path TEXT NOT NULL DEFAULT '';
+
+-- ================================================================ v3.4: credit transport slips are never locked (last 31 days)
+-- Slip entries (fuel / cash taken) may be added, edited or deleted on any day of the last 31 days, even when the
+-- Daily closing of that day is locked. Every other kind of entry stays protected by the locked-day guard.
+CREATE OR REPLACE FUNCTION pump.guard_locked_day() RETURNS trigger AS $$
+DECLARE d DATE; k TEXT;
+BEGIN
+    IF TG_OP = 'DELETE' THEN d := OLD.business_date; ELSE d := NEW.business_date; END IF;
+    IF TG_TABLE_NAME = 'party_txns' THEN
+        IF TG_OP = 'DELETE' THEN k := OLD.kind; ELSE k := NEW.kind; END IF;
+        IF k IN ('fuel', 'cash_advance') AND d >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date - 31 THEN
+            IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+            RETURN NEW;
+        END IF;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pump.days WHERE business_date = d AND status = 'locked') THEN
+        RAISE EXCEPTION 'Day % is locked. Ask the owner to unlock it first.', d;
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.business_date <> NEW.business_date AND
+       EXISTS (SELECT 1 FROM pump.days WHERE business_date = OLD.business_date AND status = 'locked') THEN
+        RAISE EXCEPTION 'Day % is locked. Ask the owner to unlock it first.', OLD.business_date;
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+-- ================================================================ v3.5: credit transport slips are never locked (any date)
+CREATE OR REPLACE FUNCTION pump.guard_locked_day() RETURNS trigger AS $$
+DECLARE d DATE; k TEXT;
+BEGIN
+    IF TG_OP = 'DELETE' THEN d := OLD.business_date; ELSE d := NEW.business_date; END IF;
+    IF TG_TABLE_NAME = 'party_txns' THEN
+        IF TG_OP = 'DELETE' THEN k := OLD.kind; ELSE k := NEW.kind; END IF;
+        IF k IN ('fuel', 'cash_advance') THEN       -- credit transport slips: any date, any day status
+            IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+            RETURN NEW;
+        END IF;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pump.days WHERE business_date = d AND status = 'locked') THEN
+        RAISE EXCEPTION 'Day % is locked. Ask the owner to unlock it first.', d;
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.business_date <> NEW.business_date AND
+       EXISTS (SELECT 1 FROM pump.days WHERE business_date = OLD.business_date AND status = 'locked') THEN
+        RAISE EXCEPTION 'Day % is locked. Ask the owner to unlock it first.', OLD.business_date;
+    END IF;
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql;

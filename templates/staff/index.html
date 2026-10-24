@@ -1,16 +1,13 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Attendance{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Employee Attendance{% endblock %}
 {% block content %}
-<div class="pagehead">{{ head('staff', '--c-staff', 'Attendance', 'Tap a staff member, take a live photo — that marks them present.') }}
-<div class="datenav"><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/staff?d=__D__" aria-label="Date">
-{% if can('salary') %}<a class="btn secondary small" href="{{ url_for('staff.salary') }}">Salary</a>{% endif %}</div></div>
+<div class="pagehead"><div class="datenav"><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/staff?d=__D__" aria-label="Date"></div>
+<span style="flex:1"></span>{% if can('salary') %}<a class="btn secondary" href="{{ url_for('staff.salary') }}">Salary</a>{% endif %}
+{% if can('staff_manage') %}<a class="btn" href="#addstaff">Add Employee</a>{% endif %}</div>
 
 <div class="stats"><div><b class="pos">{{ present }}</b><span>Present</span></div><div><b class="{{ 'neg' if total - present else '' }}">{{ total - present }}</b><span>Not marked (absent)</span></div>
 <div><b>{{ total }}</b><span>Staff</span></div></div>
 
-{% if can('attendance_photo') and user.role != 'owner' %}
-  {% if not in_window %}<div class="notice">You can mark attendance only for today and the previous {{ rules.back }} day(s). Ask the owner to change older days.</div>
-  {% else %}<div class="flash info">Photo attendance is open {{ rules.start }}–{{ rules.end }} for today and {{ rules.back }} previous day(s).</div>{% endif %}
-{% endif %}
+{% if user.role != 'owner' %}<div class="flash {{ 'info' if in_window else 'error' }}">{% if not is_today %}You can only mark attendance for today.{% elif in_window %}Check-in is open until {{ rules.end }} today. Each person is marked once, by live photo. Not marked by {{ rules.end }} = Absent.{% else %}Check-in is open {{ rules.start }}–{{ rules.end }} only. Anyone not marked is Absent; only the owner can change it.{% endif %}</div>{% endif %}
 {% if can('attendance_photo') and not mobile %}<div class="flash info">Live photos are taken on the phone: open this page in the app or on the manager’s phone.</div>{% endif %}
 {% if can('attendance_photo') and not storage %}<div class="notice">Photo storage isn’t set up yet (Supabase Storage). Ask the owner.</div>{% endif %}
 
@@ -18,18 +15,17 @@
 <div class="body flush" id="att" data-start="{{ url_for('staff.attendance_start') }}" data-post="{{ url_for('staff.attendance_photo') }}"
      data-date="{{ d.isoformat() }}" data-station="{{ station }}" data-user="{{ user.full_name or user.username }}">
 <input type="hidden" id="csrf" value="{{ csrf_token() }}">
-{% for s in staff if s.active %}{% set m = marks.get(s.id) %}
-<div class="staffcard" id="staff-{{ s.id }}">
-  {% if m and m.photo_path %}<img class="face" loading="lazy" src="{{ url_for('staff.attendance_photo_file', sid=s.id, d=d.isoformat()) }}" alt="{{ s.name }}">{% else %}<span class="face">{{ s.name[:1] }}</span>{% endif %}
-  <div class="t"><b>{{ s.name }}</b><small>{{ s.designation or 'Staff' }}{% if s.shift %} · {{ s.shift }}{% endif %}</small>
-    {% if m %}<small>{{ dict(STATUS)[m.status] }}{% if m.marked_via == 'photo' and m.captured_at %} · photo {{ m.captured_at.strftime('%I:%M %p') }}{% elif m.marked_via == 'manual' %} · set by {{ m.updated_by }}{% endif %}</small>{% endif %}</div>
-  {% if m and m.status in ('P','H') %}<span class="badge locked">{{ 'Present' if m.status=='P' else 'Half day' }}</span>
-  {% elif m %}<span class="badge {{ 'stop' if m.status=='A' else 'submitted' }}">{{ dict(STATUS)[m.status] }}</span>
-  {% else %}<span class="badge stop">Absent</span>{% endif %}
-  {% if can('attendance_photo') and mobile and storage and (in_window or user.role == 'owner') and not (m and m.status=='P') %}
-    <button type="button" class="btn small" data-snap="{{ s.id }}" data-name="{{ s.name }}">📷 Photo</button>{% endif %}
-</div>
-{% else %}<p class="empty">No staff yet.</p>{% endfor %}
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Status</th><th>Check in</th><th>Check out</th></tr></thead><tbody>
+{% for s in staff if s.active %}{% set m = marks.get(s.id) %}{% set owner = user.role == 'owner' %}{% set snap_ok = can('attendance_photo') and mobile and storage %}
+<tr id="staff-{{ s.id }}">
+  <td><div style="display:flex;align-items:center;gap:10px">{% if m and m.photo_path %}<img class="face" style="width:40px;height:40px;border-radius:12px;object-fit:cover" loading="lazy" src="{{ url_for('staff.attendance_photo_file', sid=s.id, d=d.isoformat()) }}" alt="">{% else %}<span class="avatar" style="width:40px;height:40px;border-radius:12px">{{ s.name[:1] }}</span>{% endif %}<b>{{ s.name }}</b></div></td>
+  <td>{{ s.designation or 'Staff' }}</td><td>{{ s.shift or '—' }}</td>
+  <td>{% if m and m.status == 'P' %}<span class="badge locked">Present</span>{% elif m and m.status == 'H' %}<span class="badge locked">Half day</span>{% elif m %}<span class="badge {{ 'stop' if m.status=='A' else 'submitted' }}">{{ dict(STATUS)[m.status] }}</span>{% else %}<span class="badge stop">Absent</span>{% endif %}</td>
+  <td>{% if m and m.captured_at %}{{ m.captured_at.strftime('%I:%M %p') }}{% elif m and m.status in ('P','H') %}<small class="muted">set by owner</small>{% elif snap_ok and (owner or in_window) %}<button type="button" class="btn small" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="in">📷 Check in</button>{% else %}—{% endif %}
+    {% if owner and snap_ok and m %}<button type="button" class="btn small secondary" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="in" title="Owner: replace the check-in photo">Retake</button>{% endif %}</td>
+  <td>{% if m and m.checkout_at %}<a href="{{ url_for('staff.attendance_photo_file', sid=s.id, d=d.isoformat(), kind='out') }}" target="_blank" rel="noopener">{{ m.checkout_at.strftime('%I:%M %p') }}</a>{% elif m and m.status in ('P','H') and snap_ok and (owner or is_today) %}<button type="button" class="btn small secondary" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="out">📷 Check out</button>{% else %}—{% endif %}</td>
+</tr>
+{% else %}<tr><td colspan="6" class="empty">No staff yet.</td></tr>{% endfor %}</tbody></table></div>
 </div></section>
 
 {# live camera, full screen #}
@@ -45,8 +41,8 @@
   <p id="cammsg" style="color:#fff;text-align:center;margin:0 0 12px;min-height:1.4em"></p>
 </div>
 
-{% if can('attendance_manual') %}
-<section class="section"><details class="add" style="border-top:0"><summary>Mark or change attendance without a photo</summary><div class="body">
+{% if user.role == 'owner' %}
+<section class="section"><details class="add" style="border-top:0"><summary>Mark or change attendance without a photo (owner only)</summary><div class="body">
 <form method="post" action="{{ url_for('staff.save_attendance') }}">{{ hidden() }}<input type="hidden" name="work_date" value="{{ d.isoformat() }}">
 <div class="tablewrap"><table><thead><tr><th>Staff</th><th>Status</th></tr></thead><tbody>
 {% for s in staff if s.active %}{% set m = marks.get(s.id) %}<tr><td>{{ s.name }}{% if m and m.marked_via=='photo' %} <small>(photo)</small>{% endif %}</td>
@@ -57,13 +53,12 @@
 {% endif %}
 
 {% if user.role == 'owner' %}
-<section class="section"><details class="add" style="border-top:0"><summary>Rules for photo attendance (owner)</summary><div class="body">
+<section class="section"><details class="add" style="border-top:0"><summary>Check-in hours (owner)</summary><div class="body">
 <form method="post" action="{{ url_for('staff.attendance_rules_save') }}" class="formrow">{{ csrf() }}
-  <div><label>Managers can mark today and previous</label><select name="back">{% for n in range(0, 8) %}<option value="{{ n }}" {% if n==rules.back %}selected{% endif %}>{{ n }} day(s)</option>{% endfor %}</select></div>
-  <div><label>From time</label><input type="time" name="start" value="{{ rules.start }}"></div>
-  <div><label>Until time</label><input type="time" name="end" value="{{ rules.end }}"></div>
-  <div style="flex:0"><button class="btn">Save rules</button></div></form>
-<p class="hint">Managers can mark someone present only with a live photo, only inside this window. You (the owner) can always change any day.</p></div></details></section>
+  <div><label>Check-in opens</label><input type="time" name="start" value="{{ rules.start }}"></div>
+  <div><label>Check-in closes</label><input type="time" name="end" value="{{ rules.end }}"></div>
+  <div style="flex:0"><button class="btn">Save</button></div></form>
+<p class="hint">Managers: today only, once per person, by live photo, inside these hours. Only you can change, replace or delete attendance on any day.</p></div></details></section>
 {% endif %}
 
 {% if can('staff_manage') %}
@@ -75,7 +70,7 @@
 <label>Phone</label><input name="phone" value="{{ s.phone }}"><label>Monthly salary</label><input name="monthly_salary" value="{{ s.monthly_salary }}">
 <label>Joined</label><input type="date" name="joined_on" value="{{ s.joined_on.isoformat() if s.joined_on else '' }}"><label>Bank account</label><input name="bank_account" value="{{ s.bank_account }}">
 <label>Status</label><select name="active"><option value="1">Working</option><option value="0" {% if not s.active %}selected{% endif %}>Left</option></select><button class="btn small">Save</button></form></details></td></tr>{% endfor %}</tbody></table></div>
-<details class="add" {% if not staff %}open{% endif %}><summary>Add staff</summary><div class="body"><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<div class="fields">
+<details class="add" id="addstaff" {% if not staff %}open{% endif %}><summary>Add employee</summary><div class="body"><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<div class="fields">
 <div><label>Employee code</label><input name="emp_code" value="{{ next_code }}" required></div><div><label>Name</label><input name="name" required></div>
 <div><label>Role</label><input name="designation" placeholder="Pump attendant"></div><div><label>Phone</label><input name="phone" inputmode="tel"></div>
 <div><label>Monthly salary (₹)</label><input name="monthly_salary" inputmode="decimal"></div><div><label>Joined</label><input type="date" name="joined_on"></div>

@@ -1,0 +1,10 @@
+{# Static station logo (original): shield + fuel drop. size in px #}
+{% macro logo(size=40) -%}
+<svg class="logo" width="{{ size }}" height="{{ size }}" viewBox="0 0 48 48" aria-hidden="true">
+  <defs><linearGradient id="lg-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F74FF"/><stop offset="1" stop-color="#0B3BB8"/></linearGradient></defs>
+  <path d="M24 2 L43 9 V23 C43 35 34.5 43 24 46 C13.5 43 5 35 5 23 V9 Z" fill="#fff"/>
+  <path d="M24 5.5 L40 11.4 V23 C40 33.2 32.8 40 24 42.6 C15.2 40 8 33.2 8 23 V11.4 Z" fill="url(#lg-a)"/>
+  <path d="M24 12 C24 12 32 21 32 26.5 a8 8 0 0 1-16 0 C16 21 24 12 24 12 Z" fill="#fff"/>
+  <path d="M24 19 C24 19 28.5 24.2 28.5 27 a4.5 4.5 0 0 1-9 0 C19.5 24.2 24 19 24 19 Z" fill="#E11D2E"/>
+</svg>
+{%- endmacro %}

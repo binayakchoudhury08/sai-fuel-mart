@@ -6,7 +6,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, s
 
 from .. import db
 from ..exports import party_bill_pdf, party_bill_xlsx
-from ..security import (assert_writable, audit, can, claim_form_token, current_user, login_required,
+from ..security import (assert_transport_writable, assert_writable, audit, can, claim_form_token, current_user, login_required,
                         next_receipt_no, role)
 from ..services import (PARTY_KIND_LABEL, PAY_MODES, fuels, party_balance, party_balances,
                         party_statement, party_statement_page, rates_for, settings_map)
@@ -160,7 +160,10 @@ def add_txn(pid):
     receipt = None
     with db.tx() as cur:
         claim_form_token(cur)
-        assert_writable(cur, d)
+        if kind in ("fuel", "cash_advance"):
+            assert_transport_writable(cur, d)
+        else:
+            assert_writable(cur, d)
         cur.execute("SELECT * FROM parties WHERE id=%s FOR UPDATE", (pid,))
         p = cur.fetchone()
         if not p:
@@ -294,7 +297,10 @@ def void_txn(tid):
             raise UserError("Entry not found or already cancelled.")
         if t["kind"] == "opening" and not can("adjustments"):
             raise UserError("Only the owner can cancel an opening balance.")
-        assert_writable(cur, t["business_date"])
+        if t["kind"] in ("fuel", "cash_advance"):
+            assert_transport_writable(cur, t["business_date"])
+        else:
+            assert_writable(cur, t["business_date"])
         cur.execute("""UPDATE party_txns SET voided=TRUE, void_reason=%s, voided_by=%s, voided_at=NOW()
                        WHERE id=%s""", (reason, current_user()["username"], tid))
         if t["kind"] == "lube":
@@ -321,7 +327,10 @@ def edit_txn_details(tid):
         t = cur.fetchone()
         if not t or t["voided"]:
             raise UserError("Entry not found or cancelled.")
-        assert_writable(cur, t["business_date"])
+        if t["kind"] in ("fuel", "cash_advance"):
+            assert_transport_writable(cur, t["business_date"])
+        else:
+            assert_writable(cur, t["business_date"])
         new = {"vehicle_no": clean(request.form.get("vehicle_no"), 20).upper().replace(" ", ""),
                "challan_no": clean(request.form.get("challan_no"), 30),
                "slip_no": clean(request.form.get("slip_no"), 30),

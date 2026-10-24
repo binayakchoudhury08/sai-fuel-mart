@@ -1,0 +1,69 @@
+{# Landing scene for sign-in / first setup: attendant filling a car with diesel + floating management cards (original art). #}
+<section class="landing {{ 'photo' if login_photo }}" aria-hidden="true" {% if login_photo %}style="background-image:linear-gradient(180deg,rgba(5,14,38,.55) 0%,rgba(5,14,38,.1) 40%,rgba(5,14,38,.65) 100%),url('{{ url_for('main.login_photo') }}')"{% endif %}>
+<svg class="lscene" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="ls-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050E26"/><stop offset=".6" stop-color="#0B2257"/><stop offset="1" stop-color="#16397F"/></linearGradient>
+    <linearGradient id="ls-can" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F74FF"/><stop offset="1" stop-color="#0E3FB0"/></linearGradient>
+    <radialGradient id="ls-light" cx=".5" cy="0" r="1"><stop offset="0" stop-color="#EAF5FF" stop-opacity=".85"/><stop offset=".6" stop-color="#9FD0FF" stop-opacity=".18"/><stop offset="1" stop-color="#9FD0FF" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ls-car" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F3F6FC"/><stop offset="1" stop-color="#AEB9CF"/></linearGradient>
+    <linearGradient id="ls-floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B2D5C"/><stop offset="1" stop-color="#0A1533"/></linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#ls-sky)"/>
+  <g fill="#fff" opacity=".7"><circle cx="60" cy="60" r="1.3"/><circle cx="210" cy="40" r="1"/><circle cx="380" cy="80" r="1.2"/><circle cx="640" cy="50" r="1.1"/><circle cx="740" cy="110" r="1"/></g>
+  <rect y="430" width="800" height="170" fill="url(#ls-floor)"/>
+  <!-- canopy -->
+  <path d="M40 150 L760 150 L780 168 L20 168 Z" fill="#DCE8FF"/>
+  <rect x="20" y="168" width="760" height="34" fill="url(#ls-can)"/><rect x="20" y="202" width="760" height="8" fill="#E11D2E"/><rect x="30" y="210" width="740" height="6" fill="#F4FAFF"/>
+  <path d="M60 216 L740 216 L800 470 L0 470 Z" fill="url(#ls-light)" opacity=".7"/>
+  <rect x="96" y="216" width="16" height="230" fill="#E3E9F5"/><rect x="690" y="216" width="16" height="230" fill="#E3E9F5"/>
+  <!-- dispenser -->
+  <g transform="translate(560 300)">
+    <rect x="0" y="0" width="92" height="150" rx="10" fill="#F7F9FE"/><rect x="0" y="0" width="92" height="22" rx="10" fill="#1D5BEB"/><rect x="0" y="20" width="92" height="5" fill="#E11D2E"/>
+    <rect x="12" y="36" width="68" height="46" rx="5" fill="#0A1A3F"/>
+    <text x="18" y="54" font-family="Barlow Condensed,Arial" font-size="10" fill="#7FA6E8">LITRES</text>
+    <text x="74" y="54" text-anchor="end" font-family="Barlow Condensed,Arial" font-weight="700" font-size="14" fill="#5EF0B4" data-l>0.00</text>
+    <text x="18" y="74" font-family="Barlow Condensed,Arial" font-size="10" fill="#7FA6E8">₹</text>
+    <text x="74" y="74" text-anchor="end" font-family="Barlow Condensed,Arial" font-weight="700" font-size="14" fill="#FFC857" data-r>0.00</text>
+    <rect x="12" y="92" width="68" height="16" rx="4" fill="#16A34A"/><text x="46" y="104" text-anchor="middle" font-family="Barlow,Arial" font-weight="700" font-size="10" fill="#fff">HSD</text>
+    <rect x="-6" y="146" width="104" height="8" rx="3" fill="#0A1A3F" opacity=".6"/>
+  </g>
+  <!-- car (side view) -->
+  <g transform="translate(150 330)">
+    <ellipse cx="190" cy="126" rx="210" ry="12" fill="#000" opacity=".35"/>
+    <path d="M10 92 C10 70 26 62 50 60 L110 56 L160 18 C170 10 182 8 194 8 L290 8 C306 8 318 14 328 26 L360 58 L384 62 C398 64 404 74 404 88 L404 104 C404 110 400 114 394 114 L20 114 C14 114 10 110 10 104 Z" fill="url(#ls-car)"/>
+    <path d="M124 58 L166 24 C172 19 180 17 188 17 L232 17 L232 58 Z" fill="#1C2C52"/><path d="M242 17 L292 17 C302 17 310 21 316 28 L344 58 L242 58 Z" fill="#1C2C52"/>
+    <rect x="232" y="17" width="10" height="41" fill="#C9D3E6"/>
+    <rect x="352" y="70" width="40" height="10" rx="4" fill="#FFE29A"/><rect x="14" y="72" width="22" height="10" rx="4" fill="#FF6B6B"/>
+    <circle cx="86" cy="114" r="28" fill="#111827"/><circle cx="86" cy="114" r="12" fill="#9AA6BD"/>
+    <circle cx="318" cy="114" r="28" fill="#111827"/><circle cx="318" cy="114" r="12" fill="#9AA6BD"/>
+    <rect x="58" y="66" width="20" height="14" rx="3" fill="#8D99B3"/>
+  </g>
+  <!-- hose from dispenser to the nozzle at the car's fuel inlet -->
+  <path id="hose" d="M560 360 C520 362 470 380 450 410 C432 436 300 430 236 404" fill="none" stroke="#0A1A3F" stroke-width="7" stroke-linecap="round"/>
+  <path d="M560 360 C520 362 470 380 450 410 C432 436 300 430 236 404" fill="none" stroke="#F5B301" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 14" class="flow"/>
+  <!-- attendant -->
+  <g transform="translate(240 286)">
+    <circle cx="34" cy="20" r="15" fill="#C68B5E"/><path d="M18 14 C18 2 50 2 50 14 L50 16 L18 16 Z" fill="#1D5BEB"/><rect x="14" y="14" width="40" height="5" rx="2" fill="#0E3FB0"/>
+    <path d="M14 40 C14 34 22 30 34 30 C46 30 54 34 54 40 L58 112 L10 112 Z" fill="#1D5BEB"/><rect x="10" y="64" width="48" height="6" fill="#E11D2E"/>
+    <path d="M14 46 C0 60 -10 82 -6 102" fill="none" stroke="#1D5BEB" stroke-width="12" stroke-linecap="round"/>
+    <path d="M54 46 C72 62 82 80 70 104" fill="none" stroke="#1D5BEB" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="-6" cy="104" r="6" fill="#C68B5E"/><circle cx="70" cy="106" r="6" fill="#C68B5E"/>
+    <rect x="14" y="112" width="18" height="40" fill="#0E2459"/><rect x="36" y="112" width="18" height="40" fill="#0E2459"/>
+    <rect x="10" y="150" width="24" height="8" rx="3" fill="#111827"/><rect x="36" y="150" width="24" height="8" rx="3" fill="#111827"/>
+  </g>
+  <path d="M236 404 L214 398 L218 388 L240 394 Z" fill="#111827"/>
+</svg>
+<div class="lcards">
+  <div class="lcard"><span class="ic" style="background:#1D5BEB">✓</span><div><b>Daily closing</b><small>Readings, cash, credit — step by step</small></div></div>
+  <div class="lcard"><span class="ic" style="background:#16A34A">▮</span><div><b>Tank levels</b><small>Live from the ATG, with alerts</small></div></div>
+  <div class="lcard"><span class="ic" style="background:#0E9F9B">₹</span><div><b>Credit transport</b><small>Every slip, bills in PDF &amp; Excel</small></div></div>
+  <div class="lcard"><span class="ic" style="background:#E11D74">◉</span><div><b>Attendance</b><small>Live photo check-in &amp; check-out</small></div></div>
+</div>
+<div class="lhead"><h2>Smart fuel station management</h2><p>Sales, stock, credit and staff — in one place.</p></div>
+</section>
+<script>
+(function(){ var l = document.querySelector("[data-l]"), r = document.querySelector("[data-r]"); if (!l) return;
+  var v = 0, rate = 93.98;
+  setInterval(function(){ v += 0.07; if (v > 45) v = 0; l.textContent = v.toFixed(2); r.textContent = (v * rate).toLocaleString("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2}); }, 60);
+})();
+</script>

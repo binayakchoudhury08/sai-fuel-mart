@@ -1,7 +1,36 @@
 {% extends "base.html" %}{% from "_macros.html" import status_badge, money with context %}{% block title %}Reports{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>Daily sales &amp; cash</h1><p>{{ start|d }} to {{ end|d }}</p></div></div>
-{% include "reports/_tabs.html" %}{% include "reports/_range.html" %}
+{% macro trend(p) -%}{% if p is not none %}<span class="trend {{ 'up' if p >= 0 else 'down' }}">{{ '↑' if p >= 0 else '↓' }} {{ p|abs }}%</span>{% else %}<span class="muted">—</span>{% endif %}{%- endmacro %}
+<section class="section"><div class="body" style="padding-bottom:6px">
+<nav class="tabs rtabs">
+  <a href="{{ url_for('reports.index') }}" class="on">Sales Report</a>
+  <a href="{{ url_for('tanks.index') }}#stock">Stock Report</a>
+  <a href="{{ url_for('reports.outstanding') }}">Credit Report</a>
+  <a href="{{ url_for('reports.attendance_xlsx') }}">Attendance Report</a>
+</nav>
+<form method="get" class="formrow filters">
+  <div style="flex:2 1 260px"><label>Dates</label><div class="formrow" style="gap:6px;flex-wrap:nowrap"><input type="date" name="from" value="{{ start.isoformat() }}" max="{{ today.isoformat() }}"><span class="muted">–</span><input type="date" name="to" value="{{ end.isoformat() }}" max="{{ today.isoformat() }}"></div></div>
+  <div><label>Fuel type</label><select name="fuel"><option value="">All Fuel Types</option>{% for f in ['HSD','MS','CNG','Lube'] %}<option {% if f==fuel_f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select></div>
+  <div style="flex:0"><button class="btn">⚙ Generate</button></div>
+</form></div></section>
+
+<div class="kpis kpis3">
+  <div class="kpi"><span>Total Sales</span><b>{{ summary.sales|rs }}</b>{{ trend(summary.sales_pct) }} <span class="muted">vs previous period</span></div>
+  <div class="kpi"><span>Total Litres</span><b>{{ summary.litres|qty(0) }} L</b>{{ trend(summary.litres_pct) }} <span class="muted">vs previous period</span></div>
+  <div class="kpi"><span>Total Transactions</span><b>{{ summary.tx }}</b>{{ trend(summary.tx_pct) }} <span class="muted">vs previous period</span></div>
+</div>
+
+<section class="section"><header><h2>Sales Report</h2><span class="legend2"><span><i style="background:#1D5BEB"></i>Amount</span><span><i style="background:#9CC3FF"></i>Litres</span></span></header>
+<div class="body chart"><svg viewBox="0 0 640 240" role="img" aria-label="Sales by fuel">
+  <g class="grid">{% for k in range(5) %}{% set y = 196 - k * 42 %}<line x1="70" x2="630" y1="{{ y }}" y2="{{ y }}"/><text x="64" y="{{ y + 4 }}" text-anchor="end">{{ (bmax_amt * k / 4)|qty(0) }}</text>{% endfor %}</g>
+  {% set n = bars|length or 1 %}{% set slot = 560 / n %}
+  {% for name, amt, lit in bars %}{% set x = 80 + loop.index0 * slot + slot * 0.18 %}{% set h1 = (amt / bmax_amt * 168)|float %}{% set h2 = (lit / bmax_l * 168)|float %}
+    <rect x="{{ x }}" y="{{ 196 - h1 }}" width="{{ slot * 0.28 }}" height="{{ h1 }}" rx="3" fill="#1D5BEB"><title>{{ name }}: {{ amt|rs }}</title></rect>
+    <rect x="{{ x + slot * 0.30 }}" y="{{ 196 - h2 }}" width="{{ slot * 0.28 }}" height="{{ h2 }}" rx="3" fill="#9CC3FF"><title>{{ name }}: {{ lit|qty }}</title></rect>
+    <text x="{{ x + slot * 0.29 }}" y="218" text-anchor="middle">{{ name }}</text>{% endfor %}
+</svg></div></section>
+
+<h2 style="margin:18px 0 10px">Day by day <small class="muted" style="font-weight:500">{{ start|d }} – {{ end|d }}</small></h2>
 <div class="stats"><div><b>{{ tot.gross_sale|inr }}</b><span>Total sale</span></div>
 {% for f in fuels if tot.qty[f.code] %}<div><b>{{ tot.qty[f.code]|qty }}</b><span>{{ f.code }} {{ f.unit }}</span></div>{% endfor %}
 <div><b>{{ tot.credit|inr }}</b><span>Credit given</span></div><div><b>{{ tot.payments|inr }}</b><span>Payments received</span></div>

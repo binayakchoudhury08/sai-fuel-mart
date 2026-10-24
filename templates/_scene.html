@@ -1,0 +1,40 @@
+{# Original illustration: fuel station at night (no third-party logos). #}
+<svg class="scene" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050E26"/><stop offset=".65" stop-color="#0B2257"/><stop offset="1" stop-color="#173E8C"/></linearGradient>
+    <linearGradient id="canopy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1D5BEB"/><stop offset="1" stop-color="#0E3FB0"/></linearGradient>
+    <radialGradient id="light" cx=".5" cy="0" r="1"><stop offset="0" stop-color="#E8F4FF" stop-opacity=".9"/><stop offset=".55" stop-color="#9FD0FF" stop-opacity=".25"/><stop offset="1" stop-color="#9FD0FF" stop-opacity="0"/></radialGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B2C55"/><stop offset="1" stop-color="#0A1430"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <rect width="1200" height="300" fill="url(#sky)"/>
+  <g fill="#fff"><circle cx="80" cy="34" r="1.1" opacity=".7"/><circle cx="190" cy="70" r="1" opacity=".5"/><circle cx="300" cy="24" r="1.3" opacity=".8"/><circle cx="420" cy="54" r="1" opacity=".6"/><circle cx="1140" cy="30" r="1.2" opacity=".7"/><circle cx="1060" cy="64" r="1" opacity=".5"/></g>
+  <path d="M0 214 C120 198 210 206 300 196 S480 210 560 200 S800 206 1200 198 V300 H0Z" fill="#0A1C47"/>
+  <rect y="226" width="1200" height="74" fill="url(#road)"/>
+  <g transform="translate(470 0)">
+    <!-- ground glow under the canopy -->
+    <ellipse cx="260" cy="236" rx="330" ry="34" fill="#BFE3FF" opacity=".28" filter="url(#soft)"/>
+    <path d="M40 124 L480 124 L560 226 L-40 226 Z" fill="url(#light)" opacity=".75"/>
+    <!-- canopy: blue fascia, red stripe, white lit underside -->
+    <path d="M10 78 L510 78 L524 92 L-4 92 Z" fill="#DCE8FF"/>
+    <rect x="-4" y="92" width="528" height="26" fill="url(#canopy)"/>
+    <rect x="-4" y="118" width="528" height="7" fill="#E11D2E"/>
+    <rect x="6" y="125" width="508" height="5" fill="#F4FAFF"/>
+    <g fill="#FFFFFF" opacity=".95"><rect x="40" y="130" width="60" height="3" rx="1.5"/><rect x="160" y="130" width="60" height="3" rx="1.5"/><rect x="300" y="130" width="60" height="3" rx="1.5"/><rect x="420" y="130" width="60" height="3" rx="1.5"/></g>
+    <rect x="100" y="130" width="13" height="96" fill="#E9EEF8"/><rect x="408" y="130" width="13" height="96" fill="#E9EEF8"/>
+    <!-- dispensers -->
+    <g id="du"><rect x="170" y="160" width="52" height="66" rx="6" fill="#F7F9FE"/><rect x="170" y="160" width="52" height="11" rx="5" fill="#1D5BEB"/>
+      <rect x="170" y="171" width="52" height="3" fill="#E11D2E"/>
+      <rect x="179" y="180" width="34" height="17" rx="3" fill="#0A1A3F"/><rect x="182" y="183" width="28" height="11" rx="2" fill="#5EF0B4" opacity=".9"/>
+      <path d="M222 192 q16 6 12 30" fill="none" stroke="#0A1A3F" stroke-width="3"/><rect x="166" y="222" width="60" height="5" rx="2" fill="#0A1A3F" opacity=".5"/></g>
+    <use href="#du" x="130"/>
+  </g>
+  <!-- price pole -->
+  <g transform="translate(330 0)">
+    <rect x="34" y="120" width="10" height="106" fill="#C9D3E6"/>
+    <rect x="0" y="52" width="78" height="78" rx="6" fill="#F7F9FE"/>
+    <rect x="0" y="52" width="78" height="20" rx="6" fill="#1D5BEB"/><rect x="0" y="68" width="78" height="4" fill="#E11D2E"/>
+    <g font-family="Barlow Condensed, Arial" font-weight="700" font-size="12" fill="#0A1A3F"><text x="8" y="90">MS</text><text x="8" y="108">HSD</text><text x="8" y="125">CNG</text></g>
+    <g fill="#E11D2E"><rect x="40" y="81" width="30" height="12" rx="2"/><rect x="40" y="99" width="30" height="12" rx="2"/><rect x="40" y="116" width="30" height="11" rx="2"/></g>
+  </g>
+</svg>

@@ -1,12 +1,17 @@
-{% extends "base.html" %}{% block title %}Sign in{% endblock %}
-{% block bare %}<div class="authpage"><form class="authbox" method="post">
-  <div class="brand"><span class="brand-mark">S</span><span><b>{{ station_name }}</b><span>Sign in to continue</span></span></div>
+{% extends "base.html" %}{% from "_logo.html" import logo %}{% block title %}Sign in{% endblock %}
+{% block bare %}<div class="lpage">
+{% include "auth/_landing.html" %}
+<div class="lside"><form class="lbox" method="post">
+  <div class="brand">{{ logo(46) }}<span><b>{{ station_name }}</b><small>Management system</small></span></div>
+  <h1>Welcome back</h1><p class="muted">Sign in to continue.</p>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
   {% with msgs = get_flashed_messages(with_categories=true) %}{% for c,m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
   <div class="stack">
     <div><label for="u">Username</label><input id="u" name="username" value="{{ username }}" autocomplete="username" autocapitalize="none" required autofocus></div>
     <div><label for="p">Password</label><input id="p" type="password" name="password" autocomplete="current-password" required></div>
-    <label class="check"><input type="checkbox" name="remember" value="1" checked> Keep me signed in on this phone</label>
-    <button class="btn" style="width:100%">Sign in</button>
-  </div></form></div>{% endblock %}
+    <label class="check"><input type="checkbox" name="remember" value="1" checked> Keep me signed in on this device</label>
+    <button class="btn" style="width:100%;min-height:50px">Sign in</button>
+  </div>
+  <p class="hint" style="margin-top:18px;text-align:center">Forgot your password? Ask the owner to reset it.</p>
+</form></div></div>{% endblock %}

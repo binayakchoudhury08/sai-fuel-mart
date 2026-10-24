@@ -1,29 +1,22 @@
-{% extends "base.html" %}{% from "_macros.html" import hidden, void with context %}{% block title %}Tanks{% endblock %}
+{% extends "base.html" %}{% from "_macros.html" import hidden, void with context %}{% from "_tankcard.html" import tankcard %}{% block title %}Tank Level{% endblock %}
 {% block content %}
-<div class="pagehead"><div class="grow"><h1>Tanks &amp; tankers</h1><p>Live ATG readings sync automatically from the ATG computer. Gain/loss = actual stock − (opening + received − sale); with ATG, opening and received come from the ATG and sale from the meter readings once entered.</p></div>
+<div class="pagehead"><span style="flex:1"></span>
 <div class="datenav"><a class="btn secondary small" href="?d={{ prev_day.isoformat() }}">‹</a><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/tanks?d=__D__">{% if next_day %}<a class="btn secondary small" href="?d={{ next_day.isoformat() }}">›</a>{% endif %}</div></div>
 
-{# ---------------- live tank cards (old Tank Level page) ---------------- #}
-<div class="grid2" style="margin-bottom:16px" data-tanklive>
-{% for r in rec %}{% set t = r.tank %}{% set lt = r.dip %}
-<section class="board" style="margin:0" data-tank="{{ t.id }}">
-  <h2>{{ t.name }} <span class="badge" data-sync data-at="{{ lt.updated_at.isoformat() if lt else '' }}" data-src="{{ lt.source if lt else '' }}">{% if lt %}{{ 'ATG' if lt.source=='atg' else 'Manual dip' }}{% else %}No reading today{% endif %}</span></h2>
-  <div class="led" style="grid-template-columns:1fr 1fr;margin-top:0">
-    <div><span>Stock now</span><b data-v="stock">{{ r.actual|qty(0) if r.actual is not none else '—' }}</b> <small style="color:#8796AE">L</small></div>
-    <div class="{% if r.variance is not none and r.variance < 0 %}short{% elif r.variance is not none %}ok{% endif %}" data-vbox>
-      <span>{% if r.variance is none %}Gain / short{% elif r.variance < 0 %}Short today{% elif r.variance > 0 %}Gain today{% else %}Balanced{% endif %}</span>
-      <b data-v="variance">{{ r.variance|qty if r.variance is not none else '—' }}</b></div>
-  </div>
-  <div class="meterbar {% if r.fill_pct is not none and r.fill_pct < 20 %}low{% endif %}" style="margin-top:12px;background:#1F304C"><i data-v="fillbar" style="width:{{ [r.fill_pct or 0, 100]|min }}%;background:var(--amber)"></i></div>
-  <div class="lines" style="margin-top:10px">
-    <span>Fill</span><span class="v" data-v="fill">{{ r.fill_pct ~ '%' if r.fill_pct is not none else '—' }} of {{ t.capacity_l|qty(0) }} L</span>
-    <span>Days of stock left</span><span class="v" data-v="days">{{ days_left.get(t.id, '—') }}</span>
-    {% if r.value is not none %}<span>Value of gain / short</span><span class="v" data-v="value">{{ r.value|inr }}</span>{% endif %}
-    {% if lt and lt.temperature_c is not none %}<span>Temperature</span><span class="v">{{ lt.temperature_c }} °C</span>{% endif %}
-    {% if r.atg and (r.atg.water_ltr or '0')|float > 0 %}<span style="color:#FF7A6B">Water in tank</span><span class="v" style="color:#FF7A6B">{{ r.atg.water_ltr }} L</span>{% endif %}
-  </div>
-  {% if r.receipt_mismatch %}<p style="color:#FF7A6B;margin-top:8px;font-size:.85rem">ATG shows {{ r.atg_receipt|qty }} L received today but {{ r.entered_receipt|qty }} L is recorded as tanker receipts. Record the tanker receipt below.</p>{% endif %}
-</section>{% endfor %}
+{# ---------------- tank cards ---------------- #}
+<nav class="tabs" data-tabs>
+  <a href="#overview" data-show="overview">Overview</a><a href="#stock" data-show="stock">Stock Check</a>
+  {% if atg_rows %}<a href="#atg" data-show="atg">ATG Readings</a>{% endif %}<a href="#receipts" data-show="receipts">Tanker Receipts</a><a href="#history" data-show="history">History</a></nav>
+<div id="overview" data-tab="overview">
+<div class="tankgrid" data-tanklive style="margin-bottom:16px">
+{% for r in rec %}{% set lt = r.dip %}
+  {% set extra %}{% if lt %}<span class="badge" data-sync data-at="{{ lt.updated_at.isoformat() }}" data-src="{{ lt.source }}">{{ 'ATG' if lt.source=='atg' else 'Manual dip' }}</span>{% else %}<span class="badge open">No reading today</span>{% endif %}
+    {% if days_left.get(r.tank.id) %} · ~{{ days_left[r.tank.id] }} days left{% endif %}
+    {% if r.variance is not none %}<br>{{ 'Gain' if r.variance > 0 else ('Short' if r.variance < 0 else 'Balanced') }} {{ r.variance|qty }} L{% if r.value is not none %} ({{ r.value|rs }}){% endif %}{% endif %}
+    {% if r.atg and (r.atg.water_ltr or '0')|float > 0 %}<br><span class="neg">Water {{ r.atg.water_ltr }} L</span>{% endif %}
+    {% if r.receipt_mismatch %}<br><span class="neg">Tanker not recorded</span>{% endif %}{% endset %}
+  {{ tankcard(r.tank.name, r.tank.fuel_code, r.fill_pct, r.tank.capacity_l, r.actual, extra) }}
+{% endfor %}
 </div>
 <div class="stats"><div><b class="{{ 'pos' if mt.gain }}">{{ '+' if mt.gain }}{{ mt.gain|qty }} L</b><span>Gain this month · {{ mt.gain_value|inr }}</span></div>
 <div><b class="{{ 'neg' if mt.short }}">{{ '−' if mt.short }}{{ mt.short|qty }} L</b><span>Shortage this month · {{ mt.short_value|inr }}</span></div>
@@ -32,7 +25,8 @@
 <div><b>{{ stats.hsd|qty }} L</b><span>HSD received this month</span></div><div><b class="{{ 'pos' if stats.gain_mm }}">{{ '+' if stats.gain_mm }}{{ stats.gain_mm|qty }} mm</b><span>Dip gain this month</span></div>
 <div><b class="{{ 'neg' if stats.short_mm }}">{{ '−' if stats.short_mm }}{{ stats.short_mm|qty }} mm</b><span>Dip shortage this month</span></div><div><b class="{% if stats.density_alerts %}neg{% endif %}">{{ stats.density_alerts }}</b><span>Density alerts (&gt;3 kg/m³)</span></div>
 <div><b class="{% if stats.short_challans %}neg{% endif %}">{{ stats.short_challans }}</b><span>Challans with shortage</span></div><div><b>{{ stats.last|d if stats.last else '—' }}</b><span>Last delivery</span></div></div>
-<section class="section"><header><h2>Stock check for {{ d|d }}</h2></header>
+</div>
+<section class="section" id="stock" data-tab="stock"><header><h2>Stock check for {{ d|d }}</h2></header>
 <form method="post" action="{{ url_for('tanks.save_dip') }}">{{ hidden() }}<input type="hidden" name="business_date" value="{{ d.isoformat() }}">
 <div class="body flush tablewrap"><table><thead><tr><th>Tank</th><th class="num">Opening</th><th class="num">+ Received</th><th class="num">− Sale</th><th class="num">= Book stock</th><th>Dip stock (L)</th><th>Dip mm</th><th>Water mm</th><th class="num">Gain / loss</th></tr></thead><tbody>
 {% for r in rec %}<tr><td><b>{{ r.tank.name }}</b><br><small>{{ r.tank.capacity_l|qty(0) }} L{% if days_left.get(r.tank.id) %} · ~{{ days_left[r.tank.id] }} days left{% endif %}{% if r.dip and r.dip.source=='atg' %} · <span class="badge">ATG</span>{% endif %}</small></td>
@@ -48,14 +42,14 @@
 
 
 {% set atg_rows = rec|selectattr('atg')|list %}
-{% if atg_rows %}<section class="section"><header><h2>Detailed live readings (from ATG)</h2></header><div class="body flush tablewrap"><table>
+{% if atg_rows %}<section class="section" id="atg" data-tab="atg"><header><h2>Detailed live readings (from ATG)</h2></header><div class="body flush tablewrap"><table>
 <thead><tr><th>Reading</th>{% for r in atg_rows %}<th class="num">{{ r.tank.name }}</th>{% endfor %}</tr></thead><tbody>
 {% for key, label, unit in [('capacity','Capacity','L'),('net_volume','Net volume','L'),('gross_volume','Gross volume','L'),('ullage_ltr','Ullage (space left)','L'),('dip_mm','Product dip','mm'),('water_dip_mm','Water dip','mm'),('water_ltr','Water','L'),('temperature_c','Temperature','°C'),('density_kg_m3','Density','kg/m³'),('density_at_15','Density at 15 °C','kg/m³'),('den_float_height','Density float height','mm'),('density_status','Density status',''),('decantation_status','Decantation status',''),('today_receipt_ltr','Received today (ATG)','L'),('today_sale_ltr','Sold today (ATG)','L')] %}
 <tr><td>{{ label }}</td>{% for r in atg_rows %}<td class="num">{{ r.atg.get(key) or '—' }} {% if r.atg.get(key) and unit %}<small>{{ unit }}</small>{% endif %}</td>{% endfor %}</tr>{% endfor %}
 <tr><td>Sold today (meter readings)</td>{% for r in atg_rows %}<td class="num">{{ r.meter_sold|qty if r.meter_sold is not none else 'not entered yet' }}</td>{% endfor %}</tr>
 <tr><td>Last sync</td>{% for r in atg_rows %}<td class="num">{{ r.dip.updated_at.strftime('%d %b %I:%M %p') }}</td>{% endfor %}</tr>
 </tbody></table></div></section>{% endif %}
-<section class="section"><header><h2>Tanker receipts (last 30 days)</h2></header>
+<section class="section" id="receipts" data-tab="receipts"><header><h2>Tanker receipts (last 30 days)</h2></header>
 <div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th>Invoice</th><th>Vehicle</th><th class="num">Invoice L</th><th class="num">Received L</th><th class="num">Short</th><th>Density ch / obs</th><th class="num">Dip var</th><th></th></tr></thead><tbody>
 {% for r in receipts %}<tr class="{% if r.voided %}void{% endif %}"><td>{{ r.business_date|d }}</td><td>{{ r.tank_name }}</td><td>{{ r.invoice_no }}</td><td>{{ r.vehicle_no }}</td>
 <td class="num">{{ r.invoice_qty_l|qty if r.invoice_qty_l else '' }}</td><td class="num">{{ r.received_qty_l|qty }}</td>
@@ -88,7 +82,7 @@
 <p class="hint">Fill only the compartments the tanker had. Received quantity per tank = sum of its compartment volumes. Density differing by more than 3 kg/m³ is flagged.</p>
 <p style="margin-top:10px"><button class="btn">Save tanker receipt</button></p></form></div></details></section>
 
-<section class="section"><header><h2>Dip history (14 days)</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th class="num">Stock L</th><th class="num">Dip mm</th><th class="num">Water mm</th><th>Source</th></tr></thead><tbody>
+<section class="section" id="history" data-tab="history"><header><h2>Dip history (14 days)</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th class="num">Stock L</th><th class="num">Dip mm</th><th class="num">Water mm</th><th>Source</th></tr></thead><tbody>
 {% for h in history %}<tr><td>{{ h.business_date|d }}</td><td>{{ h.tank_name }}</td><td class="num">{{ h.volume_l|qty }}</td><td class="num">{{ h.dip_mm|qty }}</td><td class="num">{{ h.water_mm|qty }}</td><td>{{ h.source }} · {{ h.updated_by }}</td></tr>
 {% else %}<tr><td colspan="6" class="empty">No dips recorded.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}
