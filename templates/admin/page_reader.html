@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_settings_tabs.html" import settings_tabs with context %}{% block title %}Settings{% endblock %}
+{% block content %}
+{{ settings_tabs('system') }}
+<section class="section"><header><h2>Page reader (Google Gemini, free tier)</h2>
+  {% if result %}<span class="badge {{ 'locked' if result.ok else 'stop' }}">{{ 'Working' if result.ok else 'Not working' }}</span>{% endif %}</header>
+<div class="body flush tablewrap"><table><tbody>
+<tr><td>GEMINI_API_KEY in Vercel</td><td>{% if ready %}<span class="match ok">✓ set</span>{% else %}<span class="match bad">✗ not set — follow the setup guide below</span>{% endif %}</td></tr>
+<tr><td>Models it will try (best first)</td><td>{{ (own_model ~ ', ' if own_model else '') ~ defaults|join(', ') }}</td></tr>
+{% if result %}
+<tr><td>Free models this key can use</td><td>{{ result.models|join(', ') if result.models else '—' }}</td></tr>
+<tr><td>Live test</td><td>{% if result.ok %}<span class="match ok">✓ {{ result.chosen }} answered in {{ (result.ms / 1000)|round(1) }} s</span>{% else %}<span class="match bad">✗ {{ result.error }}</span>{% endif %}</td></tr>
+{% endif %}
+<tr><td>Pages read</td><td>{{ usage.today }} today · {{ usage.month }} in the last 30 days</td></tr>
+</tbody></table></div>
+<div class="body btnrow"><form method="post">{{ csrf() }}<button class="btn" {% if not ready %}disabled{% endif %}>Test page reader</button></form>
+<a class="btn secondary" href="https://aistudio.google.com/rate-limit" target="_blank" rel="noopener">See my free limits (AI Studio)</a></div></section>
+
+<section class="section"><header><h2>Set up (5 minutes, free, no card)</h2></header><div class="body stack">
+<ol style="margin:0;padding-left:20px;line-height:1.8">
+<li>Open <b>aistudio.google.com/apikey</b> and sign in with a Google account (the business Gmail is best).</li>
+<li>Press <b>Create API key</b> → choose “Create key in new project” → copy the key (starts with <code>AIza…</code>).</li>
+<li>Vercel → your project → <b>Settings → Environment Variables</b> → Name <code>GEMINI_API_KEY</code>, Value = the key → Save.</li>
+<li><b>Deployments</b> → latest → ⋯ → <b>Redeploy</b>. Then come back here and press <b>Test page reader</b>.</li>
+</ol>
+<p class="hint">Free tier: Google may use the photos to improve its products, and the limits (pages per minute / per day) are set by Google and can change — see them at aistudio.google.com/rate-limit. About 10–15 pages a day is light use. If you ever want the photos kept private or higher limits, link a billing account in AI Studio (paid tier, a few rupees a month at this volume) — nothing else changes here.</p>
+</div></section>
+{% endblock %}

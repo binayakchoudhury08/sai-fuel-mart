@@ -554,3 +554,21 @@ def storage_check():
 def branding():
     """Owner shortcut: the photo slots live in Settings → Station Info."""
     return redirect(url_for("admin.settings") + "#photo")
+
+
+# ------------------------------------------------------------------ page reader (Gemini) check — owner
+@bp.route("/settings/page-reader", methods=["GET", "POST"])
+@login_required("owner")
+def page_reader():
+    import os
+    from ..scan import DEFAULT_MODELS, gemini_ready, test_connection
+    result = test_connection() if request.method == "POST" else None
+    with db.tx() as cur:
+        cur.execute("""SELECT COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) AS today,
+                              COUNT(*) FILTER (WHERE created_at > NOW() - interval '30 days') AS month
+                       FROM scans""")
+        usage = cur.fetchone()
+        if result is not None:
+            audit(cur, "admin", "page_reader", None, f"Page reader test: {'OK ' + str(result.get('chosen')) if result.get('ok') else result.get('error')}")
+    return render_template("admin/page_reader.html", ready=gemini_ready(), result=result, usage=usage,
+                           own_model=os.environ.get("GEMINI_MODEL", ""), defaults=DEFAULT_MODELS)

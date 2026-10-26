@@ -1,5 +1,43 @@
 # Sai Fuel Mart — changes
 
+## 3.9.0 — Page reader made robust (Gemini free tier, October 2026)
+
+- Uses the current free Flash models — gemini-3.8-flash first, then gemini-3.5-flash-lite, gemini-3-flash-preview,
+  gemini-2.5-flash — and moves to the next one by itself when a model is busy, limited or retired
+  (GEMINI_MODEL can force one).
+- Asks Gemini for the exact table format (structured output); falls back to plain JSON on models without it.
+- Second look: when a page's totals do not add up (or qty × rate ≠ amount), the page is read again with the
+  doubtful lines pointed out; the reading that matches the page totals is kept ("read twice" on the page).
+- Short wait and retry on the free per-minute limit; clear messages for a wrong key or a used-up limit.
+- The key is sent in a request header (not in the web address).
+- Settings → System → Page reader (AI) check: key status, which free models the key can use, live test,
+  pages read today / last 30 days, link to the free limits in AI Studio.
+- SETUP_GUIDE.md: complete, up-to-date setup (Supabase, Gemini, GitHub, Vercel, first sign-in, phones, ATG,
+  daily routine, troubleshooting).
+
+## 3.8.0 — Scan many pages of one transporter at once
+
+- Credit Transport → 📄 Scan bill pages: choose the transporter, add every page (take photos one by one or pick
+  several from the gallery), press "Read all pages" — each page is read in turn with progress shown.
+- One check screen for all pages: at the top "3 pages · 10 entries · 1,418 L · ₹1,61,609" and one chip per challan
+  (✓ 1070 · 6 entries / ⚠ 1071 · 2 to check …); below, each challan in its own section with its photo, rows and
+  page-total check; a "Save all" bar stays on screen and saves every page together.
+- Same challan photographed twice is pointed out. Saved entries are normal Credit transport entries — edit,
+  delete or add later on any date.
+
+## 3.7.0 — Scan bill page (Credit Transport)
+
+- Credit Transport → 📄 Scan bill page: photograph a handwritten credit bill page; it is read by Google Gemini
+  (free tier) and turned into Credit transport entries that the manager checks and saves in one go.
+- Reading rules: transporter from "To M/s" (learned: once "S.V.P" is confirmed as SVT it matches by itself);
+  fuel HSD; Bill No. → Challan No.; Credit Bill No. column → Slip No.; a vehicle line + the CASH line under it =
+  one entry (diesel + cash taken); a vehicle line with only an amount = cash only; ditto marks copy the row above.
+- Checks before saving: qty × rate = amount (nearest rupee), page totals (litres and ₹), vehicle not in that
+  transporter's list (closest suggested), page rate vs saved price, already-entered rows and bill numbers.
+- Nothing is saved until "Save all"; entries are created exactly like typed ones (SL numbers, rounding, credit
+  limit, audit log) and keep a link to the page photo. A scan cannot be saved twice.
+- Setup: add GEMINI_API_KEY in Vercel (free key from aistudio.google.com) and redeploy.
+
 ## 3.6.2
 
 Attendance cover when the manager is away

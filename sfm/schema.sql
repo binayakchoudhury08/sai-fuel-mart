@@ -552,3 +552,29 @@ BEGIN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
 END; $$ LANGUAGE plpgsql;
+
+-- ================================================================ v3.7: scanned credit bill pages
+CREATE TABLE IF NOT EXISTS pump.scans (
+    id          SERIAL PRIMARY KEY,
+    created_by  TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status      TEXT NOT NULL DEFAULT 'review' CHECK (status IN ('review','saved','discarded')),
+    party_id    INTEGER REFERENCES pump.parties(id),
+    written_party TEXT NOT NULL DEFAULT '',
+    bill_no     TEXT NOT NULL DEFAULT '',
+    photo_path  TEXT NOT NULL DEFAULT '',
+    raw         JSONB,
+    saved_count INTEGER NOT NULL DEFAULT 0,
+    saved_total NUMERIC(14,2)
+);
+ALTER TABLE pump.party_txns ADD COLUMN IF NOT EXISTS scan_id INTEGER;
+
+-- v3.8: several pages of one transporter scanned and saved together
+CREATE TABLE IF NOT EXISTS pump.scan_batches (
+    id          SERIAL PRIMARY KEY,
+    created_by  TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status      TEXT NOT NULL DEFAULT 'review' CHECK (status IN ('review','saved','discarded')),
+    party_id    INTEGER REFERENCES pump.parties(id),
+    saved_count INTEGER NOT NULL DEFAULT 0,
+    saved_total NUMERIC(14,2)
+);
+ALTER TABLE pump.scans ADD COLUMN IF NOT EXISTS batch_id INTEGER REFERENCES pump.scan_batches(id);

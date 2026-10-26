@@ -1,0 +1,85 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% block title %}Scan bill page{% endblock %}
+{% block content %}
+{% if not ready %}
+<section class="section"><header><h2>Set up page scanning (owner, one time, free)</h2></header><div class="body stack">
+<p>Scanning reads the handwritten bill with Google Gemini’s free tier. To switch it on:</p>
+<ol><li>Open <b>aistudio.google.com/apikey</b> → sign in with a Google account → <b>Create API key</b> → copy it (starts with AIza…).</li>
+<li>Vercel → your project → Settings → Environment Variables → add <code>GEMINI_API_KEY</code> = that key.</li>
+<li>Deployments → latest → ⋯ → <b>Redeploy</b>. Then come back here.</li></ol>
+<p class="hint">Free tier: Google may use the photos to improve its products. Bill pages hold vehicle numbers and amounts only.
+{% if user.role == 'owner' %} After setting it up, test it in <a href="{{ url_for('admin.page_reader') }}">Settings → System → Page reader (AI) check</a>.{% endif %}</p></div></section>
+{% else %}
+<section class="section"><header><h2>Scan pages of one transporter</h2></header><div class="body stack" id="scanner"
+  data-new="{{ url_for('transport.scan_batch_new') }}" data-page="/transport/scan/batch/__ID__/page">
+  <input type="hidden" id="csrf" value="{{ csrf_token() }}">
+  <div class="fields"><div><label>Transporter</label><select id="party"><option value="">Read from the page</option>
+    {% for p in parties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div></div>
+  <div class="btnrow">
+    <label class="btn" style="cursor:pointer">📷 Take photo<input type="file" accept="image/*" capture="environment" hidden data-add></label>
+    <label class="btn secondary" style="cursor:pointer">🖼 Choose from gallery<input type="file" accept="image/*" multiple hidden data-add></label>
+  </div>
+  <div class="pagethumbs" id="thumbs"></div>
+  <p id="msg" class="hint">Add every page (e.g. challan 1070, 1071, 1072…). Take one photo per page — flat, whole page, good light.</p>
+  <button class="btn go" id="go" hidden style="width:100%;min-height:52px">Read all pages</button>
+  <div class="meterbar" id="bar" hidden><i style="width:0%"></i></div>
+</div>
+<div class="body"><p class="hint">Each vehicle line + the CASH line under it becomes one entry. Bill No. → Challan No., Credit Bill No. → Slip No.
+All pages are shown together to check; nothing is saved until you press <b>Save all</b>.</p></div></section>
+{% endif %}
+<section class="section"><header><h2>Recent scans</h2></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>When</th><th>Transporter</th><th>Pages</th><th>Challans</th><th>Status</th><th class="num">Saved</th><th></th></tr></thead><tbody>
+{% for r in recent %}<tr><td>{{ r.created_at.strftime('%d %b %I:%M %p') }}</td><td>{{ r.party_name or '—' }}</td><td>{{ r.pages }}</td><td>{{ r.bills or '' }}</td>
+<td><span class="badge {{ {'saved':'locked','review':'open','discarded':''}[r.status] }}">{{ {'saved':'Saved','review':'To check','discarded':'Discarded'}[r.status] }}</span></td>
+<td class="num">{{ (r.saved_count ~ ' · ' ~ (r.saved_total|rs)) if r.status=='saved' else '' }}</td>
+<td>{% if r.status=='review' and r.pages %}<a class="btn small" href="{{ url_for('transport.scan_batch', bid=r.id) }}">Check &amp; save</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="empty">No pages scanned yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<script>
+(function(){
+  var root = document.getElementById("scanner"); if (!root) return;
+  var pages = [], thumbs = document.getElementById("thumbs"), go = document.getElementById("go"), msg = document.getElementById("msg"), bar = document.getElementById("bar");
+  function shrink(file){ return new Promise(function(res){ var img = new Image(); img.onload = function(){
+      var k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(res, "image/jpeg", 0.85); }; img.src = URL.createObjectURL(file); }); }
+  function draw(){
+    thumbs.innerHTML = "";
+    pages.forEach(function(p, i){
+      var d = document.createElement("div"); d.className = "pthumb";
+      d.innerHTML = '<img alt=""><span>Page ' + (i + 1) + '</span><small class="st">' + (p.status || "") + '</small><button type="button" aria-label="Remove">✕</button>';
+      d.querySelector("img").src = p.url; d.querySelector("button").onclick = function(){ pages.splice(i, 1); draw(); };
+      if (p.error) d.classList.add("bad");
+      thumbs.appendChild(d);
+    });
+    go.hidden = !pages.length; go.textContent = "Read all " + pages.length + " page" + (pages.length === 1 ? "" : "s");
+  }
+  root.querySelectorAll("[data-add]").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      Array.prototype.forEach.call(inp.files, function(f){ shrink(f).then(function(b){ pages.push({ blob: b, url: URL.createObjectURL(b) }); draw(); }); });
+      inp.value = "";
+    });
+  });
+  function post(url, fd){ return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){ return r.json(); }); }
+  go.addEventListener("click", function(){
+    go.disabled = true; bar.hidden = false;
+    var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value);
+    post(root.dataset.new, fd).then(function(b){
+      if (!b.ok) throw new Error(b.error || "Could not start");
+      var i = 0, failed = 0;
+      function next(){
+        if (i >= pages.length) {
+          if (failed) { msg.textContent = failed + " page(s) could not be read — retake them, or continue with the others."; go.disabled = false;
+            go.textContent = "Continue with the pages that were read"; go.onclick = function(){ location.href = b.review; }; return; }
+          location.href = b.review; return;
+        }
+        var p = pages[i]; p.status = "Reading…"; draw(); msg.textContent = "Reading page " + (i + 1) + " of " + pages.length + "… (10–30 seconds each)";
+        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "page" + (i + 1) + ".jpg");
+        post(root.dataset.page.replace("__ID__", b.id), f).then(function(r){
+          if (r.ok) { p.status = "✓ challan " + r.bill_no + " · " + r.lines + " lines"; } else { p.status = "✗ " + r.error; p.error = true; failed++; }
+        }).catch(function(){ p.status = "✗ no internet"; p.error = true; failed++; })
+          .then(function(){ i++; bar.firstElementChild.style.width = Math.round(100 * i / pages.length) + "%"; draw(); next(); });
+      }
+      next();
+    }).catch(function(e){ go.disabled = false; msg.textContent = e.message; });
+  });
+})();
+</script>
+{% endblock %}

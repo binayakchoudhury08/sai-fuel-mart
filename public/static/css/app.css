@@ -775,3 +775,59 @@ body.dark .mcard:not(.big){background:#111C36;border-color:#1F2C4A}
 body.dark .mcard .mcr{color:#8DB4FF}
 .crv{display:block;white-space:nowrap}.crx{display:block;font:500 .74rem var(--font);color:#8592AB;white-space:nowrap;margin-top:1px}
 .kpi .crx,.stats .crx{margin-top:0}
+/* scan review */
+.scanwrap{display:grid;grid-template-columns:minmax(260px,380px) 1fr;gap:16px;align-items:start}
+.scanphoto{position:sticky;top:80px}.scanphoto img{width:100%;border-radius:12px;border:1px solid var(--line)}
+.scantable input{min-height:38px;padding:6px 8px}
+.scantable td{vertical-align:top}
+.warnrow td{background:#FFFBEB}
+.noterow td{padding:2px 12px 10px;color:#9A6700;font-size:.8rem;background:#FFFBEB;border-bottom:1px solid var(--line-2)}
+@media (max-width:900px){.scanwrap{grid-template-columns:1fr}.scanphoto{position:static}}
+body.dark .warnrow td,body.dark .noterow td{background:#2E2410}
+.scantable input[data-veh]{min-width:132px;font-weight:600;letter-spacing:.02em}
+.scantable input[type=date]{min-width:138px}
+.scantable input[data-qty],.scantable input[data-rate],.scantable input[data-cash]{min-width:84px;max-width:96px!important;text-align:right}
+.scantable input[name^=slip_]{min-width:70px}
+.scantable th,.scantable td{padding:8px 6px}
+.scanwrap{grid-template-columns:minmax(240px,330px) 1fr}
+/* scan review on phones: one card per row */
+@media (max-width:900px){.scanwrap{grid-template-columns:1fr}.scanphoto{position:static}}
+@media (max-width:700px){
+  .scanform .fields{grid-template-columns:1fr}
+  .scantable thead{display:none}
+  .scantable,.scantable tbody{display:block}
+  .scantable tr[data-row]{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px 10px;padding:12px;border-top:1px solid var(--line-2)}
+  .scantable tr[data-row] td{border:0;padding:0;text-align:left!important}
+  .scantable tr[data-row] td:first-child{grid-row:span 2;align-self:start}
+  .scantable td[data-label]::before{content:attr(data-label);display:block;font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:2px}
+  .scantable td input{width:100%!important;max-width:none!important;min-width:0!important;text-align:left!important}
+  .scantable tr.noterow{display:block}.scantable tr.noterow td{display:block;padding:0 12px 10px}
+  .scantable tr.noterow td:first-child{display:none}
+  .scantable tfoot{display:block}.scantable tfoot tr{display:flex;justify-content:space-between;padding:8px 12px}
+  .scantable tfoot td{border:0;padding:0}.scantable tfoot td:empty{display:none}
+}
+@media (max-width:700px){
+  .scantable tr[data-row]{grid-template-columns:1fr 1fr}
+  .scantable tr[data-row] td:first-child{grid-column:1/-1;grid-row:auto;display:flex;align-items:center;gap:10px}
+  .scantable tr[data-row] td:first-child br{display:none}
+  .scantable td input[type=checkbox]{width:22px!important;height:22px;min-height:0}
+}
+/* multi-page scanning */
+.pagethumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.pthumb{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.pthumb img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block}
+.pthumb span{display:block;padding:6px 8px 0;font-weight:700;font-size:.82rem}
+.pthumb .st{display:block;padding:0 8px 8px;font-size:.74rem;color:#16A34A;min-height:1.2em}
+.pthumb.bad .st{color:#DC2626}
+.pthumb button{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(10,26,63,.75);color:#fff;cursor:pointer}
+.scanpage > .scanwrap{padding:0 14px 14px}
+.scansum h3{font-size:1.05rem}
+.okchip{border-color:#BBF7D0;background:#F0FDF4;color:#166534}.warnchip{border-color:#FDE68A;background:#FFFBEB;color:#92400E}
+.savebar{position:sticky;bottom:10px;z-index:6;box-shadow:0 -6px 24px rgba(15,27,51,.12)}
+@media (max-width:900px){.savebar{bottom:96px}}
+body.dark .pthumb{background:#111C36;border-color:#1F2C4A}
+@media (max-width:900px){
+  .savebar > .body:last-child{display:none}
+  .savebar .btnrow{padding:10px 12px;flex-wrap:nowrap;gap:10px;font-size:.85rem}
+  .savebar .btn{min-width:0!important;min-height:44px!important;padding:8px 18px;flex:none}
+}

@@ -297,3 +297,203 @@ def register_file(fmt):
                                     widths=[52, 24, 110, 55, 65, 45, 30, 45, 40, 60, 55, 62, 70]),
                          mimetype="application/pdf", as_attachment=True, download_name=name + ".pdf")
     abort(404)
+
+
+# ------------------------------------------------------------------ scan handwritten bill pages (many pages, one transporter)
+def _scan_rows(cur, raw, party_id, challan):
+    from ..scan import build_entries, check_against_books
+    entries, checks, page_notes = build_entries(raw)
+    already = check_against_books(cur, entries, party_id, challan)
+    if already:
+        page_notes.append(f"Challan {challan} already has {already} entr{'y' if already == 1 else 'ies'} for this transporter")
+    return entries, checks, page_notes
+
+
+@bp.route("/transport/scan")
+@login_required("transport_enter")
+def scan():
+    from ..scan import gemini_ready
+    with db.tx() as cur:
+        cur.execute("SELECT id, name FROM parties WHERE active ORDER BY name")
+        parties = cur.fetchall()
+        cur.execute("""SELECT b.*, p.name AS party_name,
+                              (SELECT COUNT(*) FROM scans s WHERE s.batch_id=b.id) AS pages,
+                              (SELECT string_agg(NULLIF(s.bill_no,''), ', ' ORDER BY s.id) FROM scans s WHERE s.batch_id=b.id) AS bills
+                       FROM scan_batches b LEFT JOIN parties p ON p.id=b.party_id ORDER BY b.id DESC LIMIT 15""")
+        recent = cur.fetchall()
+    return render_template("transport/scan.html", ready=gemini_ready(), recent=recent, parties=parties)
+
+
+@bp.route("/transport/scan/batch", methods=["POST"])
+@login_required("transport_enter")
+def scan_batch_new():
+    from flask import jsonify
+    pid = int(request.form.get("party") or 0) or None
+    with db.tx() as cur:
+        cur.execute("INSERT INTO scan_batches (created_by, party_id) VALUES (%s,%s) RETURNING id", (current_user()["username"], pid))
+        bid = cur.fetchone()["id"]
+    return jsonify({"ok": True, "id": bid, "review": url_for("transport.scan_batch", bid=bid)})
+
+
+@bp.route("/transport/scan/batch/<int:bid>/page", methods=["POST"])
+@login_required("transport_enter")
+def scan_batch_page(bid):
+    """One page per request (each read takes 10–30 s; Vercel allows 60 s per request)."""
+    import json
+    import uuid as _u
+    from flask import jsonify
+    from .. import storage
+    from ..scan import match_party, read_page
+    try:
+        b = db.one("SELECT * FROM scan_batches WHERE id=%s", (bid,))
+        if not b or b["status"] != "review":
+            raise UserError("This scan batch is already saved or discarded.")
+        f = request.files.get("photo")
+        if not f or not f.filename:
+            raise UserError("No photo received.")
+        data = f.read(4_000_001)
+        if len(data) > 4_000_000:
+            raise UserError("Photo is too big.")
+        mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+        raw = read_page(data, mime)
+        path = ""
+        if storage.ready():
+            try:
+                path = f"scans/{today():%Y-%m}/{_u.uuid4().hex}.{'png' if mime == 'image/png' else 'jpg'}"
+                storage.put(path, data, mime)
+            except Exception:
+                path = ""
+        with db.tx() as cur:
+            p, _ = match_party(cur, raw.get("party"))
+            if not b["party_id"] and p:
+                cur.execute("UPDATE scan_batches SET party_id=%s WHERE id=%s AND party_id IS NULL", (p["id"], bid))
+            cur.execute("""INSERT INTO scans (created_by, party_id, written_party, bill_no, photo_path, raw, batch_id)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                        (current_user()["username"], p["id"] if p else None, clean(raw.get("party"), 60),
+                         clean(raw.get("bill_no"), 30), path, json.dumps(raw), bid))
+            sid = cur.fetchone()["id"]
+            audit(cur, "create", "scan", sid, f"Scanned page {raw.get('bill_no') or '?'} ({raw.get('party') or '?'}): "
+                  f"{len(raw.get('rows') or [])} lines read (batch {bid})")
+        return jsonify({"ok": True, "bill_no": raw.get("bill_no") or "?", "lines": len(raw.get("rows") or [])})
+    except UserError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.route("/transport/scan/batch/<int:bid>")
+@login_required("transport_enter")
+def scan_batch(bid):
+    from ..scan import match_party
+    with db.tx() as cur:
+        cur.execute("SELECT * FROM scan_batches WHERE id=%s", (bid,))
+        b = cur.fetchone()
+        if not b:
+            abort(404)
+        cur.execute("SELECT * FROM scans WHERE batch_id=%s ORDER BY id", (bid,))
+        scans = cur.fetchall()
+        party_id = int(request.args.get("party") or b["party_id"] or 0) or None
+        pages, seen, grand = [], {}, {"entries": 0, "qty": Decimal(0), "total": Decimal(0)}
+        for s in scans:
+            raw = s["raw"] or {}
+            entries, checks, notes = _scan_rows(cur, raw, party_id, s["bill_no"])
+            if s["bill_no"] and s["bill_no"] in seen:
+                notes.insert(0, f"Same challan {s['bill_no']} as page {seen[s['bill_no']]} — was this page photographed twice?")
+            seen.setdefault(s["bill_no"], len(pages) + 1)
+            tot = sum((e["fuel_amount"] + e["cash"] for e in entries), Decimal(0))
+            qty = sum((e["qty"] or 0 for e in entries), Decimal(0))
+            grand["entries"] += len(entries); grand["qty"] += qty; grand["total"] += tot
+            pages.append({"scan": s, "entries": entries, "checks": checks, "notes": notes, "total": tot, "qty": qty,
+                          "flags": sum(1 for e in entries if e["notes"]),
+                          "ok": checks["qty_ok"] and checks["amount_ok"] and not notes})
+        _, parties = match_party(cur, (scans[0]["raw"] or {}).get("party") if scans else "")
+        rate_hsd = None
+        for pg in pages:
+            if pg["entries"] and pg["entries"][0]["date"]:
+                rate_hsd = rates_for(cur, pg["entries"][0]["date"]).get("HSD")
+                break
+    return render_template("transport/scan_review.html", b=b, pages=pages, grand=grand, parties=parties,
+                           party_id=party_id, rate_hsd=rate_hsd)
+
+
+@bp.route("/transport/scan/page/<int:sid>/photo")
+@login_required("transport_enter|bills")
+def scan_photo(sid):
+    from .. import storage
+    s = db.one("SELECT photo_path FROM scans WHERE id=%s", (sid,))
+    if not s or not s["photo_path"]:
+        abort(404)
+    link = storage.signed_download(s["photo_path"], 1800)
+    if not link:
+        abort(404)
+    return redirect(link)
+
+
+@bp.route("/transport/scan/batch/<int:bid>/save", methods=["POST"])
+@login_required("transport_enter")
+def scan_batch_save(bid):
+    import re as _re
+    with db.tx() as cur:
+        claim_form_token(cur)
+        cur.execute("SELECT * FROM scan_batches WHERE id=%s FOR UPDATE", (bid,))
+        b = cur.fetchone()
+        if not b:
+            abort(404)
+        if b["status"] != "review":
+            raise UserError("These pages were already saved or discarded.")
+        pid = int(request.form.get("party") or 0)
+        cur.execute("SELECT * FROM parties WHERE id=%s", (pid,))
+        party = cur.fetchone()
+        if not party:
+            raise UserError("Choose the transporter for these pages.")
+        cur.execute("SELECT * FROM scans WHERE batch_id=%s ORDER BY id", (bid,))
+        scans = {s["id"]: s for s in cur.fetchall()}
+        saved, total, per_page = [], Decimal(0), []
+        for sid, s in scans.items():
+            challan = clean(request.form.get(f"challan_{sid}"), 30)
+            n = int(request.form.get(f"rows_{sid}") or 0)
+            count = 0
+            for i in range(n):
+                g = lambda k: (request.form.get(f"{k}_{sid}_{i}") or "").strip()
+                if g("use") != "1":
+                    continue
+                d = parse_date(g("date"), "Date")
+                assert_transport_writable(cur, d)
+                cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
+                form = {"party": str(pid), "fuel_code": "HSD", "vehicle_no": g("vehicle"), "slip_no": g("slip"),
+                        "challan_no": challan, "remarks": f"Scanned challan {challan}".strip(), "cash_taken": g("cash") or "0"}
+                if g("qty") and to_dec(g("qty"), "Quantity") > 0:
+                    form.update(qty=g("qty"), rate=g("rate"))
+                else:
+                    form.update(kind="cash_advance")
+                try:
+                    r, _ = create_entry(cur, form, d)
+                except UserError as e:
+                    raise UserError(f"Challan {challan or '?'}, row {i + 1} ({g('vehicle') or 'cash'}): {e}")
+                cur.execute("UPDATE party_txns SET scan_id=%s WHERE id=%s", (sid, r["id"]))
+                saved.append(r); total += Decimal(r["debit"]); count += 1
+            cur.execute("UPDATE scans SET status='saved', party_id=%s, bill_no=%s, saved_count=%s WHERE id=%s",
+                        (pid, challan, count, sid))
+            per_page.append(f"{challan or '?'}: {count}")
+            key = _re.sub(r"[^A-Z0-9]", "", (s["written_party"] or "").upper())
+            if key:   # remember how this transporter is written, so the next pages match by themselves
+                cur.execute("""INSERT INTO settings (key, value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""",
+                            (f"party_alias:{key}", str(pid)))
+        if not saved:
+            raise UserError("Tick at least one row to save.")
+        cur.execute("UPDATE scan_batches SET status='saved', party_id=%s, saved_count=%s, saved_total=%s WHERE id=%s",
+                    (pid, len(saved), total, bid))
+        audit(cur, "create", "transport_entry", f"scan-batch:{bid}",
+              f"Scanned {len(scans)} page(s) for {party['name']} — {len(saved)} entries, ₹{total} ({'; '.join(per_page)})",
+              business_date=saved[0]["business_date"])
+    flash(f"{len(saved)} entries saved for {party['name']} from {len(scans)} page(s): {inr(total, decimals=0)}.", "success")
+    return redirect(url_for("transport.index", d=saved[0]["business_date"].isoformat(), party=pid))
+
+
+@bp.route("/transport/scan/batch/<int:bid>/discard", methods=["POST"])
+@login_required("transport_enter")
+def scan_batch_discard(bid):
+    with db.tx() as cur:
+        cur.execute("UPDATE scan_batches SET status='discarded' WHERE id=%s AND status='review'", (bid,))
+        cur.execute("UPDATE scans SET status='discarded' WHERE batch_id=%s AND status='review'", (bid,))
+        audit(cur, "delete", "scan", f"batch:{bid}", "Scanned pages discarded")
+    flash("Scan discarded — nothing was saved.", "info")
+    return redirect(url_for("transport.scan"))
