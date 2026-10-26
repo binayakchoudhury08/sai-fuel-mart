@@ -1,4 +1,4 @@
-# Sai Fuel Mart 3.9 — complete setup guide
+# Sai Fuel Mart 3.10 — complete setup guide
 
 Follow the steps in order. A full setup takes about an hour, and you only do it once. For an update, do step 3.4.
 
@@ -26,7 +26,9 @@ Follow the steps in order. A full setup takes about an hour, and you only do it 
 1. Open **aistudio.google.com/apikey** and sign in with a Google account. The business Gmail is best.
 2. Press **Create API key** → **Create key in new project** → copy the key (it starts with `AIza…`).
    This is `GEMINI_API_KEY`. No card is needed.
-3. Your free limits are shown at **aistudio.google.com/rate-limit**. Google sets them and can change them.
+3. *Optional:* create a **second key** the same way for **Bill Message** (`GEMINI_API_KEY_MESSAGE`). Tip: create it
+   in a **new project** — free limits count per project, so the two jobs then don't share one limit.
+4. Your free limits are shown at **aistudio.google.com/rate-limit**. Google sets them and can change them.
    About 10–15 bill pages a day is light use.
 
 What you should know about the free tier:
@@ -59,6 +61,7 @@ What you should know about the free tier:
 | `TANK_SYNC_SECRET` | any long random text (for the ATG tank-level link) |
 | `CRON_SECRET` | any long random text (protects the daily automatic job) |
 | `GEMINI_API_KEY` | the key from step 2 (turns on **Scan bill pages**) |
+| `GEMINI_API_KEY_MESSAGE` | *optional* second key for **Bill Message** (create another key the same way). If empty, `GEMINI_API_KEY` is used |
 | `SUPABASE_BUCKET` | *optional*, only if your bucket is not `proof-files` |
 | `GEMINI_MODEL` | *optional*, e.g. `gemini-3.8-flash`, only to force one model |
 
@@ -113,6 +116,7 @@ then appear in **Tank Level** with "ATG · synced".
 | During the day | Manager / staff | **Credit Transport:** type slips, or **📄 Scan bill pages** (choose transporter → add all pages → Read all → check → Save all) |
 | During the day | Staff | **Photo proofs:** dips, nozzle tests, tanker challans (phone) |
 | Evening | Manager | **Daily Closing**, 7 steps → Submit |
+| When billing a transporter | Manager / owner | **💬 Bill Message**: choose transporter → photos of all bills → Read all → check → **Copy** / **Send on WhatsApp** |
 | Any time | Owner | Dashboard, Monthly Summary, Reports, Alerts, lock closed days |
 
 Manager on leave: **Settings → Temporary Access → "Take attendance (stand-in)"**, with dates (future allowed).
@@ -137,6 +141,25 @@ For sudden absence: Attendance → **Attendance rules, backup & stand-in** → c
   read worse. Any misread shows as a **yellow row or a total mismatch**; it is never saved silently. Nothing is
   saved until **Save all**, and every entry can be edited or deleted later, on any date.
 - **Good photos:** whole page flat on a table, good light, no shadow of the phone, one page per photo.
+
+## 8b. Bill Message (message to a transporter)
+
+Credit Transport → **💬 Bill message** (or Management → Bill Message):
+1. Choose the transporter (or let it read "To M/s" from the bills) → add a photo of **every bill** → **Read all bills**.
+2. Each bill's **date** (written as DDMMYY, e.g. 12/10/26 → `121026`) and **TOTAL** are read; the TOTAL is checked
+   against the bill's rows (✓ rows add up / ⚠).
+3. Correct anything if needed (changing a date changes its label), untick a bill to leave it out.
+4. The message is built live in your format, then **Copy** or **Send on WhatsApp**:
+```
+SVT Logistics
+Bill upto 18/10/2026
+
+Bill 121026 = 54,251
+…
+--------------------
+TOTAL = 4,36,978
+```
+Tick “Line up the numbers” to send it in neat columns. Sent messages stay in the history on the same page.
 
 ## 9. Keep safe
 

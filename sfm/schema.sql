@@ -578,3 +578,18 @@ CREATE TABLE IF NOT EXISTS pump.scan_batches (
     saved_total NUMERIC(14,2)
 );
 ALTER TABLE pump.scans ADD COLUMN IF NOT EXISTS batch_id INTEGER REFERENCES pump.scan_batches(id);
+
+-- v3.10: bill messages for transporters (date + total of each bill → WhatsApp message)
+CREATE TABLE IF NOT EXISTS pump.msg_batches (
+    id         SERIAL PRIMARY KEY,
+    created_by TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    party_id   INTEGER REFERENCES pump.parties(id),
+    sent_text  TEXT
+);
+CREATE TABLE IF NOT EXISTS pump.msg_bills (
+    id         SERIAL PRIMARY KEY,
+    batch_id   INTEGER NOT NULL REFERENCES pump.msg_batches(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    photo_path TEXT NOT NULL DEFAULT '',
+    raw        JSONB
+);

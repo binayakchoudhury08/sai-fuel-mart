@@ -1,0 +1,75 @@
+{% extends "base.html" %}{% block title %}Bill Message{% endblock %}
+{% block content %}
+{% if not ready %}
+<section class="section"><header><h2>Set up (owner, one time, free)</h2></header><div class="body stack">
+<ol style="margin:0;padding-left:20px;line-height:1.8"><li>aistudio.google.com/apikey → <b>Create API key</b> (a second key, just for bill messages) → copy it.</li>
+<li>Vercel → Settings → Environment Variables → <code>GEMINI_API_KEY_MESSAGE</code> = that key → Save → <b>Redeploy</b>.</li></ol>
+<p class="hint">If you don’t add a second key, the scanning key (<code>GEMINI_API_KEY</code>) is used.</p></div></section>
+{% else %}
+<section class="section"><header><h2>Bill message for a transporter</h2></header><div class="body stack" id="scanner"
+  data-new="{{ url_for('messages.batch_new') }}" data-page="/bill-message/batch/__ID__/page">
+  <input type="hidden" id="csrf" value="{{ csrf_token() }}">
+  <div class="fields"><div><label>Transporter</label><select id="party"><option value="">Read from the bills</option>
+    {% for p in parties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div></div>
+  <div class="btnrow">
+    <label class="btn" style="cursor:pointer">📷 Take photo<input type="file" accept="image/*" capture="environment" hidden data-add></label>
+    <label class="btn secondary" style="cursor:pointer">🖼 Choose from gallery<input type="file" accept="image/*" multiple hidden data-add></label>
+  </div>
+  <div class="pagethumbs" id="thumbs"></div>
+  <p id="msg" class="hint">Add every bill of this transporter (one photo per bill). Each bill’s date and TOTAL are read.</p>
+  <button class="btn go" id="go" hidden style="width:100%;min-height:52px">Read all bills</button>
+  <div class="meterbar" id="bar" hidden><i style="width:0%"></i></div>
+</div></section>
+{% endif %}
+<section class="section"><header><h2>Recent messages</h2></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>When</th><th>Transporter</th><th>Bills</th><th>Message</th><th></th></tr></thead><tbody>
+{% for r in recent %}<tr><td>{{ r.created_at.strftime('%d %b %I:%M %p') }}</td><td>{{ r.party_name or '—' }}</td><td>{{ r.bills }}</td>
+<td><small class="muted">{{ (r.sent_text or '').splitlines()[1] if r.sent_text and r.sent_text.splitlines()|length > 1 else '' }} {{ (r.sent_text or '').splitlines()[-1] if r.sent_text else 'not sent yet' }}</small></td>
+<td>{% if r.bills %}<a class="btn small secondary" href="{{ url_for('messages.batch', bid=r.id) }}">Open</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No bill messages yet.</td></tr>{% endfor %}</tbody></table></div></section>
+<script>
+(function(){
+  var root = document.getElementById("scanner"); if (!root) return;
+  var pages = [], thumbs = document.getElementById("thumbs"), go = document.getElementById("go"), msg = document.getElementById("msg"), bar = document.getElementById("bar");
+  function shrink(file){ return new Promise(function(res){ var img = new Image(); img.onload = function(){
+      var k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(res, "image/jpeg", 0.85); }; img.src = URL.createObjectURL(file); }); }
+  function draw(){
+    thumbs.innerHTML = "";
+    pages.forEach(function(p, i){
+      var d = document.createElement("div"); d.className = "pthumb" + (p.error ? " bad" : "");
+      d.innerHTML = '<img alt=""><span>Bill ' + (i + 1) + '</span><small class="st">' + (p.status || "") + '</small><button type="button" aria-label="Remove">✕</button>';
+      d.querySelector("img").src = p.url; d.querySelector("button").onclick = function(){ pages.splice(i, 1); draw(); };
+      thumbs.appendChild(d);
+    });
+    go.hidden = !pages.length; go.textContent = "Read all " + pages.length + " bill" + (pages.length === 1 ? "" : "s");
+  }
+  root.querySelectorAll("[data-add]").forEach(function(inp){
+    inp.addEventListener("change", function(){
+      Array.prototype.forEach.call(inp.files, function(f){ shrink(f).then(function(b){ pages.push({ blob: b, url: URL.createObjectURL(b) }); draw(); }); });
+      inp.value = "";
+    });
+  });
+  function post(url, fd){ return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){ return r.json(); }); }
+  go.addEventListener("click", function(){
+    go.disabled = true; bar.hidden = false;
+    var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value);
+    post(root.dataset.new, fd).then(function(b){
+      var i = 0, failed = 0;
+      function next(){
+        if (i >= pages.length) { if (failed) { msg.textContent = failed + " bill(s) could not be read — retake them, or continue."; go.disabled = false;
+            go.textContent = "Continue with the bills that were read"; go.onclick = function(){ location.href = b.review; }; return; }
+          location.href = b.review; return; }
+        var p = pages[i]; p.status = "Reading…"; draw(); msg.textContent = "Reading bill " + (i + 1) + " of " + pages.length + "…";
+        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "bill" + (i + 1) + ".jpg");
+        post(root.dataset.page.replace("__ID__", b.id), f).then(function(r){
+          if (r.ok) p.status = "✓ Bill " + r.label + " = " + r.total + (r.checked ? "" : " ⚠"); else { p.status = "✗ " + r.error; p.error = true; failed++; }
+        }).catch(function(){ p.status = "✗ no internet"; p.error = true; failed++; })
+          .then(function(){ i++; bar.firstElementChild.style.width = Math.round(100 * i / pages.length) + "%"; draw(); next(); });
+      }
+      next();
+    }).catch(function(e){ go.disabled = false; msg.textContent = "Could not start — check the internet."; });
+  });
+})();
+</script>
+{% endblock %}

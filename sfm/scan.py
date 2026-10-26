@@ -50,8 +50,14 @@ SCHEMA = {
 }
 
 
-def gemini_ready():
-    return bool(os.environ.get("GEMINI_API_KEY"))
+def _key(job="scan"):
+    if job == "message":
+        return os.environ.get("GEMINI_API_KEY_MESSAGE") or os.environ.get("GEMINI_API_KEY", "")
+    return os.environ.get("GEMINI_API_KEY", "")
+
+
+def gemini_ready(job="scan"):
+    return bool(_key(job))
 
 
 def _models():
@@ -63,9 +69,9 @@ class _Busy(Exception):
     pass
 
 
-def _call(model, parts, schema=True):
+def _call(model, parts, schema=True, job="scan"):
     """One generateContent call. Returns parsed JSON, or raises _Busy (try another model) / UserError."""
-    key = os.environ.get("GEMINI_API_KEY", "")
+    key = _key(job)
     cfg = {"temperature": 0, "responseMimeType": "application/json"}
     if schema:
         cfg["responseSchema"] = SCHEMA
@@ -90,22 +96,23 @@ def _call(model, parts, schema=True):
         pass
     low = msg.lower()
     if r.status_code in (400, 403) and ("api key" in low or "api_key" in low or "permission" in low and "key" in low):
-        raise UserError("Google refused the key (GEMINI_API_KEY). Copy it again from aistudio.google.com/apikey.")
+        raise UserError(f"Google refused the key ({'GEMINI_API_KEY_MESSAGE' if job == 'message' and os.environ.get('GEMINI_API_KEY_MESSAGE') else 'GEMINI_API_KEY'}). "
+                        "Copy it again from aistudio.google.com/apikey.")
     if r.status_code == 400 and schema and ("schema" in low or "response" in low or "field" in low):
-        return _call(model, parts, schema=False)     # older models: plain JSON answer instead of a schema
+        return _call(model, parts, schema=False, job=job)     # older models: plain JSON answer instead of a schema
     if r.status_code in (404, 429, 500, 503, 504) or "not found" in low or "not supported" in low:
         raise _Busy(f"{r.status_code} {msg[:80]}")
     raise UserError(f"The page reader refused the photo ({r.status_code}): {msg[:160]}")
 
 
-def _ask(parts):
+def _ask(parts, job="scan"):
     """Try each free model; a busy / limited / retired model falls through to the next one."""
-    if not gemini_ready():
+    if not gemini_ready(job):
         raise UserError("Page scanning is not set up yet. The owner must add GEMINI_API_KEY in Vercel (see the setup guide).")
     last = ""
     for attempt, model in enumerate(_models()):
         try:
-            out = _call(model, parts)
+            out = _call(model, parts, job=job)
             out["_model"] = model
             return out
         except _Busy as e:
@@ -120,11 +127,11 @@ def _ask(parts):
     raise UserError("The page reader is not answering right now. Try again in a minute.")
 
 
-def read_page(image_bytes, mime="image/jpeg"):
+def read_page(image_bytes, mime="image/jpeg", job="scan"):
     """Photo → transcription. If the page's own totals do not add up, a second, focused look is taken
     at the doubtful lines, and the reading whose totals match is kept."""
     img = {"inline_data": {"mime_type": mime, "data": base64.b64encode(image_bytes).decode()}}
-    first = _ask([img, {"text": PROMPT}])
+    first = _ask([img, {"text": PROMPT}], job)
     entries, checks, notes = build_entries(first)
     bad_rows = [i + 1 for i, r in enumerate(first.get("rows") or []) if _row_mismatch(r, first)]
     if (checks["qty_ok"] and checks["amount_ok"]) and not bad_rows:
@@ -136,7 +143,7 @@ def read_page(image_bytes, mime="image/jpeg"):
             "Look at the photo again very carefully, digit by digit, especially those rows and the TOTAL line, "
             "and return the corrected full transcription in the same format. Still copy exactly what is written.")
     try:
-        second = _ask([img, {"text": PROMPT + "\n" + hint}])
+        second = _ask([img, {"text": PROMPT + "\n" + hint}], job)
     except UserError:
         first["_pass"] = 1
         return first
@@ -163,12 +170,12 @@ def _row_mismatch(row, raw):
     return bool(rate) and abs(rupee(q * rate) - a) > 1
 
 
-def test_connection():
+def test_connection(job="scan"):
     """Owner's “Test page reader”: which free models this key can use, and a tiny live call."""
     import time
-    if not gemini_ready():
-        return {"ok": False, "error": "GEMINI_API_KEY is not set in Vercel."}
-    key = os.environ.get("GEMINI_API_KEY", "")
+    if not gemini_ready(job):
+        return {"ok": False, "error": "The key is not set in Vercel."}
+    key = _key(job)
     out = {"ok": False, "models": [], "chosen": None, "ms": None, "error": None}
     try:
         r = requests.get(GEMINI_URL, headers={"x-goog-api-key": key}, params={"pageSize": 200}, timeout=20)
@@ -394,3 +401,55 @@ def check_against_books(cur, entries, party_id, challan, fuel_code="HSD"):
                        AND kind IN ('fuel','cash_advance')""", (party_id, challan))
         return cur.fetchone()["n"]
     return 0
+
+
+# ------------------------------------------------------------------ bill message (date + total of each bill)
+def bill_summary(raw):
+    """One bill page → {label DDMMYY, date, total, rows_sum, ok}. The page TOTAL is used; it is checked against
+    the sum of the row amounts (fuel + cash lines)."""
+    entries, checks, _ = build_entries(raw)
+    d = parse_date(raw.get("bill_date")) or next((e["date"] for e in entries if e["date"]), None)
+    rows_sum = checks["sum_amount"]
+    total = checks["total_amount"] if checks["total_amount"] is not None else rows_sum
+    return {"date": d, "label": d.strftime("%d%m%y") if d else (raw.get("bill_no") or ""), "bill_no": raw.get("bill_no") or "",
+            "total": rupee(total or 0), "rows_sum": rupee(rows_sum or 0),
+            "ok": checks["total_amount"] is not None and abs((total or 0) - rows_sum) <= 1,
+            "party": raw.get("party") or ""}
+
+
+def indian(n):
+    """54251 → '54,251'; 436978 → '4,36,978'."""
+    n = int(rupee(n))
+    s, neg = str(abs(n)), n < 0
+    if len(s) > 3:
+        head, tail = s[:-3], s[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:]); head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        s = ",".join(parts) + "," + tail
+    return ("-" if neg else "") + s
+
+
+def bill_message(party_name, bills, aligned=False):
+    """The message exactly as the owner sends it."""
+    bills = [b for b in bills if b.get("use", True)]
+    if not bills:
+        return ""
+    upto = max((b["date"] for b in bills if b.get("date")), default=None)
+    total = sum((Decimal(b["total"]) for b in bills), Decimal(0))
+    lines = [party_name, f"Bill upto {upto:%d/%m/%Y}" if upto else "Bill upto", ""]
+    if aligned:
+        w = max(len(b["label"]) for b in bills)
+        aw = max(len(indian(b["total"])) for b in bills + [{"total": total}])
+        for b in bills:
+            lines.append(f"Bill {b['label']:<{w}} = {indian(b['total']):>{aw}}")
+        lines.append(" " * (w + 8) + "-" * (aw + 2))
+        lines.append(f"{'TOTAL':<{w + 5}} = {indian(total):>{aw}}")
+        return "```\n" + "\n".join(lines) + "\n```"
+    for b in bills:
+        lines.append(f"Bill {b['label']} = {indian(b['total'])}")
+    lines.append("--------------------")
+    lines.append(f"TOTAL = {indian(total)}")
+    return "\n".join(lines)

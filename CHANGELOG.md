@@ -1,5 +1,15 @@
 # Sai Fuel Mart — changes
 
+## 3.10.0 — Bill Message
+
+- New section **Bill Message** (Credit Transport → 💬 Bill message, and Management → Bill Message): photos of a
+  transporter's bills → each bill's date (as DDMMYY) and TOTAL → the owner's message, e.g.
+  "SVT Logistics / Bill upto 18/10/2026 / Bill 121026 = 54,251 … / TOTAL = 4,36,978".
+- Each TOTAL is checked against the bill's rows (second look when they don't match); same bill twice is pointed out.
+- Everything can be corrected before sending; live message; Copy and Send on WhatsApp; optional lined-up columns;
+  history of sent messages.
+- Uses its own key GEMINI_API_KEY_MESSAGE (falls back to GEMINI_API_KEY).
+
 ## 3.9.0 — Page reader made robust (Gemini free tier, October 2026)
 
 - Uses the current free Flash models — gemini-3.8-flash first, then gemini-3.5-flash-lite, gemini-3-flash-preview,

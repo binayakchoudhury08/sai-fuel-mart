@@ -831,3 +831,10 @@ body.dark .pthumb{background:#111C36;border-color:#1F2C4A}
   .savebar .btnrow{padding:10px 12px;flex-wrap:nowrap;gap:10px;font-size:.85rem}
   .savebar .btn{min-width:0!important;min-height:44px!important;padding:8px 18px;flex:none}
 }
+/* bill message */
+.msgwrap{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;align-items:start}
+.msgcard{position:sticky;top:80px}
+.msgcard textarea{width:100%;font:500 .95rem/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#F8FAFD;min-height:300px}
+@media (max-width:900px){.msgwrap{grid-template-columns:1fr}.msgcard{position:static}}
+@media (max-width:700px){.billtable tr[data-row]{grid-template-columns:1fr 1fr}}
+body.dark .msgcard textarea{background:#0E1830}

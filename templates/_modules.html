@@ -13,6 +13,7 @@
 ] %}
 {% set EXTRA = [
   ('main.sales',       'log',   'Sales / Transactions','Every sale & slip',           '--c-closing',   'closing_enter|reports','main.sales'),
+  ('messages.index',   'truck', 'Bill Message',      'Bill totals for a transporter','--c-transport', 'transport_enter|bills','messages.'),
   ('parties.index',    'wallet','Party Accounts',     'Balances & payments',         '--c-accounts',  'accounts_view',       'parties.'),
   ('staff.salary',     'rupee', 'Salary',             'Salary sheet',                '--c-staff',     'salary',              'staff.salary'),
   ('proofs.index',     'cam',   'Photo Proofs',       'Dip & nozzle proofs',         '--c-proofs',    '',                    'proofs.'),

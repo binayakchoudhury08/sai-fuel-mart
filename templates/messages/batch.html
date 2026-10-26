@@ -1,0 +1,68 @@
+{% extends "base.html" %}{% block title %}Bill Message{% endblock %}
+{% block content %}
+<div class="msgwrap" data-msg data-sent="{{ url_for('messages.sent', bid=b.id) }}">
+<input type="hidden" id="csrf" value="{{ csrf_token() }}">
+<section class="section"><header><h2>Bills read ({{ bills|length }})</h2></header>
+  <div class="body"><div class="fields"><div><label>Transporter (top line of the message)</label>
+    <select id="party">{% for p in parties %}<option value="{{ p.id }}" data-name="{{ p.name }}" {% if p.name == party_name %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      {% if party_name and party_name not in parties|map(attribute='name')|list %}<option value="" data-name="{{ party_name }}" selected>{{ party_name }}</option>{% endif %}</select></div></div></div>
+  <div class="body flush tablewrap"><table class="scantable billtable"><thead><tr><th></th><th>Bill (DDMMYY)</th><th>Date</th><th class="num">Total ₹</th><th>Check</th><th></th></tr></thead><tbody>
+  {% for x in bills %}<tr data-row>
+    <td><input type="checkbox" checked data-use aria-label="Include"></td>
+    <td data-label="Bill"><input data-label-in value="{{ x.label }}" style="max-width:120px"></td>
+    <td data-label="Date"><input type="date" data-date value="{{ x.date.isoformat() if x.date else '' }}"></td>
+    <td class="num" data-label="Total ₹"><input data-total value="{{ x.total|int }}" inputmode="numeric" style="max-width:120px"></td>
+    <td data-label="Check">{% if x.ok %}<span class="match ok">✓ rows add up</span>{% else %}<span class="match bad">⚠ rows {{ indian(x.rows_sum) }}</span>{% endif %}{% if x.dup %} <span class="match bad">⚠ same bill twice?</span>{% endif %}</td>
+    <td>{% if x.photo %}<a class="btn small secondary" href="{{ url_for('messages.photo', mid=x.id) }}" target="_blank" rel="noopener">Photo</a>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No bills were read.</td></tr>{% endfor %}</tbody></table></div>
+  <div class="body"><label class="check"><input type="checkbox" id="aligned"> Line up the numbers (WhatsApp shows it in neat columns)</label></div>
+</section>
+<section class="section msgcard"><header><h2>Message</h2></header><div class="body">
+  <textarea id="text" rows="14" spellcheck="false">{{ message }}</textarea>
+  <div class="btnrow" style="margin-top:10px">
+    <button type="button" class="btn" id="copy">📋 Copy</button>
+    <a class="btn go" id="wa" href="#" target="_blank" rel="noopener">Send on WhatsApp</a>
+    <span class="hint" id="note"></span></div></div></section>
+</div>
+<script>
+(function(){
+  var root = document.querySelector("[data-msg]"); if (!root) return;
+  var text = document.getElementById("text"), party = document.getElementById("party"), al = document.getElementById("aligned"), edited = false;
+  function indian(n){ n = Math.round(n); var s = String(Math.abs(n)); if (s.length > 3) { var h = s.slice(0, -3), t = s.slice(-3), p = [];
+      while (h.length > 2) { p.unshift(h.slice(-2)); h = h.slice(0, -2); } if (h) p.unshift(h); s = p.join(",") + "," + t; } return (n < 0 ? "-" : "") + s; }
+  function pad(s, w, right){ s = String(s); while (s.length < w) s = right ? " " + s : s + " "; return s; }
+  function build(){
+    var bills = [];
+    root.querySelectorAll("[data-row]").forEach(function(r){ if (!r.querySelector("[data-use]").checked) return;
+      bills.push({ label: r.querySelector("[data-label-in]").value.trim(), date: r.querySelector("[data-date]").value, total: parseFloat(r.querySelector("[data-total]").value.replace(/,/g, "")) || 0 }); });
+    if (!bills.length) return "";
+    var upto = bills.map(function(b){ return b.date; }).filter(Boolean).sort().pop(), total = bills.reduce(function(a, b){ return a + b.total; }, 0);
+    var name = party.options[party.selectedIndex] ? party.options[party.selectedIndex].dataset.name : "";
+    var d = upto ? upto.split("-") : null, lines = [name, "Bill upto " + (d ? d[2] + "/" + d[1] + "/" + d[0] : ""), ""];
+    if (al.checked) {
+      var w = Math.max.apply(null, bills.map(function(b){ return b.label.length; })), aw = Math.max(indian(total).length, Math.max.apply(null, bills.map(function(b){ return indian(b.total).length; })));
+      bills.forEach(function(b){ lines.push("Bill " + pad(b.label, w) + " = " + pad(indian(b.total), aw, true)); });
+      lines.push(pad("", w + 8) + new Array(aw + 3).join("-")); lines.push(pad("TOTAL", w + 5) + " = " + pad(indian(total), aw, true));
+      return "```\n" + lines.join("\n") + "\n```";
+    }
+    bills.forEach(function(b){ lines.push("Bill " + b.label + " = " + indian(b.total)); });
+    lines.push("--------------------"); lines.push("TOTAL = " + indian(total));
+    return lines.join("\n");
+  }
+  function refresh(){ if (!edited) text.value = build(); document.getElementById("wa").href = "https://wa.me/?text=" + encodeURIComponent(text.value); }
+  root.addEventListener("input", function(e){ if (e.target === text) { edited = true; document.getElementById("wa").href = "https://wa.me/?text=" + encodeURIComponent(text.value); return; }
+    if (e.target.matches("[data-date]")) { var v = e.target.value.split("-"); if (v.length === 3) e.target.closest("tr").querySelector("[data-label-in]").value = v[2] + v[1] + v[0].slice(2); }
+    edited = false; refresh(); });
+  root.addEventListener("change", function(e){ if (e.target !== text) { edited = false; refresh(); } });
+  function keep(){ var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("text", text.value); fd.append("party", party.value);
+    fetch(root.dataset.sent, { method: "POST", body: fd, credentials: "same-origin" }); }
+  document.getElementById("copy").onclick = function(){
+    var done = function(){ document.getElementById("note").textContent = "Copied ✓"; keep(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text.value).then(done, function(){ text.select(); document.execCommand("copy"); done(); });
+    else { text.select(); document.execCommand("copy"); done(); }
+  };
+  document.getElementById("wa").addEventListener("click", keep);
+  refresh();
+})();
+</script>
+{% endblock %}

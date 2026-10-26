@@ -7,7 +7,7 @@
 {% if next_day %}<a class="btn secondary small" href="{{ url_for('transport.index', d=next_day.isoformat()) }}" aria-label="Next day">›</a>{% endif %}</div></div>
 
 {# ---------- 1. entry ---------- #}
-<section class="section" id="entry"><header><h2>New entry</h2><a class="btn" href="{{ url_for('transport.scan') }}">📄 Scan bill pages</a></header><div class="body">
+<section class="section" id="entry"><header><h2>New entry</h2><a class="btn" href="{{ url_for('transport.scan') }}">📄 Scan bill pages</a> <a class="btn secondary" href="{{ url_for('messages.index') }}">💬 Bill message</a></header><div class="body">
 <form method="post" action="{{ url_for('transport.add_entry') }}" data-transport>{{ hidden(url_for('transport.index', d=d.isoformat()) ~ '#entry') }}
 <input type="hidden" name="fuel_code" value="HSD">
 <div class="fields">

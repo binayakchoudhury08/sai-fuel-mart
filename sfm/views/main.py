@@ -466,7 +466,7 @@ def search():
                  ("Nozzle Management", "main.nozzles", ""), ("Tank Level", "tanks.index", "tanks|reports"),
                  ("Credit Transport", "transport.index", "transport_enter|bills"), ("Lube Stock", "lube.index", ""),
                  ("Attendance", "staff.index", "attendance_photo|staff_manage"), ("Reports", "reports.index", "reports"),
-                 ("Digital Collection", "reports.digital", "reports"), ("Sales / Transactions", "main.sales", "closing_enter|reports"),
+                 ("Digital Collection", "reports.digital", "reports"), ("Sales / Transactions", "main.sales", "closing_enter|reports"), ("Bill Message", "messages.index", "transport_enter|bills"),
                  ("Party Accounts", "parties.index", "accounts_view"), ("Salary", "staff.salary", "salary"),
                  ("Photo Proofs", "proofs.index", ""), ("Alerts", "main.alerts", ""), ("Settings", "admin.settings", "setup"),
                  ("Audit Log", "admin.audit_log", "audit")]

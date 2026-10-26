@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "3.9.0"
+VERSION = "3.10.0"
 
 
 def _secret_key():
@@ -62,9 +62,9 @@ def create_app():
         except Exception as e:  # keep the app up so the error page can explain
             log.exception("Schema setup failed: %s", e)
 
-    from .views import admin, auth, day, main, parties, lube, proofs, reports, staff, tanks, transport
+    from .views import admin, auth, day, main, messages, parties, lube, proofs, reports, staff, tanks, transport
     for bp in (auth.bp, main.bp, day.bp, parties.bp, lube.bp, tanks.bp, tanks.api, staff.bp, reports.bp,
-               admin.bp, transport.bp, proofs.bp):
+               admin.bp, transport.bp, proofs.bp, messages.bp):
         app.register_blueprint(bp)
 
     @app.before_request

@@ -137,4 +137,45 @@ check([x[0] for x in p71] == ["88", "89", "90"] and p71[1][1] == "cash_advance",
 with cl.session_transaction() as s: s["_csrf"] = "t"
 r = cl.post(f"/transport/scan/batch/{bid}/save", data=dict(form, _ft=uuid.uuid4().hex), follow_redirects=True)
 check("already saved" in r.get_data(as_text=True), "the same pages cannot be saved twice")
+print("Bill Message — the 7 SVT bills up to 18/10/2026")
+BILLS = [(12, 54251), (13, 75261), (14, 47827), (15, 53438), (16, 69651), (17, 82909), (18, 53641)]
+QUEUE = [{"bill_no": str(1060 + i), "bill_date": f"{d}.10.26", "party": "S.V.P",
+          "rows": [{"date": f"{d}.10.26", "particulars": "OD02CL2129", "quantity": "", "rate": "", "amount": str(t)}],
+          "total_quantity": "", "total_amount": str(t)} for i, (d, t) in enumerate(BILLS)]
+KEYS = []
+def bill_post(url, json=None, headers=None, **k):
+    KEYS.append((headers or {}).get("x-goog-api-key"))
+    return ok(QUEUE.pop(0))
+scan.requests.post = bill_post
+os.environ["GEMINI_API_KEY_MESSAGE"] = "msgkey"
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+mb = cl.post("/bill-message/batch", data={"_csrf": "t"}).json["id"]
+got = []
+for _ in BILLS:
+    with cl.session_transaction() as s_: s_["_csrf"] = "t"
+    got.append(cl.post(f"/bill-message/batch/{mb}/page", data={"_csrf": "t", "photo": (io.BytesIO(b"\xff\xd8\xff" + b"0" * 60), "b.jpg")},
+                       content_type="multipart/form-data").json)
+check(all(g["ok"] and g["checked"] for g in got) and got[0]["label"] == "121026" and got[0]["total"] == "54,251",
+      f"7 bills read, each total checked (first: Bill {got[0]['label']} = {got[0]['total']})")
+check(set(KEYS) == {"msgkey"}, "Bill Message uses its own key (GEMINI_API_KEY_MESSAGE)")
+h = cl.get(f"/bill-message/{mb}").get_data(as_text=True)
+import html as _h
+msg = _h.unescape(re.search(r'<textarea id="text"[^>]*>(.*?)</textarea>', h, re.S).group(1))
+want = """SVT Logistics
+Bill upto 18/10/2026
+
+Bill 121026 = 54,251
+Bill 131026 = 75,261
+Bill 141026 = 47,827
+Bill 151026 = 53,438
+Bill 161026 = 69,651
+Bill 171026 = 82,909
+Bill 181026 = 53,641
+--------------------
+TOTAL = 4,36,978"""
+check(msg == want, "message matches the owner's format exactly (TOTAL = 4,36,978)")
+if msg != want: print(msg)
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+cl.post(f"/bill-message/{mb}/sent", data={"_csrf": "t", "text": msg})
+check("4,36,978" in cl.get("/bill-message").get_data(as_text=True), "sent message kept in the history")
 print(); print("FAILED:" if FAILS else "ALL SCAN CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]
