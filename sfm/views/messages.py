@@ -38,7 +38,7 @@ def batch_new():
 @login_required("transport_enter|bills")
 def batch_page(bid):
     from .. import storage
-    from ..scan import bill_summary, indian, match_party, read_page
+    from ..scan import bill_summary, indian, match_party, read_bill_total
     try:
         b = db.one("SELECT * FROM msg_batches WHERE id=%s", (bid,))
         if not b:
@@ -50,7 +50,7 @@ def batch_page(bid):
         if len(data) > 4_000_000:
             raise UserError("Photo is too big.")
         mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-        raw = read_page(data, mime, job="message")
+        raw = read_bill_total(data, mime)
         path = ""
         if storage.ready():
             try:
@@ -67,7 +67,11 @@ def batch_page(bid):
             cur.execute("INSERT INTO msg_bills (batch_id, photo_path, raw) VALUES (%s,%s,%s)", (bid, path, json.dumps(raw)))
         return jsonify({"ok": True, "label": s["label"], "total": indian(s["total"]), "checked": s["ok"]})
     except UserError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "retry": True}), 400
+    except Exception:
+        import logging
+        logging.getLogger("sfm").exception("bill message page failed")
+        return jsonify({"ok": False, "error": "Something went wrong reading this bill. Press Retry.", "retry": True}), 500
 
 
 @bp.route("/bill-message/<int:bid>")

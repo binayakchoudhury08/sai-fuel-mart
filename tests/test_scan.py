@@ -142,9 +142,12 @@ BILLS = [(12, 54251), (13, 75261), (14, 47827), (15, 53438), (16, 69651), (17, 8
 QUEUE = [{"bill_no": str(1060 + i), "bill_date": f"{d}.10.26", "party": "S.V.P",
           "rows": [{"date": f"{d}.10.26", "particulars": "OD02CL2129", "quantity": "", "rate": "", "amount": str(t)}],
           "total_quantity": "", "total_amount": str(t)} for i, (d, t) in enumerate(BILLS)]
-KEYS = []
+QUEUE = [{"party": "S.V.P", "bill_no": str(1060 + i), "top_date": f"{d + 1}.10.26", "entry_dates": [f"{d}.10.26", "''"],
+          "total_amount": str(t), "amounts": [str(t - 1000), "1000"]} for i, (d, t) in enumerate(BILLS)]   # top date = next day
+KEYS, SEEN = [], []
 def bill_post(url, json=None, headers=None, **k):
     KEYS.append((headers or {}).get("x-goog-api-key"))
+    SEEN.append({"model": url.rsplit("/", 1)[1].split(":")[0], "cfg": json["generationConfig"]})
     return ok(QUEUE.pop(0))
 scan.requests.post = bill_post
 os.environ["GEMINI_API_KEY_MESSAGE"] = "msgkey"
@@ -156,8 +159,15 @@ for _ in BILLS:
     got.append(cl.post(f"/bill-message/batch/{mb}/page", data={"_csrf": "t", "photo": (io.BytesIO(b"\xff\xd8\xff" + b"0" * 60), "b.jpg")},
                        content_type="multipart/form-data").json)
 check(all(g["ok"] and g["checked"] for g in got) and got[0]["label"] == "121026" and got[0]["total"] == "54,251",
+      "uses the ENTRY date (12/10) — not the date at the top (13/10)")
+check(True,
       f"7 bills read, each total checked (first: Bill {got[0]['label']} = {got[0]['total']})")
 check(set(KEYS) == {"msgkey"}, "Bill Message uses its own key (GEMINI_API_KEY_MESSAGE)")
+check(SEEN[0]["model"] == "gemini-3.5-flash-lite", f"fastest model first for totals: {SEEN[0]['model']}")
+check(SEEN[0]["cfg"].get("thinkingConfig") == {"thinkingLevel": "minimal"}, "thinking switched off (minimal) — answers straight away")
+check(set(SEEN[0]["cfg"]["responseSchema"]["properties"]) == {"party", "bill_no", "entry_dates", "top_date", "total_amount", "amounts"},
+      "asks only for party, bill no., entry dates, TOTAL and the amount column")
+check(len(SEEN) == 7, f"one short request per bill when totals match ({len(SEEN)} for 7 bills)")
 h = cl.get(f"/bill-message/{mb}").get_data(as_text=True)
 import html as _h
 msg = _h.unescape(re.search(r'<textarea id="text"[^>]*>(.*?)</textarea>', h, re.S).group(1))
@@ -178,4 +188,65 @@ if msg != want: print(msg)
 with cl.session_transaction() as s_: s_["_csrf"] = "t"
 cl.post(f"/bill-message/{mb}/sent", data={"_csrf": "t", "text": msg})
 check("4,36,978" in cl.get("/bill-message").get_data(as_text=True), "sent message kept in the history")
+print("Fast reader — second look and thinking fallback")
+SEQ = []
+def mismatch_post(url, json=None, headers=None, **k):
+    text = json["contents"][0]["parts"][-1]["text"]
+    SEQ.append(("second" if "First reading" in text else "first"))
+    if "First reading" in text:
+        return ok({"bill_date": "12.10.26", "total_amount": "54251", "amounts": ["53251", "1000"]})
+    return ok({"bill_date": "12.10.26", "total_amount": "54751", "amounts": ["53251", "1000"]})   # 2 read as 7
+scan.requests.post = mismatch_post
+r = scan.read_bill_total(b"\xff\xd8\xff0")
+check(SEQ == ["first", "second"] and scan.bill_summary(r)["total"] == Decimal("54251") and r["_pass"] == 2,
+      "TOTAL not matching the amounts → second look fixed it (54,751 → 54,251)")
+TH = []
+def nothink_post(url, json=None, headers=None, **k):
+    TH.append("thinkingConfig" in json["generationConfig"])
+    if "thinkingConfig" in json["generationConfig"]:
+        return Resp(400, {"error": {"message": "Unknown field thinkingConfig.thinkingLevel"}})
+    return ok({"bill_date": "13.10.26", "total_amount": "75261", "amounts": ["75261"]})
+scan.requests.post = nothink_post
+r = scan.read_bill_total(b"\xff\xd8\xff0")
+check(TH == [True, False] and r["total_amount"] == "75261", "model without the thinking setting → retried without it")
+print("Bill Message — dates, models, time limit, errors")
+x = scan.bill_summary({"top_date": "26.10.26", "entry_dates": ["25.10.26", "''", "''"], "total_amount": "110718", "amounts": ["110718"]})
+check(x["label"] == "251026" and x["top_date"].day == 26, "sample bill: top 26/10, entries 25/10 → Bill 251026")
+x = scan.bill_summary({"top_date": "22.10.26", "entry_dates": ["21.10.26"], "total_amount": "5", "amounts": ["5"]})
+check(x["label"] == "211026", "top 22/10, entries 21/10 → Bill 211026")
+x = scan.bill_summary({"top_date": "22.10.26", "entry_dates": ["20.10.26", "''", "21.10.26"], "total_amount": "5", "amounts": ["5"]})
+check(x["label"] == "211026" and x["several_dates"], "entries on two dates → latest entry date, and pointed out")
+x = scan.bill_summary({"top_date": "22.10.26", "entry_dates": [], "total_amount": "5", "amounts": ["5"]})
+check(x["label"] == "221026" and x["no_entry_date"], "no entry date readable → top date used, and pointed out")
+USED = []
+def only38_get(url, headers=None, params=None, timeout=None):
+    return Resp(200, {"models": [{"name": "models/gemini-3.8-flash", "supportedGenerationMethods": ["generateContent"]}]})
+def rec_post(url, json=None, headers=None, timeout=None, **k):
+    USED.append(url.rsplit("/", 1)[1].split(":")[0])
+    return ok({"entry_dates": ["12.10.26"], "total_amount": "100", "amounts": ["100"]})
+scan._AVAILABLE.clear(); scan.requests.get, scan.requests.post = only38_get, rec_post
+os.environ["GEMINI_API_KEY_MESSAGE"] = "msgkey2"
+scan.read_bill_total(b"\xff\xd8\xff0")
+check(USED == ["gemini-3.8-flash"], f"asks Google which models the key has; skips the missing ones ({USED})")
+import time as _time, requests as _rq
+scan._AVAILABLE.clear(); scan.requests.get = lambda *a, **k: (_ for _ in ()).throw(_rq.RequestException("x"))
+def slow_post(url, json=None, headers=None, timeout=None, **k):
+    raise _rq.Timeout("slow")
+scan.requests.post = slow_post
+scan.BUDGET = 8
+t0 = _time.time()
+try:
+    scan.read_bill_total(b"\xff\xd8\xff0"); check(False, "slow Google → clear message")
+except Exception as ex:
+    check("took too long" in str(ex) and _time.time() - t0 < 9, f"slow Google → stops in time with a clear message: {ex}")
+scan.BUDGET = 45
+import sfm.views.messages as mv
+real = scan.read_bill_total
+scan.read_bill_total = lambda *a, **k: (_ for _ in ()).throw(KeyError("boom"))
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+mb2 = cl.post("/bill-message/batch", data={"_csrf": "t"}).json["id"]
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+r = cl.post(f"/bill-message/batch/{mb2}/page", data={"_csrf": "t", "photo": (io.BytesIO(b"\xff\xd8\xff0"), "b.jpg")}, content_type="multipart/form-data")
+check(r.status_code == 500 and r.is_json and r.json["retry"], "unexpected error → still a proper reply (shown as Retry, not “no internet”)")
+scan.read_bill_total = real
 print(); print("FAILED:" if FAILS else "ALL SCAN CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]

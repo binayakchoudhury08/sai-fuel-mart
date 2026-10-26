@@ -12,7 +12,8 @@
     <td data-label="Bill"><input data-label-in value="{{ x.label }}" style="max-width:120px"></td>
     <td data-label="Date"><input type="date" data-date value="{{ x.date.isoformat() if x.date else '' }}"></td>
     <td class="num" data-label="Total ₹"><input data-total value="{{ x.total|int }}" inputmode="numeric" style="max-width:120px"></td>
-    <td data-label="Check">{% if x.ok %}<span class="match ok">✓ rows add up</span>{% else %}<span class="match bad">⚠ rows {{ indian(x.rows_sum) }}</span>{% endif %}{% if x.dup %} <span class="match bad">⚠ same bill twice?</span>{% endif %}</td>
+    <td data-label="Check">{% if x.ok %}<span class="match ok">✓ rows add up</span>{% else %}<span class="match bad">⚠ rows {{ indian(x.rows_sum) }}</span>{% endif %}{% if x.dup %} <span class="match bad">⚠ same bill twice?</span>{% endif %}
+      <br><small class="muted">{% if x.no_entry_date %}⚠ no entry date found — top date used{% else %}entry date{% if x.top_date and x.top_date != x.date %} · top of bill {{ x.top_date.strftime('%d/%m') }} (not used){% endif %}{% endif %}{% if x.several_dates %} · ⚠ entries on more than one date — latest used{% endif %}</small></td>
     <td>{% if x.photo %}<a class="btn small secondary" href="{{ url_for('messages.photo', mid=x.id) }}" target="_blank" rel="noopener">Photo</a>{% endif %}</td></tr>
   {% else %}<tr><td colspan="6" class="empty">No bills were read.</td></tr>{% endfor %}</tbody></table></div>
   <div class="body"><label class="check"><input type="checkbox" id="aligned"> Line up the numbers (WhatsApp shows it in neat columns)</label></div>
@@ -58,10 +59,14 @@
     fetch(root.dataset.sent, { method: "POST", body: fd, credentials: "same-origin" }); }
   document.getElementById("copy").onclick = function(){
     var done = function(){ document.getElementById("note").textContent = "Copied ✓"; keep(); };
+    if (window.AndroidBridge && AndroidBridge.copyText) { AndroidBridge.copyText(text.value); done(); return; }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text.value).then(done, function(){ text.select(); document.execCommand("copy"); done(); });
     else { text.select(); document.execCommand("copy"); done(); }
   };
-  document.getElementById("wa").addEventListener("click", keep);
+  document.getElementById("wa").addEventListener("click", function(e){
+    keep();
+    if (window.AndroidBridge && AndroidBridge.shareWhatsApp) { e.preventDefault(); AndroidBridge.shareWhatsApp(text.value); }
+  });
   refresh();
 })();
 </script>

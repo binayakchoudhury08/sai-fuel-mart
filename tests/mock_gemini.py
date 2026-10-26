@@ -38,6 +38,7 @@ def next_page():
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
+        import time; time.sleep(float(os.environ.get("DELAY", "0")))
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         ok = self.headers.get("x-goog-api-key") == "testkey"
         parts = body["contents"][0]["parts"]
@@ -56,4 +57,5 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("127.0.0.1", int(os.environ.get("PORT", "5199"))), H).serve_forever()
+    from http.server import ThreadingHTTPServer
+    ThreadingHTTPServer(("127.0.0.1", int(os.environ.get("PORT", "5199"))), H).serve_forever()

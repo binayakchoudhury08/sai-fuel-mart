@@ -1,11 +1,11 @@
-# Sai Fuel Mart 3.10 — complete setup guide
+# Sai Fuel Mart 3.12 — complete setup guide
 
 Follow the steps in order. A full setup takes about an hour, and you only do it once. For an update, do step 3.4.
 
 | Folder / file in the package | What it is |
 |---|---|
 | `1-website-for-github/` | The website, to upload to GitHub. Vercel builds it from there. |
-| `2-android-app/SaiFuelMart-v3.6.2.apk` | The ready Android app. |
+| `2-android-app/SaiFuelMart-v3.7.0.apk` | The ready Android app. |
 | `3-android-studio-project/` | The app's source, to build it yourself (see `ANDROID_STUDIO_GUIDE.md`). |
 | `SIGNING-KEY-PASSWORDS.txt` | Passwords for the app's signing key. **Keep private.** |
 
@@ -63,7 +63,8 @@ What you should know about the free tier:
 | `GEMINI_API_KEY` | the key from step 2 (turns on **Scan bill pages**) |
 | `GEMINI_API_KEY_MESSAGE` | *optional* second key for **Bill Message** (create another key the same way). If empty, `GEMINI_API_KEY` is used |
 | `SUPABASE_BUCKET` | *optional*, only if your bucket is not `proof-files` |
-| `GEMINI_MODEL` | *optional*, e.g. `gemini-3.8-flash`, only to force one model |
+| `GEMINI_MODEL` | *optional*, e.g. `gemini-3.8-flash`, only to force one model for scanning |
+| `GEMINI_MODEL_MESSAGE` | *optional*, force one model for Bill Message (default: fastest Flash-Lite first) |
 
 4. Press **Deploy**. The first start creates the database tables by itself (about 30 seconds).
 
@@ -94,7 +95,7 @@ latest → ⋯ → Redeploy.
 
 ## 5. Phones (Android app)
 
-1. Send `SaiFuelMart-v3.6.2.apk` to each phone (WhatsApp / Drive) → tap → allow **Install unknown apps** → Install.
+1. Send `SaiFuelMart-v3.7.0.apk` to each phone (WhatsApp / Drive) → tap → allow **Install unknown apps** → Install.
 2. If your address is not `sai-fuel-mart.vercel.app`, **long-press Back** in the app → type your address → Save.
 3. Allow **Camera**, **Location** and **Microphone** when asked.
 4. **Attendance and photo proofs work only on phones.** The website refuses them from a computer.
@@ -146,8 +147,8 @@ For sudden absence: Attendance → **Attendance rules, backup & stand-in** → c
 
 Credit Transport → **💬 Bill message** (or Management → Bill Message):
 1. Choose the transporter (or let it read "To M/s" from the bills) → add a photo of **every bill** → **Read all bills**.
-2. Each bill's **date** (written as DDMMYY, e.g. 12/10/26 → `121026`) and **TOTAL** are read; the TOTAL is checked
-   against the bill's rows (✓ rows add up / ⚠).
+2. Each bill's **entry date** — the date in the Date column of the rows, **not** the date at the top — becomes the label
+   (12/10/26 → `121026`), and its **TOTAL** is read and checked against the bill's rows (✓ rows add up / ⚠).
 3. Correct anything if needed (changing a date changes its label), untick a bill to leave it out.
 4. The message is built live in your format, then **Copy** or **Send on WhatsApp**:
 ```
@@ -175,6 +176,7 @@ Tick “Line up the numbers” to send it in neat columns. Sent messages stay in
 | Photos don't upload | Settings → System → **Photo storage check**: fix the key or bucket it points to. |
 | "Page scanning is not set up" | Add `GEMINI_API_KEY` in Vercel → Redeploy. |
 | "Google refused the key" | Copy the key again from aistudio.google.com/apikey (no spaces) → Redeploy. |
+| A bill shows "took too long" / "Retrying…" | Normal on a busy moment: it retries by itself; press **↻ Retry failed bills** if one is left |
 | "Free page reader has reached its limit" | Wait a minute (per-minute limit) or until the next day (daily limit). See aistudio.google.com/rate-limit. |
 | A page reads badly | Retake it flat in good light, then **Discard** the old scan. |
 | Attendance button missing | It is phone-only, today only, 6–12, once per person (owner can change anything). |

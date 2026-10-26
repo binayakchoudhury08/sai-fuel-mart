@@ -31,9 +31,9 @@
   var root = document.getElementById("scanner"); if (!root) return;
   var pages = [], thumbs = document.getElementById("thumbs"), go = document.getElementById("go"), msg = document.getElementById("msg"), bar = document.getElementById("bar");
   function shrink(file){ return new Promise(function(res){ var img = new Image(); img.onload = function(){
-      var k = Math.min(1, 2000 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      var k = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement("canvas");
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      c.toBlob(res, "image/jpeg", 0.85); }; img.src = URL.createObjectURL(file); }); }
+      c.toBlob(res, "image/jpeg", 0.8); }; img.src = URL.createObjectURL(file); }); }
   function draw(){
     thumbs.innerHTML = "";
     pages.forEach(function(p, i){
@@ -50,24 +50,57 @@
       inp.value = "";
     });
   });
-  function post(url, fd){ return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){ return r.json(); }); }
+  function post(url, fd){
+    return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){
+      return r.text().then(function(t){
+        try { return JSON.parse(t); } catch (e) {
+          if (r.status === 504 || r.status === 502) return { ok: false, error: "The server took too long", retry: true };
+          if (r.status === 413) return { ok: false, error: "Photo too big — retake it" };
+          if (r.status === 401 || r.status === 403 || /sign in/i.test(t)) return { ok: false, error: "Signed out — sign in again" };
+          return { ok: false, error: "Server error " + r.status, retry: true };
+        }
+      });
+    }, function(){ return { ok: false, error: "No internet connection", retry: true }; });
+  }
   go.addEventListener("click", function(){
     go.disabled = true; bar.hidden = false;
     var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value);
     post(root.dataset.new, fd).then(function(b){
-      var i = 0, failed = 0;
-      function next(){
-        if (i >= pages.length) { if (failed) { msg.textContent = failed + " bill(s) could not be read — retake them, or continue."; go.disabled = false;
-            go.textContent = "Continue with the bills that were read"; go.onclick = function(){ location.href = b.review; }; return; }
-          location.href = b.review; return; }
-        var p = pages[i]; p.status = "Reading…"; draw(); msg.textContent = "Reading bill " + (i + 1) + " of " + pages.length + "…";
-        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "bill" + (i + 1) + ".jpg");
-        post(root.dataset.page.replace("__ID__", b.id), f).then(function(r){
-          if (r.ok) p.status = "✓ Bill " + r.label + " = " + r.total + (r.checked ? "" : " ⚠"); else { p.status = "✗ " + r.error; p.error = true; failed++; }
-        }).catch(function(){ p.status = "✗ no internet"; p.error = true; failed++; })
-          .then(function(){ i++; bar.firstElementChild.style.width = Math.round(100 * i / pages.length) + "%"; draw(); next(); });
+      var STATUS = function(r){ return "✓ Bill " + r.label + " = " + r.total + (r.checked ? "" : " ⚠"); };
+      var queue = pages.map(function(_, k){ return k; }), done = 0, failed = 0, t0 = Date.now(), total = queue.length;
+      function finish(){
+        if (failed) {
+          msg.textContent = failed + " bill(s) could not be read. Retry them, or continue with the others.";
+          go.disabled = false; go.textContent = "↻ Retry failed bills";
+          go.onclick = function(){
+            queue = []; pages.forEach(function(p, k){ if (p.error) { p.error = false; p.status = "Waiting…"; queue.push(k); } });
+            done = 0; failed = 0; total = queue.length; go.disabled = true; draw(); start();
+          };
+          var cont = document.getElementById("cont");
+          if (!cont) { cont = document.createElement("button"); cont.id = "cont"; cont.type = "button"; cont.className = "btn secondary";
+            cont.style.cssText = "width:100%;margin-top:8px"; go.parentNode.insertBefore(cont, go.nextSibling); }
+          cont.textContent = "Continue with the bills that were read"; cont.onclick = function(){ location.href = b.review; };
+          return;
+        }
+        location.href = b.review;
       }
-      next();
+      function next(){                         // 2 at a time
+        if (!queue.length) return;
+        var n = queue.shift(), p = pages[n]; p.status = "Reading…"; draw();
+        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "bill" + (n + 1) + ".jpg");
+        var send = function(){ return post(root.dataset.page.replace("__ID__", b.id), f); };
+        send().then(function(r){
+          if (r.ok || !r.retry) return r;
+          p.status = "Retrying…"; draw();                    // one automatic retry after a short pause
+          return new Promise(function(res){ setTimeout(res, 4000); }).then(send);
+        }).then(function(r){
+          if (r.ok) { p.status = STATUS(r); p.error = false; } else { p.status = "✗ " + r.error; p.error = true; failed++; }
+        }).then(function(){ done++; bar.firstElementChild.style.width = Math.round(100 * done / total) + "%";
+            msg.textContent = "Read " + done + " of " + total + " · " + Math.round((Date.now() - t0) / 1000) + " s"; draw();
+            if (done === total) finish(); else next(); });
+      }
+      function start(){ for (var w = 0; w < Math.min(2, queue.length); w++) next(); }
+      start();
     }).catch(function(e){ go.disabled = false; msg.textContent = "Could not start — check the internet."; });
   });
 })();

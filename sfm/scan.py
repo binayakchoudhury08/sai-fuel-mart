@@ -60,24 +60,68 @@ def gemini_ready(job="scan"):
     return bool(_key(job))
 
 
-def _models():
-    own = [m.strip() for m in os.environ.get("GEMINI_MODEL", "").split(",") if m.strip()]
-    return own + [m for m in DEFAULT_MODELS if m not in own]
+MESSAGE_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+
+
+def _models(job="scan"):
+    env = "GEMINI_MODEL_MESSAGE" if job == "message" else "GEMINI_MODEL"
+    own = [m.strip() for m in os.environ.get(env, "").split(",") if m.strip()]
+    base = MESSAGE_MODELS if job == "message" else DEFAULT_MODELS
+    return own + [m for m in base if m not in own]
+
+
+def _thinking(model):
+    """Switch Gemini's 'thinking' off/minimal — reading a page needs no reasoning, and it costs seconds."""
+    if model.startswith("gemini-2.5"):
+        return {"thinkingBudget": 0} if "lite" in model or "flash" in model else None
+    if model.startswith("gemini-3"):
+        return {"thinkingLevel": "minimal" if "lite" in model else "low"}
+    return None
 
 
 class _Busy(Exception):
     pass
 
 
-def _call(model, parts, schema=True, job="scan"):
+_AVAILABLE = {}     # key → (time, set of model names)
+
+
+def _available(job):
+    """Model names this key can use for generateContent (one quick call, remembered for an hour)."""
+    import time
+    key = _key(job)
+    hit = _AVAILABLE.get(key)
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    try:
+        r = requests.get(GEMINI_URL, headers={"x-goog-api-key": key}, params={"pageSize": 200}, timeout=6)
+        if r.status_code == 200:
+            names = {m.get("name", "").replace("models/", "") for m in r.json().get("models", [])
+                     if "generateContent" in (m.get("supportedGenerationMethods") or [])}
+            if names:
+                _AVAILABLE[key] = (time.time(), names)
+                return names
+    except Exception:
+        pass
+    return None
+
+
+BUDGET = 45        # seconds; Vercel stops a request at 60 s
+
+
+def _call(model, parts, schema=True, job="scan", think=True, timeout=None):
     """One generateContent call. Returns parsed JSON, or raises _Busy (try another model) / UserError."""
     key = _key(job)
     cfg = {"temperature": 0, "responseMimeType": "application/json"}
     if schema:
-        cfg["responseSchema"] = SCHEMA
+        cfg["responseSchema"] = MESSAGE_SCHEMA if job == "message" else SCHEMA
+    t = _thinking(model) if think else None
+    if t:
+        cfg["thinkingConfig"] = t
     body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": cfg}
     try:
-        r = requests.post(f"{GEMINI_URL}/{model}:generateContent", json=body, timeout=50,
+        r = requests.post(f"{GEMINI_URL}/{model}:generateContent", json=body,
+                          timeout=timeout or (25 if job == "message" else 40),
                           headers={"x-goog-api-key": key, "Content-Type": "application/json"})
     except requests.RequestException:
         raise _Busy("network")
@@ -98,33 +142,43 @@ def _call(model, parts, schema=True, job="scan"):
     if r.status_code in (400, 403) and ("api key" in low or "api_key" in low or "permission" in low and "key" in low):
         raise UserError(f"Google refused the key ({'GEMINI_API_KEY_MESSAGE' if job == 'message' and os.environ.get('GEMINI_API_KEY_MESSAGE') else 'GEMINI_API_KEY'}). "
                         "Copy it again from aistudio.google.com/apikey.")
+    if r.status_code == 400 and think and "thinking" in low:
+        return _call(model, parts, schema=schema, job=job, think=False, timeout=timeout)    # no thinking setting
     if r.status_code == 400 and schema and ("schema" in low or "response" in low or "field" in low):
-        return _call(model, parts, schema=False, job=job)     # older models: plain JSON answer instead of a schema
+        return _call(model, parts, schema=False, job=job, think=think, timeout=timeout)    # plain JSON instead
     if r.status_code in (404, 429, 500, 503, 504) or "not found" in low or "not supported" in low:
         raise _Busy(f"{r.status_code} {msg[:80]}")
     raise UserError(f"The page reader refused the photo ({r.status_code}): {msg[:160]}")
 
 
-def _ask(parts, job="scan"):
-    """Try each free model; a busy / limited / retired model falls through to the next one."""
+def _ask(parts, job="scan", started=None):
+    """Try each free model this key has; a busy / limited / retired model falls through to the next one.
+    Stops in time (BUDGET) so the request always gets a proper answer before Vercel's 60 s limit."""
+    import time
     if not gemini_ready(job):
         raise UserError("Page scanning is not set up yet. The owner must add GEMINI_API_KEY in Vercel (see the setup guide).")
+    started = started or time.time()
+    have = _available(job)
+    models = [m for m in _models(job) if not have or m in have] or _models(job)
     last = ""
-    for attempt, model in enumerate(_models()):
+    for attempt, model in enumerate(models):
+        left = BUDGET - (time.time() - started)
+        if left < 6:
+            break
         try:
-            out = _call(model, parts, job=job)
+            out = _call(model, parts, job=job, timeout=min(25 if job == "message" else 40, left - 2))
             out["_model"] = model
             return out
         except _Busy as e:
             last = str(e)
-            if last.startswith("429") and attempt == 0:
-                import time
-                time.sleep(4)        # free tier: short per-minute limit — wait a moment, then the next model
+            if last.startswith("429") and attempt == 0 and BUDGET - (time.time() - started) > 15:
+                time.sleep(3)        # free tier: short per-minute limit — wait a moment, then the next model
             continue
     if last.startswith("429"):
-        raise UserError("The free page reader has reached its limit for now (per minute or per day). "
-                        "Wait a minute and try again; the daily limit resets the next day.")
-    raise UserError("The page reader is not answering right now. Try again in a minute.")
+        raise UserError("The free reader has reached its limit for now. Wait a minute and press Retry.")
+    if last == "network" or time.time() - started >= BUDGET - 6:
+        raise UserError("Google took too long to answer. Press Retry.")
+    raise UserError("The reader is not answering right now. Press Retry in a minute.")
 
 
 def read_page(image_bytes, mime="image/jpeg", job="scan"):
@@ -182,14 +236,14 @@ def test_connection(job="scan"):
         if r.status_code == 200:
             names = {m.get("name", "").replace("models/", "") for m in r.json().get("models", [])
                      if "generateContent" in (m.get("supportedGenerationMethods") or [])}
-            out["models"] = [m for m in _models() if m in names]
+            out["models"] = [m for m in _models(job) if m in names]
         elif r.status_code in (400, 403):
             out["error"] = "Google refused the key. Copy it again from aistudio.google.com/apikey."
             return out
     except requests.RequestException:
         out["error"] = "Could not reach Google from the server."
         return out
-    for model in (out["models"] or _models()):
+    for model in (out["models"] or _models(job)):
         t = time.time()
         try:
             r = requests.post(f"{GEMINI_URL}/{model}:generateContent", timeout=30,
@@ -404,11 +458,67 @@ def check_against_books(cur, entries, party_id, challan, fuel_code="HSD"):
 
 
 # ------------------------------------------------------------------ bill message (date + total of each bill)
+MESSAGE_PROMPT = """Photo of a handwritten credit bill from an Indian fuel station. Read ONLY these, exactly as written:
+- party: the name after "To M/s" (e.g. "S.V.P")
+- bill_no: the printed "Bill No." at the top right
+- entry_dates: the dates written in the "Date" COLUMN of the table rows, top to bottom (the first row usually
+  has the date, the rows below have ditto marks — write those as ''). This is NOT the date at the top of the bill.
+- top_date: the date at the top of the bill next to "Date" (only for reference)
+- total_amount: the number on the TOTAL line at the bottom of the Amount column
+- amounts: every number in the Amount column, top to bottom (not the TOTAL)
+Digits only, no commas. Return JSON only."""
+
+MESSAGE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {"party": {"type": "STRING"}, "bill_no": {"type": "STRING"},
+                   "entry_dates": {"type": "ARRAY", "items": {"type": "STRING"}}, "top_date": {"type": "STRING"},
+                   "total_amount": {"type": "STRING"}, "amounts": {"type": "ARRAY", "items": {"type": "STRING"}}},
+    "required": ["entry_dates", "total_amount"],
+}
+
+
+def read_bill_total(image_bytes, mime="image/jpeg"):
+    """Fast reader for Bill Message: one short answer per bill; a second look only if the TOTAL does not match
+    the sum of the amounts on the bill (and there is time left)."""
+    import time
+    started = time.time()
+    img = {"inline_data": {"mime_type": mime, "data": base64.b64encode(image_bytes).decode()}}
+    first = _ask([img, {"text": MESSAGE_PROMPT}], "message", started)
+    s1 = bill_summary(first)
+    if s1["ok"] or not first.get("amounts") or time.time() - started > BUDGET - 20:
+        first["_pass"] = 1
+        return first
+    hint = (f"\nFirst reading: TOTAL {first.get('total_amount')} but the amounts add up to {s1['rows_sum']}. "
+            "Look again carefully at the Amount column and the TOTAL line, digit by digit.")
+    try:
+        second = _ask([img, {"text": MESSAGE_PROMPT + hint}], "message", started)
+    except UserError:
+        first["_pass"] = 1
+        return first
+    second["_pass"] = 2
+    return second if bill_summary(second)["ok"] else first
+
+
 def bill_summary(raw):
     """One bill page → {label DDMMYY, date, total, rows_sum, ok}. The page TOTAL is used; it is checked against
     the sum of the row amounts (fuel + cash lines)."""
+    if "amounts" in raw and not raw.get("rows"):          # fast reader: entry date, TOTAL and the amount column
+        written = [parse_date(x) for x in (raw.get("entry_dates") or []) if x and not is_ditto(x)]
+        written = [x for x in written if x]
+        # the ENTRY date (Date column of the rows) — never the date at the top; several dates → the latest one
+        d = max(written) if written else None
+        top = parse_date(raw.get("top_date") or raw.get("bill_date"))
+        if d is None:
+            d = top
+        rows_sum = sum((num(a) or 0 for a in raw.get("amounts") or []), Decimal(0))
+        tot = num(raw.get("total_amount"))
+        total = tot if tot is not None else rows_sum
+        return {"date": d, "label": d.strftime("%d%m%y") if d else (raw.get("bill_no") or ""), "bill_no": raw.get("bill_no") or "",
+                "total": rupee(total or 0), "rows_sum": rupee(rows_sum or 0),
+                "ok": tot is not None and bool(raw.get("amounts")) and abs(tot - rows_sum) <= 1, "party": raw.get("party") or "",
+                "top_date": top, "several_dates": len(set(written)) > 1, "no_entry_date": not written}
     entries, checks, _ = build_entries(raw)
-    d = parse_date(raw.get("bill_date")) or next((e["date"] for e in entries if e["date"]), None)
+    d = max((e["date"] for e in entries if e["date"]), default=None) or parse_date(raw.get("bill_date"))
     rows_sum = checks["sum_amount"]
     total = checks["total_amount"] if checks["total_amount"] is not None else rows_sum
     return {"date": d, "label": d.strftime("%d%m%y") if d else (raw.get("bill_no") or ""), "bill_no": raw.get("bill_no") or "",

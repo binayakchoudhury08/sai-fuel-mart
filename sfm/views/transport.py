@@ -376,7 +376,11 @@ def scan_batch_page(bid):
                   f"{len(raw.get('rows') or [])} lines read (batch {bid})")
         return jsonify({"ok": True, "bill_no": raw.get("bill_no") or "?", "lines": len(raw.get("rows") or [])})
     except UserError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "error": str(e), "retry": True}), 400
+    except Exception:
+        import logging
+        logging.getLogger("sfm").exception("scan page failed")
+        return jsonify({"ok": False, "error": "Something went wrong reading this page. Press Retry.", "retry": True}), 500
 
 
 @bp.route("/transport/scan/batch/<int:bid>")

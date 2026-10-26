@@ -1,5 +1,29 @@
 # Sai Fuel Mart — changes
 
+## 3.12.0 — Bill Message: entry date, no more "no internet"
+
+- Bill label uses the ENTRY date — the date in the Date column of the bill's rows — never the date at the top
+  (top 20, entries 19 → Bill 19…). Several entry dates → the latest, pointed out; no entry date readable → top date,
+  pointed out. The check column shows "entry date · top of bill 20/10 (not used)".
+- Why "no internet" appeared: a slow/busy Google answer could run past Vercel's 60-second limit, and the page
+  showed every non-standard answer as "no internet". Now:
+  - each request has a 45-second budget and always returns a proper answer ("took too long — Retry",
+    "limit reached — wait a minute");
+  - the reader first asks Google which models this key can use and skips the others (no time lost);
+  - bills (and scan pages) are read 2 at a time; a failed one is retried automatically once, then a
+    "↻ Retry failed bills" button re-reads only those; "Continue with the bills that were read" is still offered;
+  - real reasons are shown: time-out, limit, signed out, photo too big, no internet (only when truly offline).
+
+## 3.11.0 — Faster reading, app fixes, native app plan
+
+- Bill Message has its own fast reader: asks only for the transporter, bill no., date, TOTAL and the amount
+  column; fastest free model first (Gemini 3.5 Flash-Lite, then 3.8 Flash…); Gemini's "thinking" switched off;
+  photos sent at 1600 px; 3 bills read at the same time; a second look only when the TOTAL doesn't match.
+- Scan bill pages: thinking set to low, 2 pages read at the same time.
+- Android app 3.7.0 (versionCode 7, same key): several photos chosen from the gallery are all passed on (before,
+  only the first one arrived); Copy and Send on WhatsApp work natively (opens WhatsApp / WhatsApp Business).
+- NATIVE_APP_GUIDE.md: plan and Android Studio guide for the native app, Phase 1 and Phase 2.
+
 ## 3.10.0 — Bill Message
 
 - New section **Bill Message** (Credit Transport → 💬 Bill message, and Management → Bill Message): photos of a

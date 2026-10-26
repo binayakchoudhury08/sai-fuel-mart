@@ -57,27 +57,58 @@ All pages are shown together to check; nothing is saved until you press <b>Save 
       inp.value = "";
     });
   });
-  function post(url, fd){ return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){ return r.json(); }); }
+  function post(url, fd){
+    return fetch(url, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){
+      return r.text().then(function(t){
+        try { return JSON.parse(t); } catch (e) {
+          if (r.status === 504 || r.status === 502) return { ok: false, error: "The server took too long", retry: true };
+          if (r.status === 413) return { ok: false, error: "Photo too big — retake it" };
+          if (r.status === 401 || r.status === 403 || /sign in/i.test(t)) return { ok: false, error: "Signed out — sign in again" };
+          return { ok: false, error: "Server error " + r.status, retry: true };
+        }
+      });
+    }, function(){ return { ok: false, error: "No internet connection", retry: true }; });
+  }
   go.addEventListener("click", function(){
     go.disabled = true; bar.hidden = false;
     var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value);
     post(root.dataset.new, fd).then(function(b){
       if (!b.ok) throw new Error(b.error || "Could not start");
-      var i = 0, failed = 0;
-      function next(){
-        if (i >= pages.length) {
-          if (failed) { msg.textContent = failed + " page(s) could not be read — retake them, or continue with the others."; go.disabled = false;
-            go.textContent = "Continue with the pages that were read"; go.onclick = function(){ location.href = b.review; }; return; }
-          location.href = b.review; return;
+      var STATUS = function(r){ return "✓ challan " + r.bill_no + " · " + r.lines + " lines"; };
+      var queue = pages.map(function(_, k){ return k; }), done = 0, failed = 0, t0 = Date.now(), total = queue.length;
+      function finish(){
+        if (failed) {
+          msg.textContent = failed + " page(s) could not be read. Retry them, or continue with the others.";
+          go.disabled = false; go.textContent = "↻ Retry failed pages";
+          go.onclick = function(){
+            queue = []; pages.forEach(function(p, k){ if (p.error) { p.error = false; p.status = "Waiting…"; queue.push(k); } });
+            done = 0; failed = 0; total = queue.length; go.disabled = true; draw(); start();
+          };
+          var cont = document.getElementById("cont");
+          if (!cont) { cont = document.createElement("button"); cont.id = "cont"; cont.type = "button"; cont.className = "btn secondary";
+            cont.style.cssText = "width:100%;margin-top:8px"; go.parentNode.insertBefore(cont, go.nextSibling); }
+          cont.textContent = "Continue with the pages that were read"; cont.onclick = function(){ location.href = b.review; };
+          return;
         }
-        var p = pages[i]; p.status = "Reading…"; draw(); msg.textContent = "Reading page " + (i + 1) + " of " + pages.length + "… (10–30 seconds each)";
-        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "page" + (i + 1) + ".jpg");
-        post(root.dataset.page.replace("__ID__", b.id), f).then(function(r){
-          if (r.ok) { p.status = "✓ challan " + r.bill_no + " · " + r.lines + " lines"; } else { p.status = "✗ " + r.error; p.error = true; failed++; }
-        }).catch(function(){ p.status = "✗ no internet"; p.error = true; failed++; })
-          .then(function(){ i++; bar.firstElementChild.style.width = Math.round(100 * i / pages.length) + "%"; draw(); next(); });
+        location.href = b.review;
       }
-      next();
+      function next(){                         // 2 at a time
+        if (!queue.length) return;
+        var n = queue.shift(), p = pages[n]; p.status = "Reading…"; draw();
+        var f = new FormData(); f.append("_csrf", document.getElementById("csrf").value); f.append("photo", p.blob, "page" + (n + 1) + ".jpg");
+        var send = function(){ return post(root.dataset.page.replace("__ID__", b.id), f); };
+        send().then(function(r){
+          if (r.ok || !r.retry) return r;
+          p.status = "Retrying…"; draw();                    // one automatic retry after a short pause
+          return new Promise(function(res){ setTimeout(res, 4000); }).then(send);
+        }).then(function(r){
+          if (r.ok) { p.status = STATUS(r); p.error = false; } else { p.status = "✗ " + r.error; p.error = true; failed++; }
+        }).then(function(){ done++; bar.firstElementChild.style.width = Math.round(100 * done / total) + "%";
+            msg.textContent = "Read " + done + " of " + total + " · " + Math.round((Date.now() - t0) / 1000) + " s"; draw();
+            if (done === total) finish(); else next(); });
+      }
+      function start(){ for (var w = 0; w < Math.min(2, queue.length); w++) next(); }
+      start();
     }).catch(function(e){ go.disabled = false; msg.textContent = e.message; });
   });
 })();
