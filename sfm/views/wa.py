@@ -31,7 +31,20 @@ def verify():
                  f"WA_PHONE_ID: {ok(os.environ.get('WA_PHONE_ID'))}", f"WA_APP_SECRET: {ok(os.environ.get('WA_APP_SECRET'))}",
                  f"WA_OWNERS: {len(wa.owners())} number(s)" + ("" if wa.owners() else " — ❌ add e.g. 919876543210:boss"), "",
                  "In Meta → WhatsApp → Configuration, use exactly this page's address as the Callback URL,",
-                 "and the same word as WA_VERIFY_TOKEN as the Verify token."]
+                 "and the same word as WA_VERIFY_TOKEN as the Verify token.", ""]
+        from ..util import IST
+        with db.tx() as cur:
+            for ph, uname in wa.owners().items():
+                cur.execute("SELECT role, active FROM users WHERE username=%s", (uname,))
+                u = cur.fetchone()
+                lines.append(f"WA_OWNERS {wa.mask(ph)} → website login “{uname}”: " +
+                             (f"✅ found ({u['role']})" if u and u['active'] else "❌ no active login with this username"))
+            cur.execute("SELECT at, kind, detail FROM wa_log ORDER BY id DESC LIMIT 15")
+            ev = cur.fetchall()
+        lines += ["", "Last WhatsApp events (newest first) — send “hi”, then refresh this page:"]
+        lines += [f"{e['at'].astimezone(IST):%d %b %I:%M:%S %p}  {e['kind'].upper()}  {e['detail']}" for e in ev] or \
+                 ["(nothing received yet — if you sent “hi”, Meta did not deliver it here: check that the Callback URL is",
+                  " verified (green) and that “messages” is Subscribed under Webhook fields)"]
         return "\n".join(lines), 200, {"Content-Type": "text/plain; charset=utf-8"}
     if (request.args.get("hub.mode") == "subscribe" and mine
             and _s.compare_digest(request.args.get("hub.verify_token", "").strip(), mine)):
@@ -87,10 +100,17 @@ def receive():
     from .. import wa
     raw = request.get_data()
     if not wa.signature_ok(raw, request.headers.get("X-Hub-Signature-256")):
+        wa.log("refused", "the message's signature does not match WA_APP_SECRET — copy the App secret again "
+                          "(Meta → App settings → Basic) into Vercel, then Redeploy")
         return "bad signature", 403
     body = json.loads(raw or b"{}")
     msgs = [m for e in body.get("entry", []) for ch in e.get("changes", []) for m in ((ch.get("value") or {}).get("messages") or [])]
-    _process(msgs)
+    try:
+        _process(msgs)
+    except Exception as e:
+        import logging
+        logging.getLogger("sfm").exception("WhatsApp message failed")
+        wa.log("error", f"{type(e).__name__}: {e}")
     return "ok", 200
 
 
@@ -100,15 +120,19 @@ def _process(msgs):
     jobs = []
     for msg in msgs:
         phone = msg.get("from", "")
-        if phone not in allowed:
-            continue                               # strangers get no answer at all
+        if phone not in allowed:                   # strangers get no answer at all
+            wa.log("ignored", f"message from {wa.mask(phone)} — this number is not in WA_OWNERS "
+                              f"(WA_OWNERS has: {', '.join(wa.mask(p) for p in allowed) or 'nothing'})")
+            continue
         with db.tx() as cur:
             cur.execute("INSERT INTO wa_seen (msg_id) VALUES (%s) ON CONFLICT DO NOTHING RETURNING msg_id", (msg.get("id"),))
             if not cur.fetchone():
                 continue                           # the same message delivered twice
             user = _act_as(cur, allowed[phone], phone)
             if not user:
+                wa.log("ignored", f"{wa.mask(phone)}: username “{allowed[phone]}” in WA_OWNERS is not an active login on the website")
                 continue
+            wa.log("received", f"from {wa.mask(phone)} ({allowed[phone]}): {(msg.get('text') or {}).get('body', msg.get('type'))[:40]}")
             first = not wa.window_open(cur, phone)
             reply = wa.handle(cur, phone, user, msg)
             wa.save_state(cur, phone, wa.session(cur, phone)["state"] or {}, touch=True)

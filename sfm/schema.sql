@@ -627,3 +627,9 @@ CREATE TABLE IF NOT EXISTS pump.job_runs (
     PRIMARY KEY (job, run_key)
 );
 ALTER TABLE pump.wa_sessions ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS pump.wa_log (
+    id     BIGSERIAL PRIMARY KEY,
+    at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind   TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
+);

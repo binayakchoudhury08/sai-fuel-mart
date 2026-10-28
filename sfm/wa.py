@@ -61,6 +61,21 @@ def owners():
     return out
 
 
+def mask(phone):
+    p = re.sub(r"\D", "", phone or "")
+    return (p[:2] + "******" + p[-4:]) if len(p) > 6 else p
+
+
+def log(kind, detail=""):
+    """What happened to each WhatsApp message — shown on the check page (/api/wa/webhook in a browser)."""
+    try:
+        with db.tx() as cur:
+            cur.execute("INSERT INTO wa_log (kind, detail) VALUES (%s,%s)", (kind, str(detail)[:500]))
+            cur.execute("DELETE FROM wa_log WHERE id < (SELECT MAX(id) - 200 FROM wa_log)")
+    except Exception:
+        pass
+
+
 def signature_ok(raw, header):
     secret = os.environ.get("WA_APP_SECRET", "")
     if not secret:
@@ -85,8 +100,14 @@ def _send(phone, body):
                       headers={"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}", "Content-Type": "application/json"},
                       json=dict({"messaging_product": "whatsapp", "to": phone}, **body))
     if r.status_code >= 300:
-        import logging
-        logging.getLogger("sfm").warning("WhatsApp send failed %s: %s", r.status_code, r.text[:300])
+        try:
+            err = r.json().get("error", {})
+            why = f"{err.get('code', r.status_code)}: {err.get('message', '')} {err.get('error_data', {}).get('details', '')}"
+        except Exception:
+            why = f"{r.status_code}: {r.text[:200]}"
+        log("send failed", f"to {mask(phone)} — Meta says {why}")
+    else:
+        log("replied", f"to {mask(phone)}")
     return r.status_code < 300
 
 

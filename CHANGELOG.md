@@ -1,5 +1,12 @@
 # Sai Fuel Mart — changes
 
+## 3.16.1 — WhatsApp: see why a message got no answer
+
+- The check page (/api/wa/webhook in a browser) now lists the last WhatsApp events with the reason:
+  RECEIVED / REPLIED, IGNORED (number not in WA_OWNERS — shows which numbers it has; or username not a login),
+  REFUSED (WA_APP_SECRET does not match), SEND FAILED (Meta's exact error, e.g. invalid access token,
+  recipient not allowed), ERROR. It also checks each WA_OWNERS username exists. Numbers are partly hidden.
+
 ## 3.16.0 — Webhook check page, one-transporter bills, bills on WhatsApp
 
 - `/api/wa/webhook` opened in a browser shows a status page: version, and whether WA_VERIFY_TOKEN, WA_TOKEN,

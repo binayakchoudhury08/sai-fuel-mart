@@ -180,6 +180,10 @@ Then **Deployments → latest → ⋯ → Redeploy**.
 2. **Webhook fields → messages → Subscribe**.
 3. From your WhatsApp, send **hi** to the test number. You should get the menu within 1–2 seconds.
 
+**No answer to "hi"?** Open `https://YOUR-SITE.vercel.app/api/wa/webhook` again and look at **Last WhatsApp
+events**. It says exactly what happened: IGNORED (number / username), REFUSED (App secret), SEND FAILED (Meta's
+reason, e.g. token), or nothing at all (Meta didn't send it: Callback not green, or "messages" not subscribed).
+
 If it is still red: open
 `https://YOUR-SITE.vercel.app/api/wa/webhook?hub.mode=subscribe&hub.verify_token=YOUR-WORD&hub.challenge=123`
 - **It shows `123`** → the word is right. Re-type the Callback URL in Meta.
