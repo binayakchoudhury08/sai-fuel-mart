@@ -505,3 +505,31 @@ def search():
     for g_, t, d_, h in res:
         groups.setdefault(g_, []).append((t, d_, h))
     return render_template("search.html", q=q, groups=groups)
+
+
+# ------------------------------------------------------------------ public pages Meta asks for (publishing the WhatsApp app)
+@bp.route("/privacy")
+def privacy():
+    return render_template("public_page.html", title="Privacy Policy", body=[
+        ("Who we are", "Sai Fuel Mart (fuel station) uses this website and its WhatsApp assistant only for its own staff and owner "
+                       "to manage the station: sales, stock, credit transport, attendance and reports."),
+        ("What we collect", "Login names of staff; entries made by staff (sales, slips, stock, attendance with photos); and, on "
+                            "WhatsApp, the messages and bill photos that the owner or manager sends to the assistant, with their "
+                            "phone number."),
+        ("How it is used", "Only to answer those messages and to run the station's records. It is not sold, shared for "
+                           "advertising, or used for marketing."),
+        ("Where it is kept", "In the station's own database and photo storage, accessible only to its logins. WhatsApp messages "
+                             "are handled by Meta's WhatsApp Business Platform under Meta's terms. Bill photos may be read by "
+                             "Google Gemini to extract totals."),
+        ("Your choices", "To have your data or WhatsApp messages deleted, see the data deletion page or contact the station."),
+    ])
+
+
+@bp.route("/data-deletion")
+def data_deletion():
+    return render_template("public_page.html", title="Data deletion", body=[
+        ("How to delete your data", "Send the message “delete my data” to the station's WhatsApp assistant number, or tell the "
+                                    "station owner in person or by phone. Your WhatsApp chat records with the assistant are deleted "
+                                    "within 7 days."),
+        ("What is kept", "Business records required by law (bills, tax and accounting entries) are kept for the legal period."),
+    ])

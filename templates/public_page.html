@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }} · {{ station_name }}</title>
+<style>body{font:16px/1.6 system-ui,Segoe UI,Roboto,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#0F1B33}
+h1{font-size:1.8rem;margin-bottom:4px}h2{font-size:1.1rem;margin:22px 0 4px}small{color:#5B6B86}</style></head>
+<body><h1>{{ title }}</h1><small>{{ station_name }} · updated {{ today.strftime('%d %B %Y') }}</small>
+{% for h, t in body %}<h2>{{ h }}</h2><p>{{ t }}</p>{% endfor %}</body></html>

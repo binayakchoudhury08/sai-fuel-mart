@@ -578,6 +578,12 @@ def handle(cur, phone, user, msg):
         save_state(cur, phone, {}, touch=True)
         cur.execute("UPDATE wa_sessions SET joined_at=NOW() WHERE phone=%s", (phone,))
         return "✅ Connected to the Sai Fuel Mart assistant.\n\n" + MENU
+    if low in ("delete my data", "delete my chat"):
+        cur.execute("DELETE FROM wa_outbox WHERE phone=%s", (phone,))
+        cur.execute("DELETE FROM wa_jobs WHERE phone=%s", (phone,))
+        cur.execute("DELETE FROM wa_log WHERE detail LIKE %s", (f"%{mask(phone)}%",))
+        cur.execute("UPDATE wa_sessions SET state='{}'::jsonb WHERE phone=%s", (phone,))
+        return "🗑️ Your WhatsApp chat records with the assistant are deleted."
     if wants_documents(low):
         return documents_reply(cur, low)
     words = low.split(" ")

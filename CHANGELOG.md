@@ -1,5 +1,11 @@
 # Sai Fuel Mart — changes
 
+## 3.16.2 — Pages Meta needs to publish the WhatsApp app
+
+- Public pages (no login): /privacy (Privacy Policy) and /data-deletion (Data deletion instructions), to paste into
+  Meta → App settings → Basic before publishing the app (an unpublished app gets only Meta's test events, not real
+  messages). WhatsApp "delete my data" clears the sender's assistant records.
+
 ## 3.16.1 — WhatsApp: see why a message got no answer
 
 - The check page (/api/wa/webhook in a browser) now lists the last WhatsApp events with the reason:

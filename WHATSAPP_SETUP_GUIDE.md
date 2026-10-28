@@ -171,6 +171,16 @@ Then **Deployments → latest → ⋯ → Redeploy**.
    deployment address like `sai-fuel-mart-abc123-yourname.vercel.app`: Vercel protects those with a login, so
    Meta gets "not found / unauthorized".
 
+**C0b. Publish the app (Meta sends real messages only to a published app)**
+1. developers.facebook.com → your app → **App settings → Basic**:
+   - **Privacy Policy URL:** `https://YOUR-SITE.vercel.app/privacy`
+   - **User data deletion → Data deletion instructions URL:** `https://YOUR-SITE.vercel.app/data-deletion`
+   - **Category:** Business and pages (or Utility & productivity)
+   - **App icon:** upload `app-icon-1024.png` (in this package)
+   - **Save changes**
+2. Left menu **Publish** (or the **App Mode: Development → Live** switch at the top) → **Publish**.
+   No business verification is needed for this.
+
 **C1. In Meta**
 1. developers.facebook.com → your app → **WhatsApp → Configuration** → **Webhook → Edit**:
    - **Callback URL:** `https://YOUR-SITE.vercel.app/api/wa/webhook`. Copy it from the browser page in C0, with
