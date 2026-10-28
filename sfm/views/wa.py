@@ -43,8 +43,9 @@ def verify():
             ev = cur.fetchall()
         lines += ["", "Last WhatsApp events (newest first) — send “hi”, then refresh this page:"]
         lines += [f"{e['at'].astimezone(IST):%d %b %I:%M:%S %p}  {e['kind'].upper()}  {e['detail']}" for e in ev] or \
-                 ["(nothing received yet — if you sent “hi”, Meta did not deliver it here: check that the Callback URL is",
-                  " verified (green) and that “messages” is Subscribed under Webhook fields)"]
+                 ["(nothing received yet — if you sent “hi”, Meta did not deliver it here. Most often the app is not",
+                  " subscribed to your WhatsApp account: sign in as owner → Settings → System → WhatsApp connection →",
+                  " Connect. Also check the Callback URL is green and “messages” is Subscribed under Webhook fields.)"]
         return "\n".join(lines), 200, {"Content-Type": "text/plain; charset=utf-8"}
     if (request.args.get("hub.mode") == "subscribe" and mine
             and _s.compare_digest(request.args.get("hub.verify_token", "").strip(), mine)):

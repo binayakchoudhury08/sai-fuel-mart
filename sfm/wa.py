@@ -763,3 +763,58 @@ def finish_bill_job(cur, j):
     send_text(phone, ("\n".join(notes) + "\n\n" if notes else "✅ All totals checked.\n\n") +
               "Forward the message above to the transporter. Send *bill* for another one, or *menu*.")
     cur.execute("UPDATE wa_sessions SET state='{}'::jsonb WHERE phone=%s", (phone,))
+
+
+# ------------------------------------------------------------------ app ↔ WhatsApp account subscription (Meta)
+def waba_ids():
+    """The WhatsApp Business Account id(s) this token can manage: WA_WABA_ID, or read from the token itself."""
+    own = [x.strip() for x in os.environ.get("WA_WABA_ID", "").split(",") if x.strip()]
+    if own:
+        return own, None
+    tok = os.environ.get("WA_TOKEN", "")
+    try:
+        r = requests.get(f"{GRAPH}/{ver()}/debug_token", params={"input_token": tok, "access_token": tok}, timeout=15)
+        data = r.json().get("data", {})
+        if r.status_code >= 300 or not data.get("is_valid", True):
+            return [], (r.json().get("error", {}) or data.get("error", {})).get("message", "token not valid")
+        ids = []
+        for s in data.get("granular_scopes", []):
+            if s.get("scope") in ("whatsapp_business_management", "whatsapp_business_messaging"):
+                ids += [i for i in s.get("target_ids", []) if i not in ids]
+        return ids, (None if ids else "the token has no WhatsApp account — add WA_WABA_ID in Vercel")
+    except Exception as e:
+        return [], f"could not ask Meta ({type(e).__name__})"
+
+
+def subscription_status():
+    """[(waba_id, subscribed?, detail)]"""
+    ids, err = waba_ids()
+    if err and not ids:
+        return [], err
+    h = {"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}"}
+    out = []
+    for w in ids:
+        try:
+            r = requests.get(f"{GRAPH}/{ver()}/{w}/subscribed_apps", headers=h, timeout=15)
+            if r.status_code >= 300:
+                out.append((w, False, r.json().get("error", {}).get("message", r.text[:120])))
+                continue
+            apps = [a.get("whatsapp_business_api_data", a).get("name", "?") for a in r.json().get("data", [])]
+            out.append((w, bool(apps), ", ".join(apps) if apps else "no app subscribed"))
+        except Exception as e:
+            out.append((w, False, type(e).__name__))
+    return out, None
+
+
+def subscribe_all():
+    ids, err = waba_ids()
+    if err and not ids:
+        return [], err
+    h = {"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}"}
+    res = []
+    for w in ids:
+        r = requests.post(f"{GRAPH}/{ver()}/{w}/subscribed_apps", headers=h, timeout=15)
+        ok = r.status_code < 300 and r.json().get("success", False)
+        res.append((w, ok, "" if ok else r.json().get("error", {}).get("message", r.text[:160])))
+        log("subscribe", f"WhatsApp account {w}: " + ("app subscribed ✓" if ok else res[-1][2]))
+    return res, None

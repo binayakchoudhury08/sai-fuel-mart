@@ -26,7 +26,7 @@
 {% for r in rate_hist %}<tr><td>{{ r.effective_from|d }}</td><td>{{ r.fuel_code }}</td><td class="num">{{ r.rate|inr }}</td><td><small>{{ r.created_by }}</small></td></tr>{% else %}<tr><td colspan="4" class="empty">No rates yet.</td></tr>{% endfor %}</tbody></table></div></section>
 
 
-{% if owner %}{% if user.role == 'owner' %}<section class="section" data-tab="system"><div class="body btnrow"><a class="btn secondary" href="{{ url_for('admin.storage_check') }}">Photo storage check</a><a class="btn secondary" href="{{ url_for('admin.page_reader') }}">Page reader (AI) check</a><a class="btn secondary" href="{{ url_for('admin.audit_log') }}">Audit Log</a></div></section>{% endif %}
+{% if owner %}{% if user.role == 'owner' %}<section class="section" data-tab="system"><div class="body btnrow"><a class="btn secondary" href="{{ url_for('admin.storage_check') }}">Photo storage check</a><a class="btn secondary" href="{{ url_for('admin.page_reader') }}">Page reader (AI) check</a><a class="btn secondary" href="{{ url_for('admin.whatsapp_connection') }}">WhatsApp connection</a><a class="btn secondary" href="{{ url_for('admin.audit_log') }}">Audit Log</a></div></section>{% endif %}
 <section class="section" id="history" data-tab="system"><header><h2>Old data editing</h2></header><div class="body stack">
 <p>Who may reopen locked days and change old (including imported) days is set in <a href="{{ url_for('admin.permissions') }}">Permissions</a>.</p>
 <p class="hint">Reopen or lock a whole date range at once. Every reopen, correction and lock is kept in the audit log with the reason.</p>

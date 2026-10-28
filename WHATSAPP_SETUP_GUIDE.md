@@ -190,6 +190,9 @@ Then **Deployments → latest → ⋯ → Redeploy**.
 2. **Webhook fields → messages → Subscribe**.
 3. From your WhatsApp, send **hi** to the test number. You should get the menu within 1–2 seconds.
 
+**Grey ticks, no answer, and the check page says "nothing received"?** Sign in to the website as owner →
+**Settings → System → WhatsApp connection** → **Connect WhatsApp account to the app**. Then send **hi** again.
+
 **No answer to "hi"?** Open `https://YOUR-SITE.vercel.app/api/wa/webhook` again and look at **Last WhatsApp
 events**. It says exactly what happened: IGNORED (number / username), REFUSED (App secret), SEND FAILED (Meta's
 reason, e.g. token), or nothing at all (Meta didn't send it: Callback not green, or "messages" not subscribed).

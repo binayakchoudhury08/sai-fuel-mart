@@ -541,3 +541,22 @@ def page_reader():
             audit(cur, "admin", "page_reader", None, f"Page reader test: {'OK ' + str(result.get('chosen')) if result.get('ok') else result.get('error')}")
     return render_template("admin/page_reader.html", ready=gemini_ready(), result=result, usage=usage,
                            own_model=os.environ.get("GEMINI_MODEL", ""), defaults=DEFAULT_MODELS)
+
+
+# ------------------------------------------------------------------ WhatsApp connection (owner)
+@bp.route("/settings/whatsapp", methods=["GET", "POST"])
+@login_required("owner")
+def whatsapp_connection():
+    from .. import wa
+    done = None
+    if request.method == "POST":
+        done, err = wa.subscribe_all()
+        if err:
+            flash(f"Could not connect: {err}", "error")
+        elif done and all(ok for _, ok, _ in done):
+            flash("Connected: Meta will now send your WhatsApp messages to the website. Send “hi” to try.", "success")
+        else:
+            flash("Meta refused: " + "; ".join(m for _, ok, m in done if not ok), "error")
+        return redirect(url_for("admin.whatsapp_connection"))
+    status, err = wa.subscription_status() if wa.ready() else ([], "WA_TOKEN / WA_PHONE_ID not set")
+    return render_template("admin/whatsapp.html", status=status, err=err, ready=wa.ready())

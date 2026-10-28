@@ -1,5 +1,11 @@
 # Sai Fuel Mart — changes
 
+## 3.16.3 — WhatsApp connection (subscribe the app to the WhatsApp account)
+
+- Settings → System → **WhatsApp connection** (owner): finds the WhatsApp Business Account from WA_TOKEN (or
+  WA_WABA_ID), shows whether the app is subscribed to it, and **Connect** subscribes it. Without this subscription
+  Meta delivers messages to the number (grey ticks) but never forwards them to the website.
+
 ## 3.16.2 — Pages Meta needs to publish the WhatsApp app
 
 - Public pages (no login): /privacy (Privacy Policy) and /data-deletion (Data deletion instructions), to paste into
