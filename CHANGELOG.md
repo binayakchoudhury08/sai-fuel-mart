@@ -1,5 +1,9 @@
 # Sai Fuel Mart — changes
 
+## 3.16.4 — WhatsApp delivery reports
+- The check page now also shows Meta's delivery report for each reply: DELIVERED / READ, or DELIVERY FAILED with
+  Meta's code and reason (e.g. 131030 recipient not in allowed list).
+
 ## 3.16.3 — WhatsApp connection (subscribe the app to the WhatsApp account)
 
 - Settings → System → **WhatsApp connection** (owner): finds the WhatsApp Business Account from WA_TOKEN (or

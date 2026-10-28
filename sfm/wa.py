@@ -107,7 +107,7 @@ def _send(phone, body):
             why = f"{r.status_code}: {r.text[:200]}"
         log("send failed", f"to {mask(phone)} — Meta says {why}")
     else:
-        log("replied", f"to {mask(phone)}")
+        log("replied", f"to {mask(phone)} (accepted by Meta — waiting for its delivery report)")
     return r.status_code < 300
 
 

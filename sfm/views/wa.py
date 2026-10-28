@@ -106,6 +106,18 @@ def receive():
         return "bad signature", 403
     body = json.loads(raw or b"{}")
     msgs = [m for e in body.get("entry", []) for ch in e.get("changes", []) for m in ((ch.get("value") or {}).get("messages") or [])]
+    # delivery reports for the assistant's own replies: sent / delivered / read / failed (with Meta's reason)
+    for e in body.get("entry", []):
+        for ch in e.get("changes", []):
+            for st in ((ch.get("value") or {}).get("statuses") or []):
+                status = st.get("status", "")
+                to = wa.mask(st.get("recipient_id", ""))
+                if status == "failed":
+                    errs = "; ".join(f"{x.get('code')}: {x.get('title', '')} — {(x.get('error_data') or {}).get('details', x.get('message', ''))}"
+                                     for x in st.get("errors", []))
+                    wa.log("delivery failed", f"to {to} — Meta says {errs}")
+                elif status in ("delivered", "read"):
+                    wa.log(status, f"to {to} ✓")
     try:
         _process(msgs)
     except Exception as e:

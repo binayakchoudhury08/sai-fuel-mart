@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "3.16.3"
+VERSION = "3.16.4"
 
 
 def _secret_key():
