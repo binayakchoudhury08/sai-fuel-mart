@@ -581,3 +581,37 @@ def business_xlsx():
         write_sheet(w, cols, data, ())
     buf = BytesIO(); wb.save(buf); buf.seek(0)
     return _deliver_compat(buf, mimetype=XLSX, as_attachment=True, download_name=f"SaiFuelMart business {t:%Y-%m-%d}.xlsx")
+
+
+# ------------------------------------------------------------------ Business insights (owner)
+@bp.route("/insights")
+@login_required("insights")
+def insights():
+    from datetime import timedelta as _td
+    from ..insights import credit_scores, month_compare, profit, receipt_checks, tank_variation
+    from ..util import month_bounds
+    tab = request.args.get("tab", "profit")
+    t0 = today()
+    try:
+        m1, m2 = month_bounds(request.args.get("m") or t0.strftime("%Y-%m"))
+    except Exception:
+        m1, m2 = month_bounds(t0.strftime("%Y-%m"))
+    m2 = min(m2, t0)
+    a = parse_date(request.args.get("from")) if request.args.get("from") else m1
+    b = parse_date(request.args.get("to")) if request.args.get("to") else m2
+    data = {}
+    with db.tx() as cur:
+        if tab == "profit":
+            data = profit(cur, a, b)
+        elif tab == "variation":
+            data = {"tanks": tank_variation(cur, a, b)}
+        elif tab == "receipts":
+            rows, tot = receipt_checks(cur, a, b)
+            data = {"rows": rows, "tot": tot}
+        elif tab == "credit":
+            data = {"scores": credit_scores(cur, t0)}
+        else:
+            tab = "compare"
+            data = month_compare(cur, t0)
+    return render_template("reports/insights.html", tab=tab, a=a, b=b, d=data,
+                           prev_m=(m1 - _td(days=1)).strftime("%Y-%m"), next_m=(m2 + _td(days=1)).strftime("%Y-%m") if m2 < t0 else None)

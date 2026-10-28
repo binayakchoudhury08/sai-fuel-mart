@@ -1,4 +1,4 @@
-# Sai Fuel Mart 3.12 — complete setup guide
+# Sai Fuel Mart 3.14 — complete setup guide
 
 Follow the steps in order. A full setup takes about an hour, and you only do it once. For an update, do step 3.4.
 
@@ -161,6 +161,10 @@ Bill 121026 = 54,251
 TOTAL = 4,36,978
 ```
 Tick “Line up the numbers” to send it in neat columns. Sent messages stay in the history on the same page.
+
+## 8c. WhatsApp assistant + automatic schedule
+See **WHATSAPP_SETUP_GUIDE.md** (free, about 45 minutes): Meta test number, Vercel variables (`WA_TOKEN`,
+`WA_PHONE_ID`, `WA_APP_SECRET`, `WA_VERIFY_TOKEN`, `WA_OWNERS`), webhook, and the Supabase scheduler.
 
 ## 9. Keep safe
 

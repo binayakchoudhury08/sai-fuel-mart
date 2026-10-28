@@ -51,22 +51,27 @@
 
 {# ---------- 3. downloads ---------- #}
 <section class="section" id="download"><header><h2>Download bills</h2></header><div class="body">
-<div class="fields" style="align-items:end">
-  <div><label>Transporter</label><select id="dlparty"><option value="">All transporters (each separately)</option>{% for p in parties %}<option value="{{ p.id }}" {% if p.id==pid %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
-</div>
-<div class="grid2" style="margin-top:14px;gap:14px">
-<form method="get" action="{{ url_for('transport.download') }}" data-download data-dl class="section" style="margin:0;padding:14px">
-  <input type="hidden" name="period" value="day"><input type="hidden" name="party">
+{% set first_pid = pid or (parties[0].id if parties else '') %}
+{% macro party_select(sel) -%}
+  <label>Transporter</label>
+  <select name="party">{% for p in parties %}<option value="{{ p.id }}" {% if p.id == sel %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+    <option value="">All transporters (ZIP, each separately)</option></select>
+{%- endmacro %}
+<div class="grid2" style="gap:14px">
+<form method="get" action="{{ url_for('transport.download') }}" data-download class="section" style="margin:0;padding:14px">
+  <input type="hidden" name="period" value="day">
   <h3 style="margin-bottom:8px">Day bill</h3>
-  <input type="date" name="d" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" aria-label="Day">
+  {{ party_select(first_pid) }}
+  <label style="margin-top:8px">Date</label><input type="date" name="d" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}">
   <div class="btnrow" style="margin-top:10px"><button class="btn" name="fmt" value="pdf">PDF</button><button class="btn secondary" name="fmt" value="xlsx">Excel</button></div>
+  <p class="hint">One transporter + one date → that transporter’s bill for that date only.</p>
 </form>
-<form method="get" action="{{ url_for('transport.download') }}" data-download data-dl class="section" style="margin:0;padding:14px">
-  <input type="hidden" name="period" value="month"><input type="hidden" name="party">
+<form method="get" action="{{ url_for('transport.download') }}" data-download class="section" style="margin:0;padding:14px">
+  <input type="hidden" name="period" value="month">
   <h3 style="margin-bottom:8px">Month bill</h3>
-  <input type="month" name="month" value="{{ ym }}" max="{{ today.strftime('%Y-%m') }}" aria-label="Month">
+  {{ party_select(first_pid) }}
+  <label style="margin-top:8px">Month</label><input type="month" name="month" value="{{ ym }}" max="{{ today.strftime('%Y-%m') }}">
   <div class="btnrow" style="margin-top:10px"><button class="btn" name="fmt" value="pdf">PDF</button><button class="btn secondary" name="fmt" value="xlsx">Excel</button><button class="btn secondary" name="fmt" value="zip">ZIP (month + each day)</button></div>
-  <p class="hint">ZIP = month bill + every day’s bill, PDF and Excel, in a folder for each transporter.</p>
 </form></div>
 <p class="hint" style="margin-top:10px">Bills show only the entries and totals: Date, SL, Vehicle, Slip, Challan, HSD Qty, Rate, HSD Amount, Cash Taken, Total.</p>
 </div></section>

@@ -76,48 +76,17 @@ def save_general():
 @bp.route("/settings/rates", methods=["POST"])
 @login_required("setup")
 def save_rates():
+    from ..actions import set_rates
     d = parse_date(request.form.get("effective_from"), "Effective date")
-    if d > today() + timedelta(days=7):
-        raise UserError("Rates can be set at most 7 days ahead.")
-    n = 0
     with db.tx() as cur:
         claim_form_token(cur)
-        cur.execute("SELECT status FROM days WHERE business_date>=%s AND status='locked' LIMIT 1", (d,))
-        if cur.fetchone():
-            raise UserError("A locked day falls on or after that date. Rates for locked days cannot change.")
         cur.execute("SELECT code FROM fuels WHERE active")
-        active_fuels = cur.fetchall()
-        before = rates_for(cur, d)
-        for f in active_fuels:
+        wanted = {}
+        for f in cur.fetchall():
             raw = request.form.get(f"rate_{f['code']}", "").strip()
-            if not raw:
-                continue
-            rate = to_dec(raw, f"{f['code']} rate")
-            if rate <= 0 or rate > 1000:
-                raise UserError(f"{f['code']} rate looks wrong.")
-            if before.get(f["code"]) == rate:
-                continue
-            cur.execute("""INSERT INTO fuel_rates (fuel_code, effective_from, rate, created_by) VALUES (%s,%s,%s,%s)
-                           ON CONFLICT (fuel_code, effective_from) DO UPDATE SET rate=EXCLUDED.rate,
-                           created_by=EXCLUDED.created_by, created_at=NOW()""",
-                        (f["code"], d, rate, current_user()["username"]))
-            audit(cur, "update", "fuel_rate", f["code"],
-                  f"{f['code']} rate from {d}: ₹{before.get(f['code'], '–')} → ₹{rate}", business_date=d)
-            n += 1
-        # readings already saved on/after d keep the rate they were saved with unless re-saved;
-        # refresh them so totals match the new rate (only open days, enforced above)
-        if n:
-            cur.execute("""
-                UPDATE nozzle_readings r SET rate = x.new_rate
-                FROM (SELECT r2.id, (SELECT fr.rate FROM fuel_rates fr
-                                     WHERE fr.fuel_code = nz.fuel_code AND fr.effective_from <= r2.business_date
-                                     ORDER BY fr.effective_from DESC LIMIT 1) AS new_rate
-                      FROM nozzle_readings r2 JOIN nozzles nz ON nz.id = r2.nozzle_id
-                      WHERE r2.business_date >= %s) x
-                WHERE r.id = x.id AND x.new_rate IS NOT NULL AND r.rate <> x.new_rate""", (d,))
-            if cur.rowcount:
-                audit(cur, "update", "nozzle_reading", None,
-                      f"Re-priced {cur.rowcount} saved reading(s) from {d} after rate change", business_date=d)
+            if raw:
+                wanted[f["code"]] = to_dec(raw, f"{f['code']} rate")
+        n = len(set_rates(cur, d, wanted))
     flash(f"{n} rate(s) updated from {d.strftime('%d %b %Y')}." if n else "No rate changed.",
           "success" if n else "info")
     return redirect(url_for("admin.settings") + "#rates")

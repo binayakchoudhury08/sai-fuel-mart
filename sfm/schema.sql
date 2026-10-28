@@ -593,3 +593,37 @@ CREATE TABLE IF NOT EXISTS pump.msg_bills (
     photo_path TEXT NOT NULL DEFAULT '',
     raw        JSONB
 );
+
+-- v3.14: WhatsApp assistant + scheduler
+CREATE TABLE IF NOT EXISTS pump.wa_sessions (
+    phone      TEXT PRIMARY KEY,
+    last_in    TIMESTAMPTZ,
+    state      JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE TABLE IF NOT EXISTS pump.wa_seen (
+    msg_id TEXT PRIMARY KEY,
+    at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS pump.wa_outbox (
+    id         SERIAL PRIMARY KEY,
+    phone      TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sent_at    TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS pump.wa_jobs (
+    id         SERIAL PRIMARY KEY,
+    phone      TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    results    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    finished   BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE TABLE IF NOT EXISTS pump.job_runs (
+    job      TEXT NOT NULL,
+    run_key  TEXT NOT NULL,
+    at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (job, run_key)
+);
+ALTER TABLE pump.wa_sessions ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ;

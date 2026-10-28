@@ -44,6 +44,7 @@ PERMISSIONS = [
     ("setup", "Fuel rates, nozzles, tanks, pump details", "Owner-level", {"admin"}),
     ("users", "Create staff / manager accounts and reset their passwords", "Owner-level", {"admin"}),
     ("audit", "See the audit log", "Owner-level", {"admin"}),
+    ("insights", "Business insights: profit, tank variation, tanker receipts, credit scores, month comparison", "Owner-level", set()),
     ("backup", "Download full backup", "Owner-level", set()),
 ]
 PERM_KEYS = [p[0] for p in PERMISSIONS]

@@ -12,7 +12,7 @@ from .security import (DuplicateSubmit, ROLE_LABEL, can, check_csrf, csrf_token,
 from .util import UserError, fmt_date, inr, qty, today
 
 log = logging.getLogger("sfm")
-VERSION = "3.12.0"
+VERSION = "3.16.0"
 
 
 def _secret_key():
@@ -63,15 +63,16 @@ def create_app():
             log.exception("Schema setup failed: %s", e)
 
     from .views import admin, auth, day, main, messages, parties, lube, proofs, reports, staff, tanks, transport
+    from .views import wa as wa_views
     for bp in (auth.bp, main.bp, day.bp, parties.bp, lube.bp, tanks.bp, tanks.api, staff.bp, reports.bp,
-               admin.bp, transport.bp, proofs.bp, messages.bp):
+               admin.bp, transport.bp, proofs.bp, messages.bp, wa_views.bp):
         app.register_blueprint(bp)
 
     @app.before_request
     def load_user():
         g.user = None
         if (request.endpoint in ("static", "service_worker", "health")
-                or (request.endpoint or "").startswith(("api.", "api_v1."))
+                or (request.endpoint or "").startswith(("api.", "api_v1.", "api_wa."))
                 or request.path.startswith("/api/v1/") or request.path in ("/api/tank-sync", "/api/cron/daily")):
             return
         uid = session.get("uid")
@@ -106,7 +107,7 @@ def create_app():
             from .grants import close_ended
             close_ended()
         if request.method == "POST" and request.routing_exception is None \
-                and not (request.endpoint or "").startswith(("api.", "api_v1.")):
+                and not (request.endpoint or "").startswith(("api.", "api_v1.", "api_wa.")):
             check_csrf()
 
     @app.after_request

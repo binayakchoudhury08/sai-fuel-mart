@@ -1,5 +1,56 @@
 # Sai Fuel Mart — changes
 
+## 3.16.0 — Webhook check page, one-transporter bills, bills on WhatsApp
+
+- `/api/wa/webhook` opened in a browser shows a status page: version, and whether WA_VERIFY_TOKEN, WA_TOKEN,
+  WA_PHONE_ID, WA_APP_SECRET and WA_OWNERS are set. A 404 there means the site on Vercel is an older version.
+  The verify token now ignores spaces copied by mistake, and a wrong token says so.
+- Credit Transport → Download bills: each form (Day bill, Month bill) has its own Transporter list, so
+  "SVT + 26 Oct + PDF" gives only SVT's PDF for 26 Oct (Excel likewise). "All transporters (ZIP)" is a separate,
+  deliberate choice. (Before, the transporter was copied by a script; when that failed, all transporters came as a ZIP.)
+- WhatsApp: "svt pdf 26/10/2026", "svt excel yesterday", "svt bill day before yesterday", "svt pdf october" →
+  that transporter's bill files (same as the website) sent as documents; "bill" = PDF + Excel.
+
+## 3.15.0 — WhatsApp without a Meta account (Twilio Sandbox)
+
+- The assistant now also works through **Twilio's WhatsApp Sandbox**: no Meta / Facebook business account,
+  about 10 minutes to set up (WHATSAPP_SETUP_GUIDE.md, Option 1). Same commands, bill photos, reports and schedule.
+- Twilio's signature is checked on every message; long answers are split to Twilio's 1,600-character limit.
+- Sandbox links end 3 days after joining: the assistant reminds you (last 12 hours) to send your join code again;
+  "join …" messages are answered with the menu.
+- Setting TWILIO_ACCOUNT_SID switches to Twilio; without it the Meta Cloud API is used (Option 2).
+
+## 3.14.0 — WhatsApp assistant + automatic schedule
+
+- **WhatsApp assistant** (Meta's free test number; WHATSAPP_SETUP_GUIDE.md): menu; tank stock; bill message from
+  photos (read 3 at a time, your format, also saved to Bill Message history); pending credit (all / one
+  transporter); closing status; reopen dates for the manager (24 h); see / change HSD-MS-CNG rates (today or
+  tomorrow 6 AM); lube stock / lube arrived; day report; alerts; profit, variation, credit score, comparison.
+  Only numbers in WA_OWNERS get answers; messages are checked with Meta's signature; duplicates ignored;
+  changes need "YES" and are audited as "<user> (WhatsApp)".
+- **Schedule on its own clock** (Supabase pg_cron → /api/cron/tick every 15 min): 07:00 morning report, 12:05
+  attendance closed, 21:00 closing reminder (manager + owner), 23:00 escalation, urgent alerts (bundled, once a
+  day each), 00:30 daily job. Each job once a day.
+- **Always free**: messages the assistant starts are sent only inside WhatsApp's 24-hour window; otherwise they
+  wait and arrive as "While you were away" when the owner writes.
+- Fuel rate saving moved to one shared function used by the website and WhatsApp.
+
+## 3.13.0 — Business Insights (owner)
+
+Management → Business Insights (owner only; can be given to others in Permissions → "insights"):
+- **Profit**: weighted-average cost from tanker invoices (opening stock carried at its earlier cost), margin per
+  fuel and per litre, stock loss/gain valued at cost shown apart, lube margin from purchase rates, expenses and
+  staff payments → net profit. Marked **Not final** with the exact reasons whenever an input is missing (day not
+  submitted, tanker without invoice amount, lube sold without purchase rate, old-app days without readings).
+  Checked against a hand calculation in tests/test_insights.py.
+- **Tank variation**: book vs dip/ATG per tank and day, % of sale against the tolerance (auto_variation_pct,
+  default 0.5 %), value, days over the limit, trend (getting worse / steady / improving).
+- **Tanker receipts**: invoice vs received litres (allowance auto_receipt_short_pct, default 0.2 %), shortage
+  value at invoice cost, challan vs observed density (auto_density_diff, default 3 kg/m³), missing dips/amounts.
+- **Transporter credit score** (0–100, A–D): days to pay (FIFO), oldest unpaid bill, limit use, regular payments;
+  suggested limit.
+- **This month vs last month**: same days last month (fair) and the whole last month.
+
 ## 3.12.0 — Bill Message: entry date, no more "no internet"
 
 - Bill label uses the ENTRY date — the date in the Date column of the bill's rows — never the date at the top
