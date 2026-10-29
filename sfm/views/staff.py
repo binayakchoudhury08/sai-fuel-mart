@@ -6,7 +6,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 
 from .. import db
 from ..security import assert_writable, audit, claim_form_token, current_user, login_required
-from ..util import ZERO, UserError, clean, month_bounds, now_ist, parse_date, to_dec, today
+from ..util import IST, ZERO, UserError, clean, month_bounds, now_ist, parse_date, to_dec, today
 
 bp = Blueprint("staff", __name__)
 
@@ -414,3 +414,56 @@ def attendance_backup_save():
             audit(cur, "update", "settings", "attendance_backup", "Attendance backup person removed")
             flash("Attendance backup person removed.", "success")
     return redirect(url_for("staff.index"))
+
+
+# ------------------------------------------------------------------ one-screen attendance for phones (/attend)
+@bp.route("/attend")
+@login_required("attendance_photo|attendance_manual|staff_manage")
+def attend():
+    """Big cards: 📷 Present (one photo) or ✗ Absent (no photo). Today only, once per person."""
+    from ..security import role
+    from .proofs import is_mobile, storage_ready
+    t = today()
+    with db.tx() as cur:
+        rules = attendance_rules(cur)
+        cur.execute("""SELECT s.id, s.name, s.designation, s.shift, a.status, a.captured_at, a.photo_path, a.marked_via
+                       FROM staff s LEFT JOIN attendance a ON a.staff_id=s.id AND a.work_date=%s
+                       WHERE s.active ORDER BY s.name""", (t,))
+        people = cur.fetchall()
+    hm = now_ist().strftime("%H:%M")
+    in_window = rules["start"] <= hm < rules["end"]
+    counts = {"P": sum(1 for p in people if p["status"] in ("P", "H")), "A": sum(1 for p in people if p["status"] == "A")}
+    counts["N"] = len(people) - counts["P"] - counts["A"]
+    return render_template("staff/attend.html", people=people, rules=rules, in_window=in_window, d=t, counts=counts,
+                           owner=role() == "owner", mobile=is_mobile(), storage=storage_ready(), station=_station(), IST=IST)
+
+
+@bp.route("/attend/absent", methods=["POST"])
+@login_required("attendance_photo|attendance_manual|staff_manage")
+def attend_absent():
+    """✗ Absent without a photo: today only, once per person (the owner can change anything)."""
+    from flask import jsonify
+    from ..security import role
+    from .proofs import is_mobile
+    try:
+        sid = int(request.form.get("staff_id") or 0)
+        t = today()
+        owner = role() == "owner"
+        if not owner and not is_mobile():
+            raise UserError("Attendance is marked from the phone.")
+        with db.tx() as cur:
+            cur.execute("SELECT name FROM staff WHERE id=%s AND active", (sid,))
+            st = cur.fetchone()
+            if not st:
+                raise UserError("Staff not found.")
+            cur.execute("SELECT status FROM attendance WHERE staff_id=%s AND work_date=%s", (sid, t))
+            old = cur.fetchone()
+            if old and not owner:
+                raise UserError("Already marked today. Only the owner can change it.")
+            cur.execute("""INSERT INTO attendance (staff_id, work_date, status, marked_via) VALUES (%s,%s,'A','absent-button')
+                           ON CONFLICT (staff_id, work_date) DO UPDATE SET status='A', marked_via='absent-button',
+                           captured_at=NULL, photo_path=''""", (sid, t))
+            audit(cur, "update", "attendance", sid, f"{st['name']} {t:%d %b}: Absent (marked without photo)", business_date=t)
+        return jsonify({"ok": True})
+    except UserError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400

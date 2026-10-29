@@ -7,6 +7,7 @@
 <div class="stats"><div><b class="pos">{{ present }}</b><span>Present</span></div><div><b class="{{ 'neg' if total - present else '' }}">{{ total - present }}</b><span>Not marked (absent)</span></div>
 <div><b>{{ total }}</b><span>Staff</span></div></div>
 
+<a class="takeproof" href="{{ url_for('staff.attend') }}" style="margin-bottom:12px"><span>📱</span><div><b>Quick attendance</b><small>One screen: 📷 Present or ✗ Absent for each person — made for the phone</small></div></a>
 {% if my_standin %}<div class="flash success">You are the attendance stand-in from {{ my_standin.date_from|d }} to {{ my_standin.date_to|d }}. Same rules: today only, live photo, once per person.</div>{% elif backup_id == user.id %}<div class="flash success">You are the backup person for attendance.</div>{% endif %}
 {% if user.role != 'owner' %}<div class="flash {{ 'info' if in_window else 'error' }}">{% if not is_today %}You can only mark attendance for today.{% elif in_window %}Check-in is open until {{ rules.end }} today. Each person is marked once, by live photo. Not marked by {{ rules.end }} = Absent.{% else %}Check-in is open {{ rules.start }}–{{ rules.end }} only. Anyone not marked is Absent; only the owner can change it.{% endif %}</div>{% endif %}
 {% if can('attendance_photo') and not mobile %}<div class="flash info">Live photos are taken on the phone: open this page in the app or on the manager’s phone.</div>{% endif %}

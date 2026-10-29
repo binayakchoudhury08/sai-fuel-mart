@@ -1,5 +1,15 @@
 # Sai Fuel Mart — changes
 
+## 3.18.0 — Quick attendance + separate attendance app
+
+- New phone screen **/attend** (Attendance → 📱 Quick attendance): one card per person with **📷 Present** (camera opens,
+  one tap on the shutter saves it — no preview step, no check-out) and **✗ Absent** (no photo). Cards turn green/red
+  at once; Present / Absent / Not marked counts at the top. Same rules: phone only, today only, once per person,
+  Present by photo inside the check-in hours; only the owner can change a mark.
+- **SFM Attendance** Android app (com.saifuelmart.attendance, v1.0): opens straight into Quick attendance; installs
+  next to the main app; same signing key; own green icon. Marks go to the same database (website, dashboard,
+  WhatsApp report).
+
 ## 3.17.1
 - WhatsApp: the plain-text menu is the default again (it always delivers). The tap-menu is optional: set
   WA_LISTS=1 in Vercel to switch it on.
