@@ -6,7 +6,7 @@ if "supabase" in DSN:
     sys.exit("Refusing to run tests against a real database.")
 OWNER, MGR, STRANGER = "919999900001", "919999900002", "917777700000"
 os.environ.update(SKIP_SCHEMA="1", WA_TOKEN="tok", WA_PHONE_ID="555", WA_VERIFY_TOKEN="verifyme", WA_APP_SECRET="appsecret",
-                  WA_OWNERS=f"{OWNER}:boss,{MGR}:mgr2", CRON_SECRET="cronsecret", WA_INLINE_WORK="1", GEMINI_API_KEY="g")
+                  WA_OWNERS=f"{OWNER}:boss,{MGR}:mgr2", CRON_SECRET="cronsecret", WA_INLINE_WORK="1", GEMINI_API_KEY="g", WA_LISTS="1")
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 import psycopg2
@@ -85,6 +85,9 @@ c.execute("SELECT msg_id FROM pump.wa_seen ORDER BY at DESC LIMIT 1"); last = c.
 body = json.dumps({"entry": [{"changes": [{"value": {"messages": [{"from": OWNER, "id": last, "type": "text", "text": {"body": "1"}}]}}]}]}).encode()
 b0 = len(SENT); cl.post("/api/wa/webhook", data=body, headers={"X-Hub-Signature-256": "sha256=" + hmac.new(b"appsecret", body, hashlib.sha256).hexdigest()})
 check(len(SENT) == b0, "the same message delivered twice by Meta is answered once")
+os.environ.pop("WA_LISTS")
+r, out = send(OWNER, "menu"); check(out and not out[0].startswith("LIST:") and "Sai Fuel Mart assistant" in out[0], "default (no WA_LISTS): plain-text menu, as before")
+os.environ["WA_LISTS"] = "1"
 print("Tap-menu + emergency entries")
 def tap(phone, rid):
     n["i"] += 1

@@ -140,8 +140,9 @@ def send_document(phone, filename, data, mime, caption=""):
 
 
 def send_list(phone, body, button, sections):
-    """WhatsApp tap-menu (Meta). Rows: id, title (≤24), description (≤72). Max 10 rows in total."""
-    if provider() == "twilio":
+    """WhatsApp tap-menu (Meta). Rows: id, title (≤24), description (≤72). Max 10 rows in total.
+    Off unless WA_LISTS=1 in Vercel — the plain-text menu always works."""
+    if provider() == "twilio" or os.environ.get("WA_LISTS") != "1":
         return False
     return _send(phone, {"type": "interactive", "interactive": {
         "type": "list", "body": {"text": body[:1024]}, "action": {"button": button[:20], "sections": [

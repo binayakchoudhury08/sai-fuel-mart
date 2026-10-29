@@ -1,5 +1,9 @@
 # Sai Fuel Mart — changes
 
+## 3.17.1
+- WhatsApp: the plain-text menu is the default again (it always delivers). The tap-menu is optional: set
+  WA_LISTS=1 in Vercel to switch it on.
+
 ## 3.17.0 — Advanced WhatsApp assistant + premium design
 
 WhatsApp
