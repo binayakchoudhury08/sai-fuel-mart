@@ -29,7 +29,8 @@ def verify():
         lines = [f"✅ Sai Fuel Mart WhatsApp webhook is live (version {VERSION}).", "",
                  f"WA_VERIFY_TOKEN: {ok(mine)}", f"WA_TOKEN: {ok(os.environ.get('WA_TOKEN'))}",
                  f"WA_PHONE_ID: {ok(os.environ.get('WA_PHONE_ID'))}", f"WA_APP_SECRET: {ok(os.environ.get('WA_APP_SECRET'))}",
-                 f"WA_OWNERS: {len(wa.owners())} number(s)" + ("" if wa.owners() else " — ❌ add e.g. 919876543210:boss"), "",
+                 f"WA_OWNERS: {len(wa.owners())} number(s)" + ("" if wa.owners() else " — ❌ add e.g. 919876543210:boss"),
+                 ("WA_TOKEN validity: " + wa.token_info()[0]) if os.environ.get("WA_TOKEN") else "", "",
                  "In Meta → WhatsApp → Configuration, use exactly this page's address as the Callback URL,",
                  "and the same word as WA_VERIFY_TOKEN as the Verify token.", ""]
         from ..util import IST

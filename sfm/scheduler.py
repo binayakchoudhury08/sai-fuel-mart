@@ -73,6 +73,10 @@ def tick():
                 text = f"🔴 *Needs attention ({len(fresh)})*\n" + "\n".join(f"• {a['title']}\n   _{a['detail']}_" for a in fresh)
                 done.append(("alerts", [wa.notify(cur, p, text) for p in owners_]))
 
+        if hm >= "09:00" and _once(cur, "token_check", t.isoformat()):
+            info, ok = wa.token_info()
+            if not ok:
+                done.append(("token_warning", [wa.notify(cur, p, "⚠️ *WhatsApp assistant token*: " + info) for p in owners_]))
         cur.execute("DELETE FROM wa_outbox WHERE created_at < NOW() - interval '3 days'")
         cur.execute("DELETE FROM wa_seen WHERE at < NOW() - interval '3 days'")
         cur.execute("DELETE FROM job_runs WHERE at < NOW() - interval '40 days'")

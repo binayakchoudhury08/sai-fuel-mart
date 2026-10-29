@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.18.1
+- WhatsApp check page shows the token's validity: "never expires (permanent)" / "expires in N hours (temporary)" /
+  "not valid". The scheduler warns the owner once a day (09:00) on WhatsApp if the token is temporary or invalid.
+- SFM Attendance app 1.0.1: fixed crash on opening (camera helper class name).
+
 ## 3.18.0 — Quick attendance + separate attendance app
 
 - New phone screen **/attend** (Attendance → 📱 Quick attendance): one card per person with **📷 Present** (camera opens,

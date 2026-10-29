@@ -1060,3 +1060,25 @@ def subscribe_all():
         res.append((w, ok, "" if ok else r.json().get("error", {}).get("message", r.text[:160])))
         log("subscribe", f"WhatsApp account {w}: " + ("app subscribed ✓" if ok else res[-1][2]))
     return res, None
+
+
+def token_info():
+    """(text, ok) about WA_TOKEN: never expires / expires in N hours / not valid."""
+    tok = os.environ.get("WA_TOKEN", "")
+    if not tok or provider() == "twilio":
+        return ("", True)
+    try:
+        r = requests.get(f"{GRAPH}/{ver()}/debug_token", params={"input_token": tok, "access_token": tok}, timeout=8)
+        d = r.json().get("data", {})
+        if r.status_code >= 300 or not d.get("is_valid"):
+            msg = (r.json().get("error") or d.get("error") or {}).get("message", "not valid")
+            return (f"❌ NOT VALID — {msg}. Make the permanent token (System user, expiry Never) and Redeploy.", False)
+        exp = d.get("expires_at", 0)
+        if not exp:
+            return ("✅ never expires (permanent token)", True)
+        import time
+        hours = max(0, int((exp - time.time()) // 3600))
+        return (f"⚠️ expires in about {hours} hour(s) — this is a temporary token; the assistant will stop then. "
+                "Make the permanent one (System user, expiry Never).", False)
+    except Exception:
+        return ("(could not check with Meta right now)", True)
