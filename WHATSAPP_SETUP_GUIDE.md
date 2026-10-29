@@ -244,7 +244,7 @@ Each job runs **once a day**, even if the scheduler calls twice.
 
 ## Using it
 
-Send **hi** or **menu** for the list. Use the numbers or the words:
+Send **hi** or **menu**: a tap-menu opens (no typing needed). Or type any of these:
 
 | Send | You get |
 |---|---|
@@ -260,6 +260,12 @@ Send **hi** or **menu** for the list. Use the numbers or the words:
 | **9** / **alerts** | Everything that needs attention now |
 | **10** / **profit** · **variation** · **score** · **compare** | Business Insights on WhatsApp |
 | **svt pdf 26/10/2026** · **svt excel yesterday** · **svt bill day before yesterday** · **svt pdf october** | The bill **PDF / Excel of that transporter only**, for that date (or month), as files in WhatsApp. "bill" = PDF + Excel |
+| **slip svt OD02CL2129 110** · **… cash 1000** · **… yesterday** | Credit slip (asks YES) |
+| **cash svt OD02CL2129 2000** | Cash only (asks YES) |
+| **paid svt 50000 upi** · **paid svt 50000 bank UTR123** | Payment received, with receipt no. (asks YES) |
+| **expense 500 electricity** · **… yesterday** | Expense (asks YES) |
+| **lube sold servo 4t 2** | Lube sale at its price (asks YES) |
+| any normal sentence, e.g. *svt ki gaadi OD02CL2129 ne 110 litre liya* | Understood and turned into the right command (entries still ask YES) |
 | **cancel** | Stops what is in progress |
 
 **Safety:**

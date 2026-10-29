@@ -838,3 +838,111 @@ body.dark .pthumb{background:#111C36;border-color:#1F2C4A}
 @media (max-width:900px){.msgwrap{grid-template-columns:1fr}.msgcard{position:static}}
 @media (max-width:700px){.billtable tr[data-row]{grid-template-columns:1fr 1fr}}
 body.dark .msgcard textarea{background:#0E1830}
+
+/* =====================================================================================
+   v4 — premium pass. One bold element (the canopy stripe + meter-style numbers);
+   everything else quiet: ink navy, cool off-white, hairlines, layered soft shadows.
+   ===================================================================================== */
+:root{
+  --ink:#0E1A33; --ink-2:#33415C; --muted:#6B7891; --line:#E3E8F0; --line-2:#EDF1F6; --sunk:#F3F5F9;
+  --brand:#1E4FD8; --brand-2:#163CA8; --canopy-red:#D7262E; --rail:#0A1630; --rail-2:#13224A;
+  --ok:#14804A; --warn:#B45309; --bad:#C0262D;
+  --shadow-1:0 1px 1px rgba(14,26,51,.04),0 2px 6px rgba(14,26,51,.05);
+  --shadow-2:0 1px 2px rgba(14,26,51,.05),0 8px 24px rgba(14,26,51,.08);
+}
+body{background:var(--sunk);color:var(--ink);font-feature-settings:"tnum" 1,"lnum" 1}
+::selection{background:#CFDBFF}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+
+/* canopy stripe: the one signature detail */
+.topbar{border-bottom:0;box-shadow:0 1px 0 var(--line);position:sticky}
+.topbar::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:4px;
+  background:linear-gradient(180deg,var(--brand) 0 70%,var(--canopy-red) 70% 100%);opacity:.95;pointer-events:none}
+.topbar .title{font:700 1.15rem/1.2 var(--cond);letter-spacing:.01em}
+
+/* sidebar: ink navy, slim active indicator instead of a filled pill */
+.rail{background:linear-gradient(180deg,var(--rail) 0%,#0C1B3D 100%);border-right:1px solid rgba(255,255,255,.04)}
+.rail a.nav,.rail summary.nav{border-radius:8px;color:#C4CEE4;font-weight:500;position:relative}
+.rail a.nav:hover,.rail summary.nav:hover{background:rgba(255,255,255,.05);color:#fff}
+.rail a.nav[aria-current=page],.rail summary.nav[aria-current=page]{background:rgba(64,110,255,.16);color:#fff;box-shadow:none}
+.rail a.nav[aria-current=page]::before,.rail summary.nav[aria-current=page]::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:#5B8CFF}
+.rail .brand b{font:700 1.15rem var(--cond);letter-spacing:.02em}
+.stationcard{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)}
+
+/* surfaces: panels 14px, controls 10px, chips round — radius follows hierarchy */
+.section,.panel,.kpi,.mcard,.tankcard,.ncard,.tcard,.photoslot{border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-1);background:#fff}
+.section > header,.panel > header{border-bottom:1px solid var(--line-2);padding:14px 18px}
+.section > header h2,.panel > header h2{font:700 1.02rem var(--font);letter-spacing:0}
+input,select,textarea{border-radius:10px;border:1px solid #D5DCE7;background:#fff;transition:border-color .15s, box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(30,79,216,.14);outline:none}
+.btn{background:var(--brand);border-radius:10px;box-shadow:0 1px 0 rgba(255,255,255,.15) inset,0 1px 2px rgba(14,26,51,.2);font-weight:600;letter-spacing:.005em}
+.btn:hover{background:var(--brand-2)}
+.btn.secondary{background:#fff;color:var(--ink);border:1px solid #D5DCE7;box-shadow:var(--shadow-1)}
+.btn.secondary:hover{background:var(--sunk)}
+.btn.go{background:var(--ok)}.btn.danger{background:var(--bad)}
+.chip{border-radius:999px}
+
+/* meter-style numbers */
+.kpi b,.mcard b,.stats b,.k2 b{font-family:var(--cond);font-weight:700;letter-spacing:-.005em;font-variant-numeric:tabular-nums}
+.kpi span:first-child,.mcard .ml{color:var(--muted);font-weight:600;font-size:.82rem}
+.k2{padding:16px 18px 8px;align-items:start}
+.k2 > div{min-width:0}
+.k2 .trend,.k2 .muted{font-size:.78rem;white-space:nowrap}
+.k2 .glyph{border-radius:10px;width:38px;height:38px}
+.kpi .trend.up{color:var(--ok)}.kpi .trend.down,.trend.down{color:var(--bad)}
+
+/* tables: sticky header, tabular numbers, quiet zebra, clear hover */
+table{border-collapse:separate;border-spacing:0}
+thead th{position:sticky;top:0;z-index:1;background:#F7F9FC;color:var(--muted);font-weight:600;font-size:.76rem;letter-spacing:.02em;text-transform:none;border-bottom:1px solid var(--line)}
+tbody tr:nth-child(even) td{background:#FBFCFE}
+tbody tr:hover td{background:#F2F6FF}
+td.num,th.num{font-variant-numeric:tabular-nums}
+tfoot td{background:#F7F9FC;font-weight:700;border-top:1px solid var(--line)}
+
+/* hero: text always readable, art sits to the right */
+.hero{border-radius:16px;overflow:hidden;position:relative}
+.hero .copy{position:relative;z-index:2;max-width:46%}
+.hero:not(.photo)::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(6,16,42,.94) 0%,rgba(6,16,42,.78) 38%,rgba(6,16,42,.15) 70%,rgba(6,16,42,0) 100%)}
+.hero .scene{z-index:0}
+.hero .weather{z-index:2}
+.d-hero .copy h1{font:700 2rem/1.15 var(--cond);letter-spacing:.005em}
+@media (max-width:600px){.hero .copy{max-width:100%}.hero:not(.photo)::before{background:linear-gradient(180deg,rgba(6,16,42,.9),rgba(6,16,42,.55))}}
+
+/* monthly summary: hero card keeps the brand gradient, others quiet */
+.mcard.big{background:linear-gradient(135deg,#0B1D46 0%,#173A8F 100%);box-shadow:var(--shadow-2)}
+.mcard.big b{font-size:2.4rem}
+
+/* badges and notices */
+.badge{border-radius:999px;font-weight:600;letter-spacing:0}
+.notice{border-radius:12px;border:1px solid #F3D9A4;background:#FFF8EA;color:#7A4B00}
+.flash{border-radius:12px}
+
+/* page rhythm */
+main{padding:24px 28px 72px}
+.dash{gap:18px}
+@media (max-width:900px){main{padding:14px 12px 108px}}
+
+/* dark mode, tuned */
+body.dark{--ink:#E7ECF7;--ink-2:#C2CBE0;--muted:#8F9BB6;--line:#1F2B47;--line-2:#1A2540;--sunk:#0A1226}
+body.dark .section,body.dark .panel,body.dark .kpi,body.dark .mcard:not(.big),body.dark .tankcard,body.dark .ncard,body.dark .tcard{background:#0F1A33;border-color:#1F2B47;box-shadow:none}
+body.dark thead th,body.dark tfoot td{background:#0C162C}
+body.dark tbody tr:nth-child(even) td{background:#0D1730}
+body.dark tbody tr:hover td{background:#13214A}
+body.dark input,body.dark select,body.dark textarea{background:#0C162C;border-color:#24324F;color:var(--ink)}
+body.dark .btn.secondary{background:#0F1A33;border-color:#24324F;color:var(--ink)}
+body.dark .topbar{background:#0D1730;box-shadow:0 1px 0 #1F2B47}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* v4.1 — KPI cards: icon in the corner, label + number get the full width; clearer canopy stripe */
+.k2{position:relative;grid-template-columns:1fr;padding:16px 18px 10px}
+.k2 .glyph{position:absolute;top:14px;right:14px;width:30px;height:30px;font-size:.85rem;border-radius:9px}
+.k2 > div > span:first-child{display:block;padding-right:38px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.k2 b{font-size:1.65rem;margin-top:2px}
+.k2 .trend + .muted{margin-left:4px}
+.topbar::after{height:5px;bottom:-5px;background:linear-gradient(180deg,var(--brand) 0 3px,var(--canopy-red) 3px 5px)}
+@media (max-width:600px){
+  .hero{display:flex;flex-direction:column;justify-content:flex-end;min-height:0}
+  .hero .copy{padding:22px 18px 6px}
+  .hero .weather{position:relative;top:auto;right:auto;bottom:auto;margin:6px 18px 16px;align-self:flex-start;display:flex;gap:10px;align-items:center;padding:8px 12px}
+  .hero .weather small{display:inline}
+}

@@ -139,6 +139,67 @@ def send_document(phone, filename, data, mime, caption=""):
     return _send(phone, {"type": "document", "document": {"id": up.json()["id"], "filename": filename, "caption": caption[:900]}})
 
 
+def send_list(phone, body, button, sections):
+    """WhatsApp tap-menu (Meta). Rows: id, title (≤24), description (≤72). Max 10 rows in total."""
+    if provider() == "twilio":
+        return False
+    return _send(phone, {"type": "interactive", "interactive": {
+        "type": "list", "body": {"text": body[:1024]}, "action": {"button": button[:20], "sections": [
+            {"title": sec[:24], "rows": [{"id": i, "title": t[:24], "description": d[:72]} for i, t, d in rows]}
+            for sec, rows in sections]}}})
+
+
+def typing(msg_id):
+    """Blue ticks + "typing…" while the answer is prepared (Meta; best effort)."""
+    if provider() == "twilio" or not msg_id:
+        return
+    try:
+        requests.post(f"{GRAPH}/{ver()}/{os.environ.get('WA_PHONE_ID')}/messages", timeout=3,
+                      headers={"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}", "Content-Type": "application/json"},
+                      json={"messaging_product": "whatsapp", "status": "read", "message_id": msg_id,
+                            "typing_indicator": {"type": "text"}})
+    except Exception:
+        pass
+
+
+MAIN_LIST = ("Check", [("tank", "⛽ Tank stock", "HSD / MS litres, % full, days left"),
+                       ("report", "📊 Today’s report", "Sale, litres, credit, cash"),
+                       ("pending", "🚚 Pending credit", "All transporters, oldest bills"),
+                       ("alerts", "🔔 What to do now", "Alerts and reminders"),
+                       ("closing", "📋 Closing status", "Last 7 days")])
+ENTRY_LIST = ("Entry (emergency)", [("help:slip", "➕ Credit slip", "Vehicle, litres, cash taken"),
+                                    ("help:paid", "💰 Payment received", "From a transporter"),
+                                    ("help:expense", "🧾 Expense", "Amount and what for"),
+                                    ("help:docs", "📄 Bill PDF / Excel", "One transporter, any date"),
+                                    ("more", "➡️ More…", "Rates, lube, reopen, profit, bill photos")])
+MORE_LIST = [("Owner", [("rates", "💲 Rates", "See or change HSD / MS / CNG"),
+                        ("help:reopen", "🔓 Reopen dates", "For the manager, 24 hours"),
+                        ("profit", "💰 Profit (month)", "Exact, with what is missing"),
+                        ("variation", "🧪 Tank variation", "Loss / gain this month"),
+                        ("score", "🏷️ Credit score", "Transporters, weakest first"),
+                        ("compare", "📈 This vs last month", "Same days, fair")]),
+             ("More", [("lube", "🛢️ Lube stock", "Stock, sold, arrived"),
+                       ("help:lube", "🛢️ Lube sold / arrived", "Quick lube entry"),
+                       ("bill", "🧾 Bill message (photos)", "Totals → message for transporter"),
+                       ("help:all", "❓ All commands", "Everything you can type")])]
+
+HELP = {
+    "slip": "➕ *Credit slip* — send like:\n*slip svt OD02CL2129 110*\n*slip svt OD02CL2129 110 cash 1000*\n*slip svt OD02CL2129 110 yesterday*\nCash only: *cash svt OD02CL2129 2000*\n(rate is today’s HSD price; I ask YES before saving)",
+    "paid": "💰 *Payment received* — send like:\n*paid svt 50000 cash*\n*paid svt 50000 upi*\n*paid svt 50000 bank UTR123456*",
+    "expense": "🧾 *Expense* — send like:\n*expense 500 electricity*\n*expense 250 tea staff yesterday*",
+    "docs": "📄 *Bill files* — send like:\n*svt pdf 26/10/2026* · *svt excel yesterday* · *svt bill today* · *svt pdf october*",
+    "reopen": "🔓 *Reopen* — *reopen 20/10* · *reopen 18/10-20/10* · *reopen 20/10 for ramesh*",
+    "lube": "🛢️ *Lube* — sold: *lube sold servo 4t 2*  ·  arrived: *lube add servo 4t 12 @ 280*",
+}
+
+
+def menu_reply(more=False):
+    if more:
+        return {"list": ("More options:", "Open", MORE_LIST), "fallback": MENU}
+    return {"list": ("👋 *Sai Fuel Mart assistant*\nTap *Open menu*, or just type what you need — e.g. *tank*, "
+                     "*svt pdf yesterday*, *slip svt OD02CL2129 110*.", "Open menu", [MAIN_LIST, ENTRY_LIST]), "fallback": MENU}
+
+
 def download_media(media_id):
     if provider() == "twilio":                 # Twilio gives a media URL instead of an id
         f = requests.get(media_id, auth=(os.environ.get("TWILIO_ACCOUNT_SID"), os.environ.get("TWILIO_AUTH_TOKEN")), timeout=30)
@@ -237,13 +298,18 @@ Send a number or a word:
 4️⃣ *Closing* — daily closing status
 5️⃣ *Reopen* — reopen dates for the manager
 6️⃣ *Rates* — see / change HSD, MS, CNG
-7️⃣ *Lube* — lube stock / lube arrived
+7️⃣ *Lube* — stock · *lube sold servo 4t 2* · *lube add servo 4t 12 @ 280*
 8️⃣ *Report* — today’s / yesterday’s summary
 9️⃣ *Alerts* — what needs attention now
 🔟 *Profit* — this month (also *variation*, *score*, *compare*)
 📄 *svt pdf 26/10* — bill PDF / Excel of one transporter
    (also *svt excel yesterday*, *svt bill day before yesterday*, *svt pdf october*)
 
+➕ *Entries* (ask YES first):
+   *slip svt OD02CL2129 110 cash 1000* · *cash svt OD02CL2129 2000*
+   *paid svt 50000 upi* · *expense 500 electricity*
+
+Or just write normally — I understand plain sentences too.
 Send *menu* any time."""
 
 
@@ -533,11 +599,143 @@ def documents_reply(cur, low):
     return {"docs": docs, "caption": caption, "reply": f"📄 {caption}"}
 
 
+PLATE_RE = re.compile(r"\b([a-z]{2})\s?(\d{1,2})\s?([a-z]{0,3})\s?(\d{3,4})\b")
+
+
+def _amounts(text):
+    return [Decimal(x) for x in re.findall(r"(?<![\w/.-])(\d+(?:\.\d{1,2})?)(?![\w/.-])", text)]
+
+
+def entry_reply(cur, phone, low, cmd, rest):
+    """Emergency entries — always ask YES first."""
+    from .scan import vehicle as clean_plate
+    when = _when(low)
+    d = when[1] if when and when[0] == "day" else today()
+    noday = re.sub(r"day before yesterday|yesterday|today|\bkal\b|\baaj\b|\bparso\b|\b\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?\b", " ", rest)
+    if cmd in ("slip", "entry", "cash"):
+        hits, parties = _which_party(cur, rest)
+        if len(hits) != 1:
+            return "Which transporter? " + ", ".join(p["name"] for p in (hits or parties)[:12]) + "\n\n" + HELP["slip"]
+        m = PLATE_RE.search(noday)
+        if not m:
+            return "Vehicle number not clear (e.g. OD02CL2129).\n\n" + HELP["slip"]
+        veh = clean_plate("".join(m.groups()))
+        tail = noday[:m.start()] + " " + noday[m.end():]
+        cash = Decimal(0)
+        cm = re.search(r"cash\s*(\d+(?:\.\d+)?)", tail) if cmd != "cash" else None
+        if cm:
+            cash = Decimal(cm.group(1)); tail = tail[:cm.start()] + tail[cm.end():]
+        nums = _amounts(tail)
+        if cmd == "cash":
+            if not nums:
+                return "How much cash? e.g. *cash svt OD02CL2129 2000*"
+            cash, qty = nums[0], Decimal(0)
+        else:
+            if not nums:
+                return "How many litres? e.g. *slip svt OD02CL2129 110*"
+            qty = nums[0]
+        from .services import rates_for
+        rate = rates_for(cur, d).get("HSD")
+        if qty and not rate:
+            return f"No HSD price is set for {d:%d %b}. Set it first (*rates*)."
+        fuel_amt = (qty * rate).quantize(Decimal("1")) if qty else Decimal(0)
+        state = {"mode": "confirm", "action": "slip", "party_id": hits[0]["id"], "party": hits[0]["name"], "vehicle": veh,
+                 "qty": str(qty), "cash": str(cash), "d": d.isoformat()}
+        save_state(cur, phone, state, touch=True)
+        return (f"➕ *Credit slip* — {hits[0]['name']}, {d:%d %b %Y}\nVehicle: *{veh}*\n"
+                + (f"HSD: {qty} L × ₹{rate} = {inr(fuel_amt)}\n" if qty else "") + (f"Cash taken: {inr(cash)}\n" if cash else "")
+                + f"Total: *{inr(fuel_amt + cash)}*\nReply *YES* to save.")
+    if cmd in ("paid", "payment", "received", "receive"):
+        hits, parties = _which_party(cur, rest)
+        if len(hits) != 1:
+            return "Which transporter? " + ", ".join(p["name"] for p in (hits or parties)[:12]) + "\n\n" + HELP["paid"]
+        ref = ""
+        rm = re.search(r"\b(?:utr|ref|chq|cheque no|no)\.?\s*([a-z0-9]{4,30})", noday)
+        if rm:
+            ref = rm.group(1).upper(); noday = noday.replace(rm.group(0), " ")
+        nums = _amounts(noday)
+        if not nums:
+            return "How much? e.g. *paid svt 50000 upi*"
+        from .services import PAY_MODES
+        mode = "Cash"
+        for word, key in (("upi", "upi"), ("bank", "bank"), ("neft", "bank"), ("rtgs", "bank"), ("imps", "bank"), ("cheque", "cheque"), ("chq", "cheque"), ("card", "card")):
+            if re.search(rf"\b{word}\b", noday):
+                mode = next((k for k in PAY_MODES if key in k.lower()), mode); break
+        save_state(cur, phone, {"mode": "confirm", "action": "paid", "party_id": hits[0]["id"], "party": hits[0]["name"],
+                                "amount": str(nums[0]), "pay_mode": mode, "ref": ref, "d": d.isoformat()}, touch=True)
+        return (f"💰 *Payment received* — {hits[0]['name']}, {d:%d %b %Y}\nAmount: *{inr(nums[0])}* by {mode}"
+                + (f" (ref {ref})" if ref else "") + "\nReply *YES* to save.")
+    if cmd in ("expense", "exp", "kharcha"):
+        nums = _amounts(noday)
+        if not nums:
+            return HELP["expense"]
+        from .services import EXPENSE_CATEGORIES
+        words = re.sub(r"\d+(?:\.\d+)?", " ", noday).strip()
+        cat = next((c for c in EXPENSE_CATEGORIES if c.lower().split()[0] in words.lower()), "General")
+        save_state(cur, phone, {"mode": "confirm", "action": "expense", "amount": str(nums[0]), "category": cat,
+                                "desc": words[:120] or cat, "d": d.isoformat()}, touch=True)
+        return f"🧾 *Expense* {d:%d %b %Y}: *{inr(nums[0])}* — {cat}" + (f" ({words})" if words else "") + "\nReply *YES* to save."
+    return None
+
+
+def lube_sold_reply(cur, phone, rest):
+    m = re.match(r"^sold\s+(.+?)\s+(\d+(?:\.\d+)?)$", rest)
+    if not m:
+        return HELP["lube"]
+    cur.execute("SELECT id, name, sale_rate FROM lube_products WHERE active AND LOWER(name) LIKE %s ORDER BY name", (f"%{m.group(1)}%",))
+    found = cur.fetchall()
+    if len(found) != 1:
+        return (f"Which product? Found: {', '.join(p['name'] for p in found[:8])}" if found else f"No lube product matching “{m.group(1)}”.")
+    p = found[0]
+    save_state(cur, phone, {"mode": "confirm", "action": "lube_sale", "product_id": p["id"], "name": p["name"], "qty": m.group(2)}, touch=True)
+    return f"🛢️ Lube sold: *{p['name']}* × {m.group(2)} @ ₹{p['sale_rate']} = {inr(Decimal(m.group(2)) * Decimal(p['sale_rate'] or 0))} (cash)\nReply *YES* to save."
+
+
+AI_PROMPT = """You turn a fuel station owner's WhatsApp message (English / Hindi / Odia / Hinglish) into ONE command.
+Commands: tank | report | report DD/MM | pending | pending <transporter> | closing | alerts | rates |
+rate HSD <price> MS <price> [tomorrow] | profit | variation | score | compare | lube |
+lube sold <product> <qty> | lube add <product> <qty> @ <rate> |
+slip <transporter> <vehicle> <litres> [cash <amount>] [DD/MM] | cash <transporter> <vehicle> <amount> [DD/MM] |
+paid <transporter> <amount> [cash|upi|bank] [UTR <no>] [DD/MM] | expense <amount> <what> [DD/MM] |
+<transporter> pdf|excel|bill <DD/MM/YYYY|yesterday|today|month> | reopen DD/MM[-DD/MM] [for <user>] | bill | menu
+Transporters: {parties}. Today is {today}.
+Return JSON {{"command": "..."}}; use "menu" if it is none of these. Never invent numbers that are not in the message."""
+
+
+def ai_command(cur, text):
+    """Free sentence → one command (Gemini, fast model, thinking off). None if not set up / not understood."""
+    from . import scan
+    if not (scan.gemini_ready("message")):
+        return None
+    cur.execute("SELECT name FROM parties WHERE active ORDER BY name")
+    names = ", ".join(r["name"] for r in cur.fetchall())[:800]
+    try:
+        old = scan.MESSAGE_SCHEMA
+        out = scan._call((scan._available("message") and next((m for m in scan._models("message") if m in scan._available("message")), None))
+                         or scan._models("message")[0],
+                         [{"text": AI_PROMPT.format(parties=names, today=today().strftime("%d/%m/%Y")) + "\n\nMessage: " + text[:500]}],
+                         schema=False, job="message", timeout=8)
+        cmd = (out or {}).get("command", "").strip()
+        return cmd if cmd and cmd.lower() != "menu" else None
+    except Exception:
+        return None
+
+
 def handle(cur, phone, user, msg):
     """One incoming WhatsApp message → reply text (or None when a background job will answer)."""
     s = session(cur, phone)
     state = s["state"] or {}
     mtype = msg.get("type")
+    if mtype == "interactive":
+        it = msg.get("interactive") or {}
+        rid = (it.get("list_reply") or it.get("button_reply") or {}).get("id", "")
+        if rid == "more":
+            return menu_reply(more=True)
+        if rid.startswith("help:"):
+            key = rid[5:]
+            return MENU if key == "all" else HELP.get(key, MENU)
+        msg = {"type": "text", "text": {"body": rid}}
+        mtype = "text"
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
 
@@ -584,13 +782,19 @@ def handle(cur, phone, user, msg):
         cur.execute("DELETE FROM wa_log WHERE detail LIKE %s", (f"%{mask(phone)}%",))
         cur.execute("UPDATE wa_sessions SET state='{}'::jsonb WHERE phone=%s", (phone,))
         return "🗑️ Your WhatsApp chat records with the assistant are deleted."
-    if wants_documents(low):
-        return documents_reply(cur, low)
     words = low.split(" ")
     cmd, rest = (words[0], " ".join(words[1:])) if words else ("", "")
-    if low in ("hi", "hello", "hey", "menu", "help", "0", "start") or not low:
+    if wants_documents(low) and cmd not in ("slip", "entry", "cash", "paid", "payment", "received", "receive", "expense", "exp", "kharcha", "lube"):
+        return documents_reply(cur, low)
+    if low in ("hi", "hello", "hey", "menu", "help", "0", "start", "hii", "hlo", "namaste") or not low:
         save_state(cur, phone, {}, touch=True)
-        return MENU
+        return menu_reply()
+    if cmd in ("more",):
+        return menu_reply(more=True)
+    if cmd in ("slip", "entry", "cash", "paid", "payment", "received", "receive", "expense", "exp", "kharcha"):
+        return entry_reply(cur, phone, low, cmd, rest) if rest else HELP["paid" if cmd in ("paid", "payment", "received", "receive") else "expense" if cmd in ("expense", "exp", "kharcha") else "slip"]
+    if cmd in ("7", "lube", "lubes") and rest.startswith("sold"):
+        return lube_sold_reply(cur, phone, rest)
     if cmd in ("1", "tank", "tanks", "stock"):
         return tank_text(cur)
     if cmd in ("2", "bill", "bills"):
@@ -620,7 +824,15 @@ def handle(cur, phone, user, msg):
         return score_text(cur)
     if cmd in ("compare", "comparison"):
         return compare_text(cur)
-    return "🤔 I didn't understand that.\n\n" + MENU
+    if not msg.get("_ai"):
+        guess = ai_command(cur, text)
+        if guess:
+            r = handle(cur, phone, user, {"type": "text", "text": {"body": guess}, "_ai": True})
+            if isinstance(r, str) and not r.startswith("🤔"):
+                return f"_(understood as: {guess})_\n\n" + r
+            if isinstance(r, dict):
+                return r
+    return "🤔 I didn't understand that. Tap *Open menu* or type *menu*.\n\n" + HELP["slip"].split("\n")[0]
 
 
 def ask_reopen(cur, phone, rest):
@@ -698,6 +910,35 @@ def run_confirmed(cur, st):
         if st["action"] == "lube":
             lube_purchase(cur, st["product_id"], st["qty"], st["rate"])
             return f"✅ {st['name']}: +{st['qty']} @ ₹{st['rate']} saved."
+        if st["action"] == "slip":
+            from .views.transport import create_entry
+            form = {"party": str(st["party_id"]), "fuel_code": "HSD", "vehicle_no": st["vehicle"], "cash_taken": st["cash"],
+                    "remarks": "via WhatsApp"}
+            if Decimal(st["qty"]) > 0:
+                form["qty"] = st["qty"]
+            else:
+                form.update(kind="cash_advance", amount=st["cash"])
+            d = date.fromisoformat(st["d"])
+            cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
+            r, p_ = create_entry(cur, form, d)
+            from .security import audit
+            audit(cur, "create", "transport_entry", r["id"],
+                  f"SL {r['sl_no']} {st['party']}: {r['qty']} {r['fuel_code'] or ''} @ ₹{r['rate']} "
+                  f"+ cash ₹{r['cash_taken'] if r['kind'] == 'fuel' else r['debit']} = ₹{r['debit']} (WhatsApp)",
+                  after=r, business_date=d)
+            return f"✅ Slip saved — SL {r.get('sl_no') or '–'}, {st['party']}, {st['vehicle']}: {inr(r['debit'])}"
+        if st["action"] == "paid":
+            from .actions import add_payment
+            rec = add_payment(cur, st["party_id"], date.fromisoformat(st["d"]), st["amount"], st["pay_mode"], st.get("ref", ""))
+            return f"✅ Payment saved — receipt {rec}: {inr(st['amount'])} from {st['party']} ({st['pay_mode']})."
+        if st["action"] == "expense":
+            from .actions import add_expense
+            add_expense(cur, date.fromisoformat(st["d"]), st["amount"], st["category"], st["desc"])
+            return f"✅ Expense saved: {inr(st['amount'])} — {st['category']}."
+        if st["action"] == "lube_sale":
+            from .actions import lube_sale
+            name, amt = lube_sale(cur, st["product_id"], st["qty"])
+            return f"✅ Lube sale saved: {name} × {st['qty']} = {inr(amt)}."
     except UserError as e:
         return f"❌ Not done: {e}"
     return "Nothing to confirm."

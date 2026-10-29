@@ -14,7 +14,8 @@ import sfm.wa as wa, sfm.scan as scan, sfm.scheduler as sched
 FAILS = []
 def check(ok, msg):
     print(("  ok  " if ok else "  FAIL ") + msg); FAILS.append(msg) if not ok else None
-SENT, UPLOADS = [], []
+SENT, UPLOADS, TYPING = [], [], []
+AI = {"svt ki gaadi OD02CL2129 ne 20 litre liya": "slip svt OD02CL2129 20"}
 class R:
     def __init__(s, code, body): s.status_code, s._b, s.text, s.content, s.headers = code, body, json.dumps(body), b"\xff\xd8\xffJPEG", {"Content-Type": "image/jpeg"}
     def json(s): return s._b
@@ -28,9 +29,17 @@ def fake_post(url, json=None, headers=None, timeout=None, data=None, auth=None, 
     if "graph" in url and url.endswith("/media"):                          # file upload
         UPLOADS.append(k["files"]["file"][0]); return R(200, {"id": f"MEDIA{len(UPLOADS)}"})
     if "graph" in url and url.endswith("/messages"):                       # WhatsApp send
+        if json.get("status") == "read":
+            TYPING.append(json.get("message_id")); return R(200, {"success": True})
+        if json.get("type") == "interactive":
+            SENT.append((json["to"], "LIST:" + json["interactive"]["body"]["text"])); return R(200, {"messages": [{"id": "wamid.l"}]})
         if json.get("type") == "document":
             SENT.append((json["to"], "DOC:" + json["document"]["filename"])); return R(200, {"messages": [{"id": "wamid.d"}]})
         SENT.append((json["to"], json["text"]["body"])); return R(200, {"messages": [{"id": "wamid.x"}]})
+    if "generativelanguage" in url and "owner's WhatsApp message" in json["contents"][0]["parts"][-1].get("text", ""):
+        said = json["contents"][0]["parts"][-1]["text"].split("Message: ", 1)[1]
+        cmd = AI.get(said, "menu")
+        return R(200, {"candidates": [{"content": {"parts": [{"text": _json.dumps({"command": cmd})}]}}]})
     if "generativelanguage" in url:                                       # Gemini reads a bill
         return R(200, {"candidates": [{"content": {"parts": [{"text": _json.dumps(next(BILL))}]}}]})
     raise AssertionError(url)
@@ -63,16 +72,55 @@ check(cl.get("/api/wa/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.chal
 r, out = send(STRANGER, "hi"); check(r.status_code == 200 and not out, "a stranger's number gets no answer")
 r, out = send(OWNER, "hi", sign=False); check(r.status_code == 403 and not out, "message without Meta's signature refused")
 print("Menu and answers")
-r, out = send(OWNER, "hi"); check(out and "Sai Fuel Mart assistant" in out[0], "hi → menu")
+r, out = send(OWNER, "hi"); check(out and out[0].startswith("LIST:") and "Sai Fuel Mart assistant" in out[0], "hi → tap-menu (WhatsApp list)")
+check(TYPING, "blue ticks + “typing…” sent while working")
 for cmd, want in (("1", "Tank stock"), ("pending", "Pending credit"), ("pending svt", "SVT Logistics"), ("closing", "Daily closing"),
                   ("rates", "Today’s rates"), ("lube", "Lube stock"), ("report", "Report —"), ("alerts", ""), ("profit", "Profit"),
                   ("variation", "Tank variation"), ("score", "credit score"), ("compare", "This month vs"), ("blah", "didn't understand")):
     r, out = send(OWNER, cmd)
+    if cmd == "blah":
+        check(out and "didn't understand" in out[-1], "nonsense → “didn't understand” (after asking the AI)"); continue
     check(out and want in out[-1], f"“{cmd}” → {out[-1].splitlines()[0][:60] if out else 'nothing'}")
 c.execute("SELECT msg_id FROM pump.wa_seen ORDER BY at DESC LIMIT 1"); last = c.fetchone()[0]
 body = json.dumps({"entry": [{"changes": [{"value": {"messages": [{"from": OWNER, "id": last, "type": "text", "text": {"body": "1"}}]}}]}]}).encode()
 b0 = len(SENT); cl.post("/api/wa/webhook", data=body, headers={"X-Hub-Signature-256": "sha256=" + hmac.new(b"appsecret", body, hashlib.sha256).hexdigest()})
 check(len(SENT) == b0, "the same message delivered twice by Meta is answered once")
+print("Tap-menu + emergency entries")
+def tap(phone, rid):
+    n["i"] += 1
+    msg = {"from": phone, "id": f"wamid.tap{n['i']}", "type": "interactive", "interactive": {"type": "list_reply", "list_reply": {"id": rid, "title": rid}}}
+    body = json.dumps({"entry": [{"changes": [{"value": {"messages": [msg]}}]}]}).encode()
+    b0 = len(SENT); cl.post("/api/wa/webhook", data=body, headers={"X-Hub-Signature-256": "sha256=" + hmac.new(b"appsecret", body, hashlib.sha256).hexdigest()})
+    return [t for _, t in SENT[b0:]]
+check("Tank stock" in "".join(tap(OWNER, "tank")), "tapping “⛽ Tank stock” in the menu → tank answer")
+check("Credit slip" in "".join(tap(OWNER, "help:slip")), "tapping “➕ Credit slip” → how to write it")
+check("LIST:" in "".join(tap(OWNER, "more")), "tapping “More…” → second menu")
+r, out = send(OWNER, "slip svt OD02CL2129 50 cash 500")
+check(out and "Reply *YES*" in out[0] and "OD02CL2129" in out[0], "slip → summary with total, asks YES")
+r, out = send(OWNER, "yes")
+c.execute("SELECT qty, cash_taken, debit, remarks FROM pump.party_txns WHERE vehicle_no='OD02CL2129' AND remarks='via WhatsApp' AND kind='fuel' ORDER BY id DESC LIMIT 1")
+row = c.fetchone()
+check(row and row[0] == 50 and row[1] == 500 and "Slip saved" in out[0], f"slip saved like the website: {row} · {out[0][:60] if out else ''}")
+r, out = send(OWNER, "cash svt OD02CL2129 700"); r, out = send(OWNER, "yes")
+c.execute("SELECT debit FROM pump.party_txns WHERE vehicle_no='OD02CL2129' AND kind='cash_advance' ORDER BY id DESC LIMIT 1")
+check((c.fetchone() or [0])[0] == 700, "cash only (cash advance) saved")
+r, out = send(OWNER, "paid svt 1000 upi"); r, out = send(OWNER, "yes")
+c.execute("SELECT credit, pay_mode, receipt_no FROM pump.party_txns WHERE kind='payment' AND remarks='via WhatsApp' ORDER BY id DESC LIMIT 1")
+pr = c.fetchone()
+check(pr and pr[0] == 1000 and "UPI" in pr[1] and pr[2], f"payment saved with receipt no.: {pr}")
+r, out = send(OWNER, "expense 300 electricity bill yesterday")
+check(out and "Expense" in out[0] and "YES" in out[0], "“expense … bill yesterday” stays an expense (not a bill request)")
+r, out = send(OWNER, "yes")
+c.execute("SELECT amount, category, business_date FROM pump.expenses ORDER BY id DESC LIMIT 1")
+ex = c.fetchone()
+check(ex and ex[0] == 300 and ex[1] == "Electricity" and ex[2] == date.today() - timedelta(days=1), f"expense saved for yesterday: {ex}")
+r, out = send(OWNER, "lube sold servo 1"); r, out = send(OWNER, "yes")
+check(out and "Lube sale saved" in out[0], f"lube sale saved: {out[0][:50] if out else ''}")
+c.execute("SELECT COUNT(DISTINCT entity) FROM pump.audit_log WHERE username='boss (WhatsApp)' AND entity IN ('transport_entry','party_txn','expense','lube_sale')")
+check(c.fetchone()[0] == 4, "every entry in the audit log as “boss (WhatsApp)”")
+r, out = send(OWNER, "svt ki gaadi OD02CL2129 ne 20 litre liya")
+check(out and "understood as: slip svt OD02CL2129 20" in out[0] and "YES" in out[0], "plain sentence understood → slip to confirm")
+send(OWNER, "no")
 print("Actions (need YES)")
 tm = date.today() + timedelta(days=1)
 r, out = send(OWNER, "rate hsd 95.50 ms 102.25 tomorrow"); check(out and "Reply *YES*" in out[0] and "95.50" in out[0], "rate change asks for YES")

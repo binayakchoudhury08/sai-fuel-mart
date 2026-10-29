@@ -147,12 +147,17 @@ def _process(msgs):
                 continue
             wa.log("received", f"from {wa.mask(phone)} ({allowed[phone]}): {(msg.get('text') or {}).get('body', msg.get('type'))[:40]}")
             first = not wa.window_open(cur, phone)
+            wa.typing(msg.get("id"))
             reply = wa.handle(cur, phone, user, msg)
             wa.save_state(cur, phone, wa.session(cur, phone)["state"] or {}, touch=True)
             if first or msg.get("type") == "text":
                 wa.deliver_waiting(cur, phone)
             note = wa.sandbox_note(cur, phone, first)
-        if isinstance(reply, dict) and reply.get("docs"):
+        if isinstance(reply, dict) and reply.get("list"):
+            body, button, sections = reply["list"]
+            if not wa.send_list(phone, body + note, button, sections):
+                wa.send_text(phone, reply.get("fallback", wa.MENU) + note)
+        elif isinstance(reply, dict) and reply.get("docs"):
             for name, data, mime in reply["docs"]:
                 wa.send_document(phone, name, data, mime, reply.get("caption", ""))
             if note:

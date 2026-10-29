@@ -1,5 +1,21 @@
 # Sai Fuel Mart — changes
 
+## 3.17.0 — Advanced WhatsApp assistant + premium design
+
+WhatsApp
+- Tap-menu (WhatsApp lists): Check · Entry (emergency) · More — no typing needed; "typing…" + blue ticks shown at once.
+- Emergency entries, each confirmed with YES, saved with the website's own rules and audited "(WhatsApp)":
+  credit slip (slip svt OD02CL2129 110 cash 1000 [date]), cash only (cash svt OD02CL2129 2000), payment received
+  (paid svt 50000 upi / bank UTR…), expense (expense 500 electricity [yesterday]), lube sold (lube sold servo 4t 2).
+- Plain sentences (English / Hindi / Hinglish…) are understood: unknown messages go to a fast Gemini step that turns
+  them into one command, shown as "understood as: …", still asking YES for entries.
+
+Design
+- Premium pass: canopy stripe under the top bar, ink-navy sidebar with a slim active marker, hairline panels with
+  layered soft shadows, meter-style condensed numbers, sticky table headers with tabular figures, clearer buttons and
+  focus rings, readable hero text over the forecourt art, roomier KPI cards, better phone hero, tuned dark mode,
+  reduced-motion respected.
+
 ## 3.16.4 — WhatsApp delivery reports
 - The check page now also shows Meta's delivery report for each reply: DELIVERED / READ, or DELIVERY FAILED with
   Meta's code and reason (e.g. 131030 recipient not in allowed list).

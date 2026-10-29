@@ -56,10 +56,10 @@
     {% else %}<p class="empty">No nozzles yet.</p>{% endfor %}</div></section>
 
   <div class="kpis d-kpis">
-    <div class="kpi k2" style="--mc:#22C55E"><span class="glyph">₹</span><div><span>Total Sales (Today)</span><b>{{ td.gross_sale|cr }}</b><small class="crx">{{ td.gross_sale|rs }}</small>{{ trend(kpi.sale_pct) }}</div>{{ spark(sparks.sale, '#22C55E') }}</div>
-    <div class="kpi k2" style="--mc:#1D5BEB"><span class="glyph">🧾</span><div><span>Total Transactions</span><b>{{ kpi.tx }}</b>{{ trend(kpi.tx_pct) }}</div>{{ spark(sparks.tx, '#1D5BEB') }}</div>
-    <div class="kpi k2" style="--mc:#8B5CF6"><span class="glyph">◔</span><div><span>Avg. Sale Amount</span><b>{{ kpi.avg|rs }}</b>{{ trend(kpi.avg_pct) }}</div>{{ spark(sparks.avg, '#8B5CF6') }}</div>
-    <div class="kpi k2" style="--mc:#F59E0B"><span class="glyph">⛽</span><div><span>Fuel Dispensed</span><b>{{ kpi.litres|qty(0) }} Ltrs</b>{{ trend(kpi.litres_pct) }}</div>{{ spark(sparks.litres, '#F59E0B') }}</div>
+    <div class="kpi k2" style="--mc:#22C55E"><span class="glyph">₹</span><div><span>Sales today</span><b>{{ td.gross_sale|cr }}</b><small class="crx">{{ td.gross_sale|rs }}</small>{{ trend(kpi.sale_pct) }}</div>{{ spark(sparks.sale, '#22C55E') }}</div>
+    <div class="kpi k2" style="--mc:#1D5BEB"><span class="glyph">🧾</span><div><span>Transactions</span><b>{{ kpi.tx }}</b>{{ trend(kpi.tx_pct) }}</div>{{ spark(sparks.tx, '#1D5BEB') }}</div>
+    <div class="kpi k2" style="--mc:#8B5CF6"><span class="glyph">◔</span><div><span>Avg. sale</span><b>{{ kpi.avg|rs }}</b>{{ trend(kpi.avg_pct) }}</div>{{ spark(sparks.avg, '#8B5CF6') }}</div>
+    <div class="kpi k2" style="--mc:#F59E0B"><span class="glyph">⛽</span><div><span>Fuel sold</span><b>{{ kpi.litres|qty(0) }} Ltrs</b>{{ trend(kpi.litres_pct) }}</div>{{ spark(sparks.litres, '#F59E0B') }}</div>
   </div>
 
   {% if mon and user.role == 'owner' %}<section class="panel d-month"><header><h2><span class="hico">📅</span>Monthly Summary — {{ month_nav.label }}</h2>

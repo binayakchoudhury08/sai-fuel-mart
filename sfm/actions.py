@@ -85,3 +85,63 @@ def lube_purchase(cur, product_id, qty, rate, d=None):
                 (product_id, d, qty, rate, (qty * rate).quantize(Decimal("0.01")), current_user()["username"]))
     audit(cur, "create", "lube_move", product_id, f"Lube arrived: {p['name']} +{qty} @ ₹{rate}", business_date=d)
     return p["name"]
+
+
+def add_payment(cur, party_id, d, amount, mode="Cash", reference=""):
+    """Payment received from a transporter (same rules as Party accounts → Receive payment)."""
+    from .security import assert_writable, next_receipt_no
+    from .services import PAY_MODES
+    amount = Decimal(amount)
+    if amount <= 0:
+        raise UserError("Amount received must be more than zero.")
+    if mode not in PAY_MODES:
+        raise UserError("Mode must be one of: " + ", ".join(PAY_MODES))
+    if mode in ("Bank transfer", "Cheque") and not reference:
+        raise UserError("Add the UTR / cheque number, e.g. ‘… bank UTR123456’.")
+    assert_writable(cur, d)
+    cur.execute("SELECT * FROM parties WHERE id=%s FOR UPDATE", (party_id,))
+    p = cur.fetchone()
+    cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
+    receipt = next_receipt_no(cur, d)
+    cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, credit, pay_mode, reference, receipt_no, remarks, created_by)
+                   VALUES (%s,%s,'payment',%s,%s,%s,%s,'via WhatsApp',%s) RETURNING *""",
+                (party_id, d, amount, mode, reference[:60], receipt, current_user()["username"]))
+    t = cur.fetchone()
+    audit(cur, "create", "party_txn", t["id"], f"Payment ₹{amount} – {p['name']} via {mode} #{receipt}", after=t, business_date=d)
+    return receipt
+
+
+def add_expense(cur, d, amount, category, description):
+    from .security import assert_writable
+    amount = Decimal(amount)
+    if amount <= 0 or amount > 1000000:
+        raise UserError("Expense amount looks wrong.")
+    assert_writable(cur, d)
+    cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
+    cur.execute("""INSERT INTO expenses (business_date, category, description, amount, from_counter, created_by)
+                   VALUES (%s,%s,%s,%s,TRUE,%s) RETURNING *""",
+                (d, category[:40] or "General", (description or category)[:200], amount, current_user()["username"]))
+    e = cur.fetchone()
+    audit(cur, "create", "expense", e["id"], f"Expense ₹{amount} – {category}: {description}", after=e, business_date=d)
+    return e
+
+
+def lube_sale(cur, product_id, qty, d=None, mode="Cash"):
+    from .security import assert_writable
+    d = d or today()
+    qty = Decimal(qty)
+    if qty <= 0:
+        raise UserError("Quantity must be more than zero.")
+    assert_writable(cur, d)
+    cur.execute("SELECT * FROM lube_products WHERE id=%s AND active", (product_id,))
+    p = cur.fetchone()
+    if not p or not p["sale_rate"]:
+        raise UserError("Product not found or it has no sale price.")
+    rate = Decimal(p["sale_rate"])
+    amount = (qty * rate).quantize(Decimal("0.01"))
+    cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
+    cur.execute("""INSERT INTO lube_moves (product_id, business_date, kind, qty, rate, amount, pay_mode, created_by)
+                   VALUES (%s,%s,'sale',%s,%s,%s,%s,%s) RETURNING *""", (product_id, d, -qty, rate, amount, mode, current_user()["username"]))
+    m = cur.fetchone()
+    audit(cur, "create", "lube_sale", m["id"], f"Sold {qty} {p['name']} @ ₹{rate} = ₹{amount} ({mode})", after=m, business_date=d)
+    return p["name"], amount
