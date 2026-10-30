@@ -2,7 +2,7 @@ import json
 from datetime import timedelta
 from decimal import Decimal
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from .. import db
 from ..security import (assert_writable, audit, can, can_unlock, claim_form_token, current_user, login_required,
@@ -529,3 +529,114 @@ def print_day(d):
         t = compute_day(cur, d)
         st = settings_map(cur)
     return render_template("day/print.html", t=t, d=d, st=st, PAY_MODES=PAY_MODES)
+
+
+# ------------------------------------------------------------------ scan the handwritten closing page
+@bp.route("/day/<d>/scan", methods=["POST"])
+@login_required("closing_enter")
+def closing_scan(d):
+    import json as _j
+    import uuid as _u
+    from flask import jsonify
+    from .. import storage
+    from ..closing_scan import read_closing
+    d = parse_date(d)
+    try:
+        f = request.files.get("photo")
+        if not f or not f.filename:
+            raise UserError("Take a photo of the closing page.")
+        data = f.read(4_000_001)
+        mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
+        raw = read_closing(data, mime)
+        path = ""
+        if storage.ready():
+            try:
+                path = f"closing-scans/{d:%Y-%m}/{_u.uuid4().hex}.jpg"
+                storage.put(path, data, mime)
+            except Exception:
+                path = ""
+        with db.tx() as cur:
+            cur.execute("INSERT INTO closing_scans (business_date, created_by, photo_path, raw) VALUES (%s,%s,%s,%s) RETURNING id",
+                        (d, current_user()["username"], path, _j.dumps(raw)))
+            sid = cur.fetchone()["id"]
+        return jsonify({"ok": True, "review": url_for("day.closing_scan_review", d=d.isoformat(), sid=sid)})
+    except UserError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.route("/day/<d>/scan/<int:sid>")
+@login_required("closing_enter")
+def closing_scan_review(d, sid):
+    from ..closing_scan import analyse
+    from ..services import EXPENSE_CATEGORIES
+    d = parse_date(d)
+    with db.tx() as cur:
+        cur.execute("SELECT * FROM closing_scans WHERE id=%s AND business_date=%s", (sid, d))
+        s = cur.fetchone()
+        if not s:
+            abort(404)
+        a = analyse(cur, d, s["raw"] or {})
+        cur.execute("SELECT id, name FROM parties WHERE active ORDER BY name")
+        parties = cur.fetchall()
+        cur.execute("SELECT id, name FROM collection_modes WHERE active ORDER BY sort, id")
+        modes = cur.fetchall()
+        cur.execute("SELECT id, name, sale_rate FROM lube_products WHERE active ORDER BY name")
+        products = cur.fetchall()
+        cur.execute("SELECT COUNT(*) AS n FROM closing_scans WHERE business_date=%s AND status='saved' AND id<>%s", (d, sid))
+        already = cur.fetchone()["n"]
+    return render_template("day/closing_scan.html", s=s, a=a, d=d, parties=parties, modes=modes, products=products,
+                           categories=EXPENSE_CATEGORIES, already=already)
+
+
+@bp.route("/day/<d>/scan/<int:sid>/photo")
+@login_required("closing_enter")
+def closing_scan_photo(d, sid):
+    from .. import storage
+    s = db.one("SELECT photo_path FROM closing_scans WHERE id=%s", (sid,))
+    if not s or not s["photo_path"]:
+        abort(404)
+    return redirect(storage.signed_download(s["photo_path"], 1800))
+
+
+@bp.route("/day/<d>/scan/<int:sid>/save", methods=["POST"])
+@login_required("closing_enter")
+def closing_scan_save(d, sid):
+    import json as _j
+    from ..closing_scan import analyse, save
+    from ..security import role
+    from ..services import compute_day
+    d = parse_date(d)
+    with db.tx() as cur:
+        claim_form_token(cur)
+        cur.execute("SELECT * FROM closing_scans WHERE id=%s AND business_date=%s FOR UPDATE", (sid, d))
+        s = cur.fetchone()
+        if not s or s["status"] != "review":
+            raise UserError("This scan was already saved or discarded.")
+        cur.execute("SELECT COUNT(*) AS n FROM closing_scans WHERE business_date=%s AND status='saved'", (d,))
+        if cur.fetchone()["n"] and role() != "owner":
+            raise UserError("A scanned page was already saved for this date. Correct it in Daily Closing (or ask the owner).")
+        a = analyse(cur, d, s["raw"] or {})
+        done = save(cur, d, request.form, a)
+        c = compute_day(cur, d)
+        expected = Decimal(str(c["expected_cash"]))
+        page = Decimal(request.form.get("page_cash") or a["page_cash"] or 0)
+        short = expected - page                      # positive = less cash on the page than the system expects
+        result = {"done": done, "expected": str(expected), "page": str(page), "short": str(short),
+                  "ok": short <= 10, "recon_ok": bool(c.get("recon_ok", True))}
+        cur.execute("UPDATE closing_scans SET status='saved', result=%s WHERE id=%s", (_j.dumps(result), sid))
+    msg = (f"Closing page saved. Page cash ₹{page:,.0f} · system expects ₹{expected:,.0f} → "
+           + (f"short ₹{short:,.0f} ✓ (within ₹10)" if 0 < short <= 10 else ("matches ✓" if short <= 0 and short > -1 else
+              (f"excess ₹{-short:,.0f}" if short < 0 else f"SHORT ₹{short:,.0f} ✗"))))
+    if not result["recon_ok"]:
+        msg += " · Transporter credit totals don’t match the slips yet (step 3)."
+    flash(msg, "success" if result["ok"] and result["recon_ok"] else "error")
+    return redirect(url_for("day.day_view", d=d.isoformat()))
+
+
+@bp.route("/day/<d>/scan/<int:sid>/discard", methods=["POST"])
+@login_required("closing_enter")
+def closing_scan_discard(d, sid):
+    with db.tx() as cur:
+        cur.execute("UPDATE closing_scans SET status='discarded' WHERE id=%s AND status='review'", (sid,))
+    flash("Scan discarded — nothing was saved.", "info")
+    return redirect(url_for("day.day_view", d=d))

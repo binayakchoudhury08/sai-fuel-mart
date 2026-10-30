@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Check scanned closing{% endblock %}
+{% block content %}
+{% set KIND = [('credit','Credit given (transporter)'),('payment','Payment received'),('digital','Digital collection'),('sai','Sai Hitech slip (Babu)'),('expense','Expense'),('misc','Misc expense (advance)'),('skip','Skip — not saved')] %}
+<form method="post" action="{{ url_for('day.closing_scan_save', d=d.isoformat(), sid=s.id) }}" class="scanwrap" style="padding:0">{{ hidden() }}
+<aside class="scanphoto">{% if s.photo_path %}<a href="{{ url_for('day.closing_scan_photo', d=d.isoformat(), sid=s.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('day.closing_scan_photo', d=d.isoformat(), sid=s.id) }}" alt="Closing page"></a><small class="muted">Tap to zoom</small>{% endif %}</aside>
+<div>
+<section class="section"><header><h2>Closing page — {{ d|d }}</h2>
+  <span class="badge {{ 'locked' if not a.flags and not a.notdone else 'stop' }}">{{ 'All lines add up' if not a.flags and not a.notdone else (a.flags|length + a.notdone|length) ~ ' to check' }}</span></header>
+  {% if already %}<div class="notice" style="margin:12px 18px">A scanned page was already saved for this date. Saving again adds payments, expenses and lube again — only the owner can do it.</div>{% endif %}
+  {% if a.flags or a.notdone %}<div class="body"><ul class="checklist">
+    {% for f in a.notdone %}<li class="bad">⛔ {{ f }}</li>{% endfor %}{% for f in a.flags %}<li>⚠ {{ f }}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+
+{% for code in ('MS','HSD') %}{% set fu = a.fuels[code] %}
+<section class="section"><header><h2>{{ code }} meter readings</h2><small>movement {{ fu.movement }} − testing <input name="test_{{ code }}" value="{{ fu.testing }}" style="width:70px;display:inline-block"> = {{ fu.net }} L</small></header>
+<div class="body flush tablewrap"><table class="mini"><thead><tr><th>Nozzle</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Litres</th><th>Check</th></tr></thead><tbody>
+{% for r in fu.rows %}<tr class="{{ 'warnrow' if r.flags }}"><td>{{ r.nozzle.name if r.nozzle else 'column ' ~ r.col }}</td>
+  {% if r.nozzle %}<td class="num"><input name="open_{{ r.nozzle.id }}" value="{{ r.opening if r.opening is not none else '' }}" style="max-width:130px"></td>
+  <td class="num"><input name="close_{{ r.nozzle.id }}" value="{{ r.closing if r.closing is not none else '' }}" style="max-width:130px"></td>{% else %}<td></td><td></td>{% endif %}
+  <td class="num">{{ (r.closing - r.opening) if r.closing is not none and r.opening is not none else '—' }}</td>
+  <td>{% if r.flags %}<small class="neg">{{ r.flags|join(' · ') }}</small>{% else %}<span class="match ok">✓</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endfor %}
+
+<section class="section"><header><h2>CNG</h2></header><div class="body fields">
+  <div><label>Opening reading (type it)</label><input name="cng_open" inputmode="decimal" {% if a.cng.nozzle and a.cng.qty %}required{% endif %}></div>
+  <div><label>Quantity (from page)</label><input name="cng_qty" value="{{ a.cng.qty if a.cng.qty is not none else '' }}"></div>
+  <div><label>Rate · amount</label><input value="{{ a.cng.rate or '' }} · {{ a.cng.amount or '' }}" readonly></div>
+  {% if not a.cng.nozzle %}<p class="hint">No CNG nozzle in the system — CNG is not saved.</p>{% endif %}</div></section>
+
+{% if a.lube %}<section class="section"><header><h2>Lube sales</h2></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th></th><th>On the page</th><th>Product</th><th class="num">Qty</th><th>Check</th></tr></thead><tbody>
+{% for l in a.lube %}<tr class="{{ 'warnrow' if l.flags }}"><td><input type="checkbox" name="lube_use_{{ l.i }}" value="1" checked></td><td>{{ l.text }}</td>
+<td><select name="lube_prod_{{ l.i }}"><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}" {% if l.product and l.product.id == p.id %}selected{% endif %}>{{ p.name }} (₹{{ p.sale_rate }})</option>{% endfor %}</select></td>
+<td class="num"><input name="lube_qty_{{ l.i }}" value="{{ l.qty if l.qty is not none else '' }}" style="max-width:70px"></td>
+<td>{% if l.flags %}<small class="neg">{{ l.flags|join(' · ') }}</small>{% else %}<span class="match ok">✓</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+<section class="section"><header><h2>Payments, digital, credit, expenses</h2><small>collection {{ a.collection|rs if a.collection is not none else '—' }}</small></header>
+<div class="body flush tablewrap"><table class="mini"><thead><tr><th>On the page</th><th class="num">Amount</th><th>Goes to</th><th>Which</th></tr></thead><tbody>
+{% for l in a.lines %}{% if l.kind == 'total' %}<tr><td colspan="4" class="muted">= running total {{ l.amount|rs if l.amount is not none else '?' }} {% if l.ok %}✓{% else %}<b class="neg">✗ should be {{ l.running|rs }}</b>{% endif %}</td></tr>
+{% else %}<tr class="{{ 'warnrow' if l.kind == 'unknown' }}"><td>{{ l.sign }} {{ l.name }}{% if l.note %}<br><small class="muted">{{ l.note }}</small>{% endif %}</td>
+<td class="num"><input name="amt_{{ l.i }}" value="{{ l.amount }}" style="max-width:110px"></td>
+<td><select name="kind_{{ l.i }}">{% for k, lab in KIND %}<option value="{{ k }}" {% if k == l.kind or (l.kind == 'unknown' and k == 'skip') %}selected{% endif %}>{{ lab }}</option>{% endfor %}</select></td>
+<td><select name="target_{{ l.i }}"><option value="">—</option>
+  <optgroup label="Transporters">{% for p in parties %}<option value="{{ p.id }}" {% if l.kind in ('credit','payment','sai') and l.target_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</optgroup>
+  <optgroup label="Digital">{% for m in modes %}<option value="{{ m.id }}" {% if l.kind == 'digital' and l.target_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</optgroup>
+  <optgroup label="Expense">{% for c in categories %}<option value="{{ c }}" {% if l.kind in ('expense','misc') and l.target == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</optgroup>
+</select></td></tr>{% endif %}{% endfor %}
+</tbody><tfoot><tr><td>Cash on the page</td><td class="num"><input name="page_cash" value="{{ a.final_cash if a.final_cash is not none else a.page_cash }}" style="max-width:110px"></td><td colspan="2" class="muted">adds up to {{ a.page_cash|rs }}</td></tr></tfoot></table></div></section>
+
+{% if a.dips %}<section class="section"><header><h2>Dip stock</h2></header><div class="body fields">
+{% for x in a.dips %}<div><label>{{ x.fuel }} {{ ('· dip ' ~ x.dip) if x.dip else '' }} → litres</label>{% if x.tank %}<input name="dip_{{ x.tank.id }}" value="{{ x.litres if x.litres is not none else '' }}">{% else %}<input value="no {{ x.fuel }} tank" readonly>{% endif %}</div>{% endfor %}
+</div></section>{% endif %}
+
+<section class="section savebar"><div class="body btnrow"><div style="flex:1">After saving, the page cash is compared with what the system expects. <b>Shortage up to ₹10 is fine.</b></div>
+<button class="btn go" style="min-width:180px">Save to Daily Closing</button></div></section>
+</div></form>
+<form method="post" action="{{ url_for('day.closing_scan_discard', d=d.isoformat(), sid=s.id) }}" style="margin-top:8px">{{ csrf() }}<button class="btn small secondary">Discard this scan</button></form>
+{% endblock %}

@@ -10,7 +10,30 @@
     <input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/day/__D__" aria-label="Choose date">
     {% if next_day %}<a class="btn secondary small" href="{{ url_for('day.day_view', d=next_day.isoformat()) }}" aria-label="Next day">›</a>{% endif %}
     <a class="btn secondary small" href="{{ url_for('day.print_day', d=d.isoformat()) }}">Print</a>
-    <a class="btn secondary small" href="{{ url_for('main.sales', **{'from': d.isoformat(), 'to': d.isoformat()}) }}">Sales / Transactions</a></div></div>
+    <a class="btn secondary small" href="{{ url_for('main.sales', **{'from': d.isoformat(), 'to': d.isoformat()}) }}">Sales / Transactions</a>
+    {% if can('closing_enter') %}<label class="btn small" style="cursor:pointer" title="Photo of the handwritten closing page">📷 Scan closing page
+      <input type="file" accept="image/*" hidden data-closing-scan="{{ url_for('day.closing_scan', d=d.isoformat()) }}"></label>{% endif %}</div></div>
+<div id="cscan-msg" class="flash info" hidden></div>
+<script>
+(function(){
+  var inp = document.querySelector("[data-closing-scan]"); if (!inp) return;
+  inp.addEventListener("change", function(){
+    var f = inp.files[0]; if (!f) return; var msg = document.getElementById("cscan-msg");
+    msg.hidden = false; msg.textContent = "Reading the closing page… (20–40 seconds)";
+    var img = new Image(); img.onload = function(){
+      var k = Math.min(1, 2400 / Math.max(img.width, img.height)), c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(function(b){
+        var fd = new FormData(); fd.append("_csrf", document.querySelector("input[name=_csrf]").value); fd.append("photo", b, "closing.jpg");
+        fetch(inp.dataset.closingScan, { method: "POST", body: fd, credentials: "same-origin" }).then(function(r){ return r.text().then(function(t){
+          try { return JSON.parse(t); } catch (e) { return { ok: false, error: r.status === 504 ? "The server took too long — try again" : "Server error " + r.status }; } }); })
+        .then(function(r){ if (r.ok) location.href = r.review; else { msg.className = "flash error"; msg.textContent = r.error; } })
+        .catch(function(){ msg.className = "flash error"; msg.textContent = "No internet — try again."; });
+      }, "image/jpeg", 0.88);
+    }; img.src = URL.createObjectURL(f);
+  });
+})();
+</script>
 </div>
 {% set st_read = 'done' if (t.readings_needed and t.readings_done == t.readings_needed) else ('warn' if t.readings_done else '') %}
 {% set st_cash = 'done' if t.counted_cash is not none else '' %}

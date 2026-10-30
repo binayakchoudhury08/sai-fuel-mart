@@ -87,7 +87,7 @@ def lube_purchase(cur, product_id, qty, rate, d=None):
     return p["name"]
 
 
-def add_payment(cur, party_id, d, amount, mode="Cash", reference=""):
+def add_payment(cur, party_id, d, amount, mode="Cash", reference="", remarks="via WhatsApp"):
     """Payment received from a transporter (same rules as Party accounts → Receive payment)."""
     from .security import assert_writable, next_receipt_no
     from .services import PAY_MODES
@@ -104,8 +104,8 @@ def add_payment(cur, party_id, d, amount, mode="Cash", reference=""):
     cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
     receipt = next_receipt_no(cur, d)
     cur.execute("""INSERT INTO party_txns (party_id, business_date, kind, credit, pay_mode, reference, receipt_no, remarks, created_by)
-                   VALUES (%s,%s,'payment',%s,%s,%s,%s,'via WhatsApp',%s) RETURNING *""",
-                (party_id, d, amount, mode, reference[:60], receipt, current_user()["username"]))
+                   VALUES (%s,%s,'payment',%s,%s,%s,%s,%s,%s) RETURNING *""",
+                (party_id, d, amount, mode, reference[:60], receipt, remarks, current_user()["username"]))
     t = cur.fetchone()
     audit(cur, "create", "party_txn", t["id"], f"Payment ₹{amount} – {p['name']} via {mode} #{receipt}", after=t, business_date=d)
     return receipt

@@ -16,7 +16,7 @@ PAY_MODES = OrderedDict([
 DRAWER_PAY_MODES = ("Cash", "UPI at pump")
 
 EXPENSE_CATEGORIES = ["General", "Electricity", "Tea & snacks", "Repairs", "Transport",
-                      "Stationery", "Bank charges", "Govt / licence", "Staff welfare", "Other"]
+                      "Stationery", "Bank charges", "Govt / licence", "Staff welfare", "Misc", "Other"]
 
 DENOMINATIONS = [500, 200, 100, 50, 20, 10, 5, 2, 1]
 

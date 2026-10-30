@@ -946,3 +946,4 @@ body.dark .topbar{background:#0D1730;box-shadow:0 1px 0 #1F2B47}
   .hero .weather{position:relative;top:auto;right:auto;bottom:auto;margin:6px 18px 16px;align-self:flex-start;display:flex;gap:10px;align-items:center;padding:8px 12px}
   .hero .weather small{display:inline}
 }
+.checklist{margin:0;padding-left:18px;display:grid;gap:4px;font-size:.9rem;color:#8A4B00}.checklist li.bad{color:#C0262D}

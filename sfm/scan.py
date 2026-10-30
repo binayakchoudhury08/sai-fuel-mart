@@ -114,7 +114,7 @@ def _call(model, parts, schema=True, job="scan", think=True, timeout=None):
     key = _key(job)
     cfg = {"temperature": 0, "responseMimeType": "application/json"}
     if schema:
-        cfg["responseSchema"] = MESSAGE_SCHEMA if job == "message" else SCHEMA
+        cfg["responseSchema"] = schema if isinstance(schema, dict) else (MESSAGE_SCHEMA if job == "message" else SCHEMA)
     t = _thinking(model) if think else None
     if t:
         cfg["thinkingConfig"] = t
@@ -151,7 +151,7 @@ def _call(model, parts, schema=True, job="scan", think=True, timeout=None):
     raise UserError(f"The page reader refused the photo ({r.status_code}): {msg[:160]}")
 
 
-def _ask(parts, job="scan", started=None):
+def _ask(parts, job="scan", started=None, schema=True):
     """Try each free model this key has; a busy / limited / retired model falls through to the next one.
     Stops in time (BUDGET) so the request always gets a proper answer before Vercel's 60 s limit."""
     import time
@@ -166,7 +166,7 @@ def _ask(parts, job="scan", started=None):
         if left < 6:
             break
         try:
-            out = _call(model, parts, job=job, timeout=min(25 if job == "message" else 40, left - 2))
+            out = _call(model, parts, schema=schema, job=job, timeout=min(25 if job == "message" else 40, left - 2))
             out["_model"] = model
             return out
         except _Busy as e:

@@ -1,5 +1,19 @@
 # Sai Fuel Mart — changes
 
+## 3.19.0 — Scan the handwritten Daily Closing page
+
+Daily Closing → 📷 Scan closing page: a photo of the notebook page is read and every number is re-checked
+(nozzle differences, totals, testing, litres × rate, lube qty × rate, CNG, collection, every running total, final
+cash; openings vs yesterday's closings; rates vs saved prices). Review screen: photo + MS/HSD readings, CNG (manager
+types the opening), lube, every ± line with where it goes, dips → Save to Daily Closing.
+- + name = payment received; − transporter name (either column) = credit given (compared with the slips in step 3);
+  − PhonePe / Card / HPCL OTP / HP Pay = digital; C.F / discount and everything written under "EXP" = General
+  expense; driver advance = Misc expense; Babu car / Babu diesel = a Credit Transport slip for Sai Hitech; an
+  unknown name = warning (not saved unless chosen); unreadable lines are listed as "not done" with their neighbours.
+- A wrong running total names the lines between the two totals to check.
+- After saving: page cash vs the system's expected cash — shortage up to ₹10 is fine; missing slips are pointed out.
+- Names learned once (transporters, lube products). Expense category "Misc" added.
+
 ## 3.18.1
 - WhatsApp check page shows the token's validity: "never expires (permanent)" / "expires in N hours (temporary)" /
   "not valid". The scheduler warns the owner once a day (09:00) on WhatsApp if the token is temporary or invalid.

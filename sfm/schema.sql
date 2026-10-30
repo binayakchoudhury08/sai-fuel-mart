@@ -633,3 +633,14 @@ CREATE TABLE IF NOT EXISTS pump.wa_log (
     kind   TEXT NOT NULL,
     detail TEXT NOT NULL DEFAULT ''
 );
+
+-- v3.19: scanned daily closing pages
+CREATE TABLE IF NOT EXISTS pump.closing_scans (
+    id            SERIAL PRIMARY KEY,
+    business_date DATE NOT NULL,
+    created_by    TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status        TEXT NOT NULL DEFAULT 'review' CHECK (status IN ('review','saved','discarded')),
+    photo_path    TEXT NOT NULL DEFAULT '',
+    raw           JSONB,
+    result        JSONB
+);
