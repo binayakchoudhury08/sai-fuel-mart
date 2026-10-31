@@ -126,4 +126,40 @@ gap = Decimal(res["expected"]) - Decimal(res["page"])
 check(Decimal("499") <= gap <= Decimal("501") and not res["recon_ok"],
       f"system cash = page cash except the skipped unknown ₹500 line (+ paise rounding): gap ₹{gap}; step 3 still asks for the missing slips")
 check("Transporter credit totals don’t match the slips" in txt, "after saving: tells the manager that slips are still missing")
+print("Reading in two halves in the background (with a timeout and Retry)")
+os.environ["WA_INLINE_WORK"] = "1"
+from sfm.util import UserError
+CALLS = []
+def fake_part(img_b64, mime, part):
+    CALLS.append(part)
+    if part == "bottom" and CALLS.count("bottom") == 1:
+        raise UserError("Google took too long to answer. Press Retry.")
+    keys = cs.PART_KEYS[part]
+    return {k: copy.deepcopy(PAGE[k]) for k in keys}
+cs.read_part = fake_part
+D2 = date(2026, 9, 30)
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+r = cl.post(f"/day/{D2}/scan", data={"_csrf": "t", "photo": (__import__("io").BytesIO(b"\xff\xd8\xff" + b"0" * 200), "c.jpg")}, content_type="multipart/form-data")
+job = r.json
+def read(part):
+    with cl.session_transaction() as s_: s_["_csrf"] = "t"
+    return cl.post(job["read"], data={"_csrf": "t", "part": part}).json
+r1, r2 = read("top"), read("bottom")
+check(r1["ok"] and not r2["ok"] and "took too long" in r2["error"], f"half 1 read ✓, half 2 timed out → shown with the reason: {r2['error']}")
+r3 = read("bottom")
+check(r3["ok"] and r3["state"] == "review" and CALLS == ["top", "bottom", "bottom"], f"Retry re-reads only half 2 → ready for review (reads: {CALLS})")
+sid2 = int(job["review"].rstrip("/").split("/")[-1])
+c.execute("SELECT raw, img FROM pump.closing_scans WHERE id=%s", (sid2,)); raw2, img2 = c.fetchone()
+check(img2 is None and raw2["final_cash"] == "30432" and len(raw2["lines"]) == len(PAGE["lines"]) and raw2["ms"]["total"] == "1152.67",
+      "the two halves joined into the full page (photo copy removed after reading)")
+h2 = cl.get(job["review"]).get_data(as_text=True)
+check("≠ yesterday’s closing in the system" in h2, "review opens; reusing the 29th page as the 30th is caught (openings ≠ yesterday’s closings)")
+EMPTY = {"top": {"date": "30.09.26"}}
+def empty_part(img_b64, mime, part):
+    return EMPTY.get(part, {k: copy.deepcopy(PAGE[k]) for k in cs.PART_KEYS[part]})
+cs.read_part = empty_part
+with cl.session_transaction() as s_: s_["_csrf"] = "t"
+job = cl.post(f"/day/{D2}/scan", data={"_csrf": "t", "photo": (__import__("io").BytesIO(b"\xff\xd8\xff0"), "c.jpg")}, content_type="multipart/form-data").json
+e1 = read("top")
+check(not e1["ok"] and "meter readings could not be read" in e1["error"], "a half that comes back empty is not accepted — Retry offered")
 print(); print("FAILED:" if FAILS else "ALL CLOSING-SCAN CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]

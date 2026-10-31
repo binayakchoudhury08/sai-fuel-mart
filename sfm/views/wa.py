@@ -154,11 +154,16 @@ def _process(msgs):
             if first or msg.get("type") == "text":
                 wa.deliver_waiting(cur, phone)
             note = wa.sandbox_note(cur, phone, first)
-        if isinstance(reply, dict) and reply.get("list"):
+        if isinstance(reply, dict) and reply.get("texts"):
+            for t_ in reply["texts"]:
+                wa.send_text(phone, t_)
+        elif isinstance(reply, dict) and reply.get("list"):
             body, button, sections = reply["list"]
             if not wa.send_list(phone, body + note, button, sections):
                 wa.send_text(phone, reply.get("fallback", wa.MENU) + note)
         elif isinstance(reply, dict) and reply.get("docs"):
+            if reply.get("reply") and len(reply["docs"]) > 1:
+                wa.send_text(phone, reply["reply"])
             for name, data, mime in reply["docs"]:
                 wa.send_document(phone, name, data, mime, reply.get("caption", ""))
             if note:
@@ -198,6 +203,16 @@ def work():
     j = request.get_json(force=True, silent=True) or {}
     idxs = j.get("idx") if isinstance(j.get("idx"), list) else [j.get("idx")]
     _work(int(j["job"]), [int(i) for i in idxs])
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/closing/work", methods=["POST"])
+def closing_work():
+    if not _internal_ok():
+        return jsonify({"ok": False}), 401
+    from ..closing_scan import work_part
+    j = request.get_json(force=True, silent=True) or {}
+    work_part(int(j["sid"]), j["part"] if j.get("part") in ("top", "bottom") else "top")
     return jsonify({"ok": True})
 
 

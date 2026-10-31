@@ -58,6 +58,58 @@ def read_closing(image_bytes, mime="image/jpeg"):
     return _ask([img, {"text": PROMPT}], "scan", schema=SCHEMA)
 
 
+# The page is read in two halves at the same time (each its own request), so neither runs into Vercel's 60 s limit.
+PART_KEYS = {"top": ["date", "ms", "hsd", "ms_sale", "hsd_sale", "fuel_total", "lube", "after_lube", "cng", "collection"],
+             "bottom": ["lines", "final_cash", "dips"]}
+PART_NOTE = {"top": "Read ONLY the upper part: date, MS and HSD nozzle readings, the two SALE lines, the lube lines, CNG and COLLECTION. "
+                    "Do not read anything below COLLECTION.",
+             "bottom": "Read ONLY what comes after COLLECTION: every + / − line in both columns with the running totals, the final "
+                       "cash, and the dip stock lines. Do not read the meter readings."}
+
+
+def read_part(image_b64, mime, part):
+    keys = PART_KEYS[part]
+    schema = {"type": "OBJECT", "properties": {k: SCHEMA["properties"][k] for k in keys},
+              "required": [k for k in keys if k in ("ms", "hsd", "lines")]}
+    img = {"inline_data": {"mime_type": mime, "data": image_b64}}
+    return _ask([img, {"text": PROMPT + "\n" + PART_NOTE[part]}], "scan", schema=schema, level="minimal")
+
+
+def work_part(sid, part):
+    """Background worker: read one half; when both halves are in, the scan is ready for review."""
+    from . import db
+    from .util import UserError
+    row = db.one("SELECT img, parts, status FROM closing_scans WHERE id=%s", (sid,))
+    if not row or row["status"] not in ("reading", "failed") or part in (row["parts"] or {}):
+        return
+    try:
+        got = read_part(row["img"], "image/jpeg", part)
+        got.pop("_model", None)
+        if part == "top" and not ((got.get("ms") or {}).get("nozzles") or (got.get("hsd") or {}).get("nozzles")):
+            raise UserError("the meter readings could not be read — press Retry, or retake the photo flat and sharp")
+        if part == "bottom" and not got.get("lines"):
+            raise UserError("the credit / digital / expense lines could not be read — press Retry, or retake the photo")
+        with db.tx() as cur:
+            cur.execute("UPDATE closing_scans SET parts = parts || %s::jsonb WHERE id=%s", (json.dumps({part: got}), sid))
+    except UserError as e:
+        with db.tx() as cur:
+            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"{'Meter readings' if part == 'top' else 'Lines / cash'}: {e}", sid))
+    except Exception as e:
+        with db.tx() as cur:
+            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"Reading failed ({type(e).__name__}). Press Retry.", sid))
+    with db.tx() as cur:
+        cur.execute("SELECT parts, error, status FROM closing_scans WHERE id=%s FOR UPDATE", (sid,))
+        r = cur.fetchone()
+        if r["status"] not in ("reading", "failed"):
+            return
+        p = r["parts"] or {}
+        if "top" in p and "bottom" in p:
+            raw = dict(p["top"]); raw.update(p["bottom"])
+            cur.execute("UPDATE closing_scans SET raw=%s, status='review', img=NULL, error=NULL WHERE id=%s", (json.dumps(raw), sid))
+        elif r["error"]:
+            cur.execute("UPDATE closing_scans SET status='failed' WHERE id=%s", (sid,))
+
+
 def _r(v):
     return Decimal(v).quantize(D1, rounding=ROUND_HALF_UP)
 

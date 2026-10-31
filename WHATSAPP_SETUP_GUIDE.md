@@ -249,7 +249,7 @@ Send **hi** or **menu**: a tap-menu opens (no typing needed). Or type any of the
 | Send | You get |
 |---|---|
 | **1** / **tank** | Each tank: litres, % full, days left, ATG/dip time |
-| **2** / **bill** (or **bill SVT**) | Then send the bill photos (any number), then **done** → the message in your format, ready to forward |
+| **2** / **bill** (or **bill SVT**) | Then send the bill photos (any number) — each is read as it arrives — then **done** → the message in your format at once |
 | **3** / **pending** · **pending svt** | Pending credit of all transporters (total), or one transporter with oldest bill, days to pay, score |
 | **4** / **closing** | Last 7 days: submitted / open / locked |
 | **5** / **reopen 20/10** · **reopen 18/10-20/10** · **reopen 20/10 for ramesh** | Opens those dates for the manager for 24 hours (locks again by itself) after **YES** |
@@ -266,6 +266,14 @@ Send **hi** or **menu**: a tap-menu opens (no typing needed). Or type any of the
 | **expense 500 electricity** · **… yesterday** | Expense (asks YES) |
 | **lube sold servo 4t 2** | Lube sale at its price (asks YES) |
 | any normal sentence, e.g. *svt ki gaadi OD02CL2129 ne 110 litre liya* | Understood and turned into the right command (entries still ask YES) |
+| **bills october** · **bills october excel** | Every transporter's month bill (PDF / Excel) in one go |
+| **staff** · **attendance** | All staff with today's Present / Absent / Not marked |
+| **add staff Ramesh Kumar role pump attendant shift morning salary 12000 phone 98…** | New employee (asks YES) |
+| **present ramesh** · **absent suresh** · **leave pooja yesterday** · **off raju 27/10** | Owner marks attendance (asks YES) |
+| **remove staff ramesh** | Employee made inactive; old attendance kept (asks YES) |
+| **add transporter Mahadev Roadlines limit 200000 phone 98…** | New transporter (asks YES) |
+| **dip hsd 15800** · **dip ms 9328 yesterday** | Tank dip in litres (asks YES) |
+| **submit 29/10** · **lock 29/10** | Submits / locks the day if its checks pass; otherwise says exactly what is missing |
 | **cancel** | Stops what is in progress |
 
 **Safety:**

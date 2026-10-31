@@ -535,33 +535,97 @@ def print_day(d):
 @bp.route("/day/<d>/scan", methods=["POST"])
 @login_required("closing_enter")
 def closing_scan(d):
-    import json as _j
+    """Upload the page; two background readers start at once; the page polls /status."""
+    import base64 as _b
     import uuid as _u
     from flask import jsonify
     from .. import storage
-    from ..closing_scan import read_closing
     d = parse_date(d)
     try:
         f = request.files.get("photo")
         if not f or not f.filename:
             raise UserError("Take a photo of the closing page.")
         data = f.read(4_000_001)
-        mime = "image/png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
-        raw = read_closing(data, mime)
+        if len(data) > 4_000_000:
+            raise UserError("Photo is too big.")
         path = ""
         if storage.ready():
             try:
                 path = f"closing-scans/{d:%Y-%m}/{_u.uuid4().hex}.jpg"
-                storage.put(path, data, mime)
+                storage.put(path, data, "image/jpeg")
             except Exception:
                 path = ""
         with db.tx() as cur:
-            cur.execute("INSERT INTO closing_scans (business_date, created_by, photo_path, raw) VALUES (%s,%s,%s,%s) RETURNING id",
-                        (d, current_user()["username"], path, _j.dumps(raw)))
+            cur.execute("""INSERT INTO closing_scans (business_date, created_by, photo_path, img, status)
+                           VALUES (%s,%s,%s,%s,'reading') RETURNING id""", (d, current_user()["username"], path, _b.b64encode(data).decode()))
             sid = cur.fetchone()["id"]
-        return jsonify({"ok": True, "review": url_for("day.closing_scan_review", d=d.isoformat(), sid=sid)})
+        return jsonify({"ok": True, "read": url_for("day.closing_scan_read", d=d.isoformat(), sid=sid),
+                        "review": url_for("day.closing_scan_review", d=d.isoformat(), sid=sid)})
     except UserError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+def _start_closing_workers(sid, parts):
+    import os
+    import requests as _rq
+    if os.environ.get("WA_INLINE_WORK") or not os.environ.get("CRON_SECRET"):
+        from ..closing_scan import work_part
+        for p in parts:                       # tests / no secret: read here, one after the other
+            work_part(sid, p)
+        return
+    base = request.host_url.rstrip("/")
+    for p in parts:
+        try:
+            _rq.post(f"{base}/api/closing/work", json={"sid": sid, "part": p}, timeout=(3, 0.8),
+                     headers={"x-cron-secret": os.environ.get("CRON_SECRET", "")})
+        except _rq.RequestException:
+            pass                              # the reader keeps running on its own
+
+
+@bp.route("/day/<d>/scan/<int:sid>/read", methods=["POST"])
+@login_required("closing_enter")
+def closing_scan_read(d, sid):
+    """Read one half now (the browser calls this twice at the same time: part=top and part=bottom)."""
+    import time
+    from flask import jsonify
+    from ..closing_scan import work_part
+    part = request.form.get("part")
+    if part not in ("top", "bottom"):
+        return jsonify({"ok": False, "error": "Unknown part."}), 400
+    t = time.time()
+    with db.tx() as cur:
+        cur.execute("UPDATE closing_scans SET status='reading', error=NULL WHERE id=%s AND status='failed'", (sid,))
+    work_part(sid, part)
+    s = db.one("SELECT status, parts, error FROM closing_scans WHERE id=%s", (sid,))
+    done = part in ((s or {}).get("parts") or {})
+    return jsonify({"ok": done, "part": part, "state": (s or {}).get("status"), "seconds": round(time.time() - t, 1),
+                    "error": None if done else ((s or {}).get("error") or "Not read — press Retry.")}), (200 if done else 400)
+
+
+@bp.route("/day/<d>/scan/<int:sid>/status")
+@login_required("closing_enter")
+def closing_scan_status(d, sid):
+    from flask import jsonify
+    s = db.one("SELECT status, parts, error FROM closing_scans WHERE id=%s", (sid,))
+    if not s:
+        return jsonify({"state": "failed", "error": "Not found."})
+    return jsonify({"state": s["status"], "top": "top" in (s["parts"] or {}), "bottom": "bottom" in (s["parts"] or {}),
+                    "error": s["error"], "review": url_for("day.closing_scan_review", d=d, sid=sid),
+                    "retry": url_for("day.closing_scan_retry", d=d, sid=sid)})
+
+
+@bp.route("/day/<d>/scan/<int:sid>/retry", methods=["POST"])
+@login_required("closing_enter")
+def closing_scan_retry(d, sid):
+    from flask import jsonify
+    s = db.one("SELECT status, parts FROM closing_scans WHERE id=%s", (sid,))
+    if not s or s["status"] not in ("reading", "failed"):
+        return jsonify({"ok": False, "error": "Nothing to retry."}), 400
+    todo = [p for p in ("top", "bottom") if p not in (s["parts"] or {})]
+    with db.tx() as cur:
+        cur.execute("UPDATE closing_scans SET status='reading', error=NULL WHERE id=%s", (sid,))
+    _start_closing_workers(sid, todo)
+    return jsonify({"ok": True, "parts": todo})
 
 
 @bp.route("/day/<d>/scan/<int:sid>")

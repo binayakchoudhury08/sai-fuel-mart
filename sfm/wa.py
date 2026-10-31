@@ -303,9 +303,11 @@ Send a number or a word:
 8️⃣ *Report* — today’s / yesterday’s summary
 9️⃣ *Alerts* — what needs attention now
 🔟 *Profit* — this month (also *variation*, *score*, *compare*)
-📄 *svt pdf 26/10* — bill PDF / Excel of one transporter
+📄 *svt pdf 26/10* — bill PDF / Excel of one transporter · *bills october* — all transporters' month bills
    (also *svt excel yesterday*, *svt bill day before yesterday*, *svt pdf october*)
 
+👥 *Staff*: *staff* · *add staff Ramesh role pump attendant shift morning salary 12000* · *present ramesh* · *absent suresh*
+🛢️ *dip hsd 15800* · 🚚 *add transporter Mahadev Roadlines limit 200000* · 📋 *submit 29/10* · *lock 29/10*
 ➕ *Entries* (ask YES first):
    *slip svt OD02CL2129 110 cash 1000* · *cash svt OD02CL2129 2000*
    *paid svt 50000 upi* · *expense 500 electricity*
@@ -740,15 +742,20 @@ def handle(cur, phone, user, msg):
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
 
-    # ---- photos for a bill message
+    # ---- photos for a bill message: each photo is read right away, inside its own message
     if mtype in ("image", "document"):
         media = msg.get("image") or msg.get("document") or {}
         if state.get("mode") != "bill":
-            state = {"mode": "bill", "photos": [], "party": None}
-        state["photos"].append(media.get("id"))
-        save_state(cur, phone, state, touch=True)
-        n = len(state["photos"])
-        return f"📷 {n} bill photo{'s' if n > 1 else ''} received. Send more, or *done* to make the message." if n == 1 or n % 3 == 0 else None
+            state = {"mode": "bill", "party": None}
+            save_state(cur, phone, state, touch=True)
+        cur.execute("INSERT INTO wa_bill_photos (phone, media_id) VALUES (%s,%s) RETURNING id", (phone, media.get("id")))
+        pid = cur.fetchone()["id"]
+        read_bill_photo(cur, pid)
+        cur.execute("SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE raw IS NOT NULL) AS ok FROM wa_bill_photos WHERE phone=%s AND NOT used", (phone,))
+        c_ = cur.fetchone()
+        n = c_["n"]
+        return (f"📷 {n} bill{'s' if n > 1 else ''} received ({c_['ok']} read). Send more, or *done* to make the message."
+                if n == 1 or n % 3 == 0 else None)
 
     if low in ("cancel", "stop", "no") and state.get("mode"):
         save_state(cur, phone, {}, touch=True)
@@ -762,27 +769,18 @@ def handle(cur, phone, user, msg):
         save_state(cur, phone, {}, touch=True)
         return "Not done. Send *menu* for options."
 
-    # ---- bill flow
+    # ---- bill flow: totals are already read — the message comes back at once
     if state.get("mode") == "bill" and low in ("done", "ok", "make", "finish", "bas"):
-        photos = state.get("photos") or []
-        if not photos:
-            return "No photos yet. Send the bill photos first."
-        cur.execute("INSERT INTO wa_jobs (phone, kind, data) VALUES (%s,'bill',%s) RETURNING id",
-                    (phone, json.dumps({"photos": photos, "party": state.get("party"), "user": user["username"]})))
-        jid = cur.fetchone()["id"]
-        save_state(cur, phone, {"mode": "bill_wait", "job": jid}, touch=True)
-        return {"start_job": jid, "reply": f"⏳ Reading {len(photos)} bill{'s' if len(photos) > 1 else ''}… about {max(8, len(photos) * 4)} seconds."}
+        cur.execute("SELECT id FROM wa_bill_photos WHERE phone=%s AND NOT used AND raw IS NULL ORDER BY id LIMIT 3", (phone,))
+        for r in cur.fetchall():                    # a photo that failed earlier gets one more try now
+            read_bill_photo(cur, r["id"])
+        save_state(cur, phone, {}, touch=True)
+        return bill_message_from_photos(cur, phone, state.get("party"))
 
     if low.startswith("join "):                 # Twilio Sandbox join message
         save_state(cur, phone, {}, touch=True)
         cur.execute("UPDATE wa_sessions SET joined_at=NOW() WHERE phone=%s", (phone,))
         return "✅ Connected to the Sai Fuel Mart assistant.\n\n" + MENU
-    if low in ("delete my data", "delete my chat"):
-        cur.execute("DELETE FROM wa_outbox WHERE phone=%s", (phone,))
-        cur.execute("DELETE FROM wa_jobs WHERE phone=%s", (phone,))
-        cur.execute("DELETE FROM wa_log WHERE detail LIKE %s", (f"%{mask(phone)}%",))
-        cur.execute("UPDATE wa_sessions SET state='{}'::jsonb WHERE phone=%s", (phone,))
-        return "🗑️ Your WhatsApp chat records with the assistant are deleted."
     words = low.split(" ")
     cmd, rest = (words[0], " ".join(words[1:])) if words else ("", "")
     if wants_documents(low) and cmd not in ("slip", "entry", "cash", "paid", "payment", "received", "receive", "expense", "exp", "kharcha", "lube"):
@@ -792,6 +790,15 @@ def handle(cur, phone, user, msg):
         return menu_reply()
     if cmd in ("more",):
         return menu_reply(more=True)
+    if (user.get("role") or "") == "owner":
+        from . import wa_pro
+        if low in ("staff", "employees", "attendance", "attendance today"):
+            return wa_pro.staff_text(cur)
+        if re.match(r"^(all |monthly )?bills\b", low):
+            return wa_pro.monthly_bills(cur, low)
+        r_ = wa_pro.ask(cur, phone, low, text)
+        if r_ is not None:
+            return r_
     if cmd in ("slip", "entry", "cash", "paid", "payment", "received", "receive", "expense", "exp", "kharcha"):
         return entry_reply(cur, phone, low, cmd, rest) if rest else HELP["paid" if cmd in ("paid", "payment", "received", "receive") else "expense" if cmd in ("expense", "exp", "kharcha") else "slip"]
     if cmd in ("7", "lube", "lubes") and rest.startswith("sold"):
@@ -896,6 +903,14 @@ def ask_lube(cur, phone, rest):
 
 
 def run_confirmed(cur, st):
+    from . import wa_pro
+    r_ = wa_pro.run(cur, st)
+    if r_ is not None:
+        return r_
+    return _run_confirmed(cur, st)
+
+
+def _run_confirmed(cur, st):
     from .actions import lube_purchase, reopen_for, set_rates
     from datetime import date
     try:
@@ -945,7 +960,53 @@ def run_confirmed(cur, st):
     return "Nothing to confirm."
 
 
-# ------------------------------------------------------------------ bill message from photos (background)
+# ------------------------------------------------------------------ bill message from photos (read on arrival)
+def read_bill_photo(cur, pid):
+    from .scan import read_bill_total
+    cur.execute("SELECT media_id FROM wa_bill_photos WHERE id=%s", (pid,))
+    r = cur.fetchone()
+    try:
+        data, mime = download_media(r["media_id"])
+        raw = read_bill_total(data, mime)
+        cur.execute("UPDATE wa_bill_photos SET raw=%s, error=NULL WHERE id=%s", (json.dumps(raw), pid))
+    except Exception as e:
+        cur.execute("UPDATE wa_bill_photos SET error=%s WHERE id=%s", (str(e)[:200], pid))
+
+
+def bill_message_from_photos(cur, phone, want=None):
+    """The photos sent since "bill" → the message (also saved in the website's Bill Message history)."""
+    from .scan import bill_message, bill_summary, match_party
+    cur.execute("SELECT id, raw, error FROM wa_bill_photos WHERE phone=%s AND NOT used ORDER BY id", (phone,))
+    rows = cur.fetchall()
+    if not rows:
+        return "No photos yet. Send *bill*, then the bill photos, then *done*."
+    bills, failed = [], []
+    for n, r in enumerate(rows, 1):
+        if r["raw"]:
+            bills.append(dict(bill_summary(r["raw"]), n=n, raw=r["raw"]))
+        else:
+            failed.append(n)
+    bills.sort(key=lambda b: (b["date"] is None, b["date"] or today()))
+    p = None
+    if want or bills:
+        p, _ = match_party(cur, want or next((b["party"] for b in bills if b["party"]), ""))
+    name = p["name"] if p else (want or "Transporter")
+    msg = bill_message(name, bills) if bills else ""
+    cur.execute("INSERT INTO msg_batches (created_by, party_id, sent_text) VALUES (%s,%s,%s) RETURNING id",
+                ("owner (WhatsApp)", p["id"] if p else None, msg))
+    bid = cur.fetchone()["id"]
+    for b in bills:
+        cur.execute("INSERT INTO msg_bills (batch_id, raw) VALUES (%s,%s)", (bid, json.dumps(b["raw"])))
+    cur.execute("UPDATE wa_bill_photos SET used=TRUE WHERE phone=%s AND NOT used", (phone,))
+    notes = [f"⚠ Bill {b['label']}: TOTAL doesn't match its rows — check it" for b in bills if not b["ok"]]
+    notes += [f"⚠ Photo {n} could not be read — send it again" for n in failed]
+    if not msg:
+        return "❌ None of the photos could be read. Retake them flat and sharp, then send *bill* again."
+    return {"texts": [msg, ("\n".join(notes) + "\n\n" if notes else "✅ All totals checked.\n\n") +
+                      "Forward the message above to the transporter."]}
+
+
+# ------------------------------------------------------------------ (old background job — kept for messages already queued)
 def bill_job_step(cur, jid, idx):
     """Read photo number idx of a bill job; when all are read, build and send the message (once)."""
     from .scan import bill_summary, read_bill_total

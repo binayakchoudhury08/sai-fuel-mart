@@ -1,5 +1,30 @@
 # Sai Fuel Mart — changes
 
+## 3.20.0 — WhatsApp assistant: owner's website in chat
+
+- Bill photos are read the moment each one arrives (inside that message), so "done" answers at once; a photo
+  that failed is retried on "done". No background self-calls any more (they were unreliable on Vercel).
+- Monthly bills in one go: "bills october" (PDF for every transporter with entries), "bills october excel".
+- Staff & attendance (owner): "staff" (list with today's status), "add staff Ramesh Kumar role pump attendant shift
+  morning salary 12000 phone 98…", "remove staff ramesh", "present / absent / leave / off ramesh [yesterday | 27/10]".
+- "add transporter Mahadev Roadlines limit 200000 phone 98…", "dip hsd 15800 [yesterday]",
+  "submit 29/10" / "lock 29/10" (the website's own checks; refused with the exact reason).
+- All of these: owner only, YES first, audited "(WhatsApp)". Managers cannot use them.
+
+## 3.19.2 — Scan closing page: reliable and fast
+- The browser now starts both halves of the page itself, at the same time, as two normal requests (each within
+  Vercel's 60 s). The website no longer calls itself in the background (Vercel could stop those calls, which made
+  reading hang and feel slow).
+- Gemini is asked for "minimal" thinking on the closing page — reading numbers needs no reasoning.
+- Live progress per half with seconds; ↻ Retry re-reads only the half that failed.
+- A half that comes back without its content (no meter readings / no lines) counts as failed, never as read.
+
+## 3.19.1
+- Scan closing page no longer times out: the page is read in two halves at the same time, each in its own
+  background request (meter readings / sales / lube / CNG — and the ± lines, cash, dips), so neither runs into
+  Vercel's 60-second limit. Daily Closing shows progress for both halves and a real ↻ Retry button that re-reads
+  only the half that failed. Photos are sent at 2000 px.
+
 ## 3.19.0 — Scan the handwritten Daily Closing page
 
 Daily Closing → 📷 Scan closing page: a photo of the notebook page is read and every number is re-checked

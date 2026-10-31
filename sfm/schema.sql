@@ -644,3 +644,17 @@ CREATE TABLE IF NOT EXISTS pump.closing_scans (
     raw           JSONB,
     result        JSONB
 );
+ALTER TABLE pump.closing_scans ADD COLUMN IF NOT EXISTS img TEXT;
+ALTER TABLE pump.closing_scans ADD COLUMN IF NOT EXISTS parts JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE pump.closing_scans ADD COLUMN IF NOT EXISTS error TEXT;
+ALTER TABLE pump.closing_scans DROP CONSTRAINT IF EXISTS closing_scans_status_check;
+ALTER TABLE pump.closing_scans ADD CONSTRAINT closing_scans_status_check CHECK (status IN ('reading','failed','review','saved','discarded'));
+CREATE TABLE IF NOT EXISTS pump.wa_bill_photos (
+    id         SERIAL PRIMARY KEY,
+    phone      TEXT NOT NULL,
+    media_id   TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    raw        JSONB,
+    error      TEXT,
+    used       BOOLEAN NOT NULL DEFAULT FALSE
+);

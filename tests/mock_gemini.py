@@ -41,6 +41,16 @@ class H(BaseHTTPRequestHandler):
         import time; time.sleep(float(os.environ.get("DELAY", "0")))
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         ok = self.headers.get("x-goog-api-key") == "testkey"
+        _text = body["contents"][0]["parts"][-1].get("text", "")
+        if ok and "DAILY CLOSING" in _text:                      # closing page halves
+            src = open(os.path.join(os.path.dirname(__file__), "test_closing_scan.py")).read()
+            ns = {}; exec(src[src.index("PAGE = {"):src.index("k = psycopg2")], {}, ns)
+            keys = ["lines", "final_cash", "dips"] if "Read ONLY what comes after COLLECTION" in _text else ["date", "ms", "hsd", "ms_sale", "hsd_sale", "fuel_total", "lube", "after_lube", "cng", "collection"]
+            with open("/tmp/gemini_calls.log", "a") as lg:
+                lg.write(json.dumps({"t": __import__("time").time(), "think": body["generationConfig"].get("thinkingConfig")}) + "\n")
+            data = json.dumps({"candidates": [{"content": {"parts": [{"text": json.dumps({k: ns["PAGE"][k] for k in keys})}]}}]}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data)))
+            self.end_headers(); self.wfile.write(data); return
         parts = body["contents"][0]["parts"]
         if ok and "Reply with the single word OK" in parts[-1].get("text", ""):
             data = json.dumps({"candidates": [{"content": {"parts": [{"text": "OK"}]}}]}).encode()
