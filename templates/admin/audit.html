@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Audit log{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Audit log</h1><p>Every change, by whom and when. This log cannot be edited or deleted, even by the owner.</p></div></div>
+<form class="formrow section" method="get" style="padding:12px 16px"><div><label>Search</label><input name="q" value="{{ q }}" placeholder="party, amount, nozzle…"></div>
+<div><label>User</label><select name="user"><option value="">Everyone</option>{% for u in users %}<option {% if u.username==who %}selected{% endif %}>{{ u.username }}</option>{% endfor %}</select></div>
+<div><label>Action</label><select name="action"><option value="">Any</option>{% for a in ['create','update','void','lock','unlock','submit','login','export','import','sync','legacy'] %}<option {% if a==action %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></div>
+<div style="flex:0"><button class="btn secondary">Filter</button></div></form>
+<section class="section"><div class="body flush tablewrap"><table><thead><tr><th>When</th><th>Who</th><th>Action</th><th>What</th><th>For date</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td><small>{{ r.at.strftime('%d %b %Y %I:%M:%S %p') }}</small></td><td>{{ r.username }} <small>{{ r.role }}</small></td>
+<td><span class="badge {% if r.action in ('void','unlock') %}stop{% elif r.action=='lock' %}locked{% endif %}">{{ r.action }}</span></td><td>{{ r.summary }}<br><small class="muted">{{ r.entity }} {{ r.entity_id or '' }}{% if r.ip %} · {{ r.ip }}{% endif %}</small></td>
+<td>{{ r.business_date|d if r.business_date else '' }}</td>
+<td>{% if r.before_data or r.after_data %}<details><summary class="hint" style="cursor:pointer">Details</summary><pre style="white-space:pre-wrap;font-size:.72rem;max-width:420px">{% if r.before_data %}Before: {{ r.before_data|tojson }}{% endif %}
+{% if r.after_data %}After: {{ r.after_data|tojson }}{% endif %}</pre></details>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">Nothing matches.</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="btnrow">{% if page > 1 %}<a class="btn secondary" href="?page={{ page-1 }}&q={{ q }}&user={{ who }}&action={{ action }}">Newer</a>{% endif %}{% if has_more %}<a class="btn secondary" href="?page={{ page+1 }}&q={{ q }}&user={{ who }}&action={{ action }}">Older</a>{% endif %}</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}{% from "_macros.html" import crx with context %}{% block title %}Business Insights{% endblock %}
+{% block content %}
+{% macro money(v) -%}<span class="{{ 'neg' if v and v < 0 else '' }}">{{ v|rs }}</span>{%- endmacro %}
+<nav class="tabs">
+  {% for k, label in [('profit','Profit'), ('variation','Tank Variation'), ('receipts','Tanker Receipts'), ('credit','Transporter Credit Score'), ('compare','This Month vs Last')] %}
+  <a href="?tab={{ k }}&from={{ a.isoformat() }}&to={{ b.isoformat() }}" class="{{ 'on' if tab == k }}">{{ label }}</a>{% endfor %}
+</nav>
+{% if tab in ('profit','variation','receipts') %}
+<form method="get" class="section"><div class="body formrow filters"><input type="hidden" name="tab" value="{{ tab }}">
+  <div><label>From</label><input type="date" name="from" value="{{ a.isoformat() }}" max="{{ today.isoformat() }}"></div>
+  <div><label>To</label><input type="date" name="to" value="{{ b.isoformat() }}" max="{{ today.isoformat() }}"></div>
+  <div style="flex:0"><button class="btn">Show</button></div>
+  <div style="flex:0"><a class="btn secondary" href="?tab={{ tab }}&m={{ prev_m }}">‹ Previous month</a></div></div></form>
+{% endif %}
+
+{% if tab == 'profit' %}
+{% if not d.final %}<div class="notice"><b>Not final — some inputs are missing.</b> Profit is shown only from what is entered; fix these first:
+  <ul style="margin:6px 0 0 18px">{% for i in d.issues %}<li>{{ i }}</li>{% endfor %}</ul></div>{% endif %}
+<div class="kpis">
+  <div class="kpi"><span>Net profit</span><b class="{{ 'neg' if d.net < 0 }}">{{ d.net|cr }}</b><small class="crx">{{ d.net|rs }}{{ '' if d.final else ' · not final' }}</small></div>
+  <div class="kpi"><span>Fuel margin</span><b>{{ d.fuel.margin|cr }}</b><small class="crx">{{ d.fuel.margin|rs }} on {{ d.fuel.litres|qty(0) }} L</small></div>
+  <div class="kpi"><span>Lube margin</span><b>{{ d.lube.margin|rs }}</b><small class="crx">sales {{ d.lube.sales|rs }}</small></div>
+  <div class="kpi"><span>Expenses + staff</span><b>{{ (d.expenses_total + d.staff_total)|rs }}</b><small class="crx">stock {{ 'loss' if d.stock_diff < 0 else 'gain' }} {{ d.stock_diff|rs }}</small></div>
+</div>
+<section class="section"><header><h2>Fuel</h2><small>weighted average purchase cost from tanker invoices</small></header>
+<div class="body flush tablewrap"><table><thead><tr><th>Fuel</th><th class="num">Litres sold</th><th class="num">Sales</th><th class="num">Cost / L</th><th class="num">Cost of fuel sold</th><th class="num">Margin</th><th class="num">Margin / L</th><th class="num">Stock loss/gain</th></tr></thead><tbody>
+{% for f in d.fuels %}<tr><td><b>{{ f.code }}</b></td><td class="num">{{ f.litres|qty }}</td><td class="num">{{ f.sales|rs }}</td><td class="num">{{ ('₹' ~ f.cost_per_l) if f.cost_per_l else '—' }}</td><td class="num">{{ f.cogs|rs }}</td><td class="num"><b>{{ money(f.margin) }}</b></td><td class="num">{{ ('₹' ~ f.margin_per_l) if f.margin_per_l is not none else '—' }}</td><td class="num">{{ f.stock_diff_l|qty }} L · {{ money(f.stock_diff_value) }}</td></tr>
+{% else %}<tr><td colspan="8" class="empty">No fuel sales in this period.</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="grid2">
+<section class="section"><header><h2>Lube</h2></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>Product</th><th class="num">Sold</th><th class="num">Sales</th><th class="num">Cost</th><th class="num">Margin</th></tr></thead><tbody>
+{% for l in d.lube_rows %}<tr><td>{{ l.name }}</td><td class="num">{{ l.qty|qty(0) }}</td><td class="num">{{ l.sales|rs }}</td><td class="num">{{ l.cost|rs if l.unit_cost else '—' }}</td><td class="num">{{ money(l.margin) }}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No lube sales.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="section"><header><h2>Expenses &amp; staff</h2></header><div class="body flush tablewrap"><table class="mini"><tbody>
+{% for e in d.expenses %}<tr><td>{{ e.category }}</td><td class="num">{{ e.amount|rs }}</td></tr>{% endfor %}
+{% for k, v in d.staff.items() %}<tr><td>Staff — {{ k }}</td><td class="num">{{ v|rs }}</td></tr>{% endfor %}
+{% if not d.expenses and not d.staff %}<tr><td class="empty">Nothing entered.</td></tr>{% endif %}</tbody></table></div></section>
+</div>
+<section class="section"><div class="body"><p class="hint" style="margin:0"><b>How it is worked out:</b> cost per litre = (opening stock × earlier average invoice cost + this period’s tanker invoice amounts) ÷ (opening litres + invoiced litres).
+Margin = sales − litres sold × cost per litre. Stock loss/gain (dip/ATG vs book) is valued at the same cost and shown apart. Lube margin uses recorded purchase rates. Expenses and staff payments as entered (cash paid).
+Net profit = fuel margin + lube margin + stock loss/gain − expenses − staff payments.</p></div></section>
+
+{% elif tab == 'variation' %}
+<section class="section"><header><h2>Tank variation {{ a|d }} – {{ b|d }}</h2><small>book stock vs dip/ATG · tolerance {{ (d.tanks[0].tolerance if d.tanks else 0.5) }} % of sale</small></header>
+<div class="body flush tablewrap"><table><thead><tr><th>Tank</th><th class="num">Sold</th><th class="num">Loss / gain</th><th class="num">% of sale</th><th class="num">Value</th><th>Days over limit</th><th>Trend</th><th>Verdict</th></tr></thead><tbody>
+{% for t in d.tanks %}<tr><td><b>{{ t.tank.name }}</b><br><small class="muted">{{ t.checked_days }} day(s) checked{% if t.missing_dip %} · {{ t.missing_dip }} without dip{% endif %}</small></td>
+<td class="num">{{ t.sold|qty }} L</td><td class="num"><b class="{{ 'neg' if t.variance < 0 }}">{{ t.variance|qty }} L</b></td><td class="num">{{ (t.pct ~ ' %') if t.pct is not none else '—' }}</td><td class="num">{{ money(t.value) }}</td>
+<td>{{ t.bad_days }}</td><td>{{ {'worse':'↘ getting worse','better':'↗ improving','steady':'→ steady'}.get(t.trend, '—') }}</td>
+<td><span class="badge {{ {'loss':'stop','gain':'submitted','normal':'locked'}.get(t.verdict, '') }}">{{ t.verdict|capitalize }}</span></td></tr>
+{% else %}<tr><td colspan="8" class="empty">No tanks.</td></tr>{% endfor %}</tbody></table></div></section>
+{% for t in d.tanks if t.checked_days %}
+<section class="section"><header><h2>{{ t.tank.name }} — day by day</h2></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>Date</th><th class="num">Opening</th><th class="num">+ Received</th><th class="num">− Sold</th><th class="num">= Book</th><th class="num">Actual</th><th class="num">Loss / gain</th><th class="num">%</th></tr></thead><tbody>
+{% for r in t.days if r.variance is not none %}<tr class="{{ 'warnrow' if r.sold and (r.variance|abs) > (r.sold * t.tolerance / 100) }}"><td>{{ r.date|d }}</td><td class="num">{{ r.opening|qty(0) }}</td><td class="num">{{ r.received|qty(0) }}</td><td class="num">{{ r.sold|qty(0) }}</td><td class="num">{{ r.book|qty(0) }}</td><td class="num">{{ r.actual|qty(0) }}</td><td class="num"><b class="{{ 'neg' if r.variance < 0 }}">{{ r.variance|qty }}</b></td><td class="num">{{ r.variance_pct if r.variance_pct is not none else '—' }}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endfor %}
+
+{% elif tab == 'receipts' %}
+<div class="kpis kpis3">{% for code, t in d.tot.items() %}<div class="kpi"><span>{{ code }} tankers</span><b>{{ t.count }}</b><small class="crx">invoice {{ t.invoice|qty(0) }} L · received {{ t.received|qty(0) }} L · short {{ t.short|qty }} L = {{ t.value|rs }}</small></div>{% endfor %}</div>
+<section class="section"><header><h2>Each tanker {{ a|d }} – {{ b|d }}</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Date</th><th>Tank</th><th>Invoice</th><th class="num">Invoice L</th><th class="num">Received L</th><th class="num">Short</th><th class="num">Cost/L</th><th class="num">Density (challan / seen)</th><th>Check</th></tr></thead><tbody>
+{% for x in d.rows %}{% set r = x.r %}<tr class="{{ 'warnrow' if x.flags }}"><td>{{ r.business_date|d }}</td><td>{{ r.tank_name }}</td><td>{{ r.invoice_no }}</td><td class="num">{{ r.invoice_qty_l|qty(0) }}</td><td class="num">{{ r.received_qty_l|qty(0) }}</td>
+<td class="num">{{ (x.short|qty ~ ' L') if x.short is not none else '—' }}{% if x.short_value %}<br><small>{{ x.short_value|rs }}</small>{% endif %}</td><td class="num">{{ ('₹' ~ x.cost_per_l) if x.cost_per_l else '—' }}</td>
+<td class="num">{{ r.challan_density or '—' }} / {{ r.observed_density or '—' }}</td><td>{% if x.flags %}<small class="neg">⚠ {{ x.flags|join(' · ') }}</small>{% else %}<span class="match ok">✓</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="9" class="empty">No tanker receipts in this period.</td></tr>{% endfor %}</tbody></table></div></section>
+
+{% elif tab == 'credit' %}
+<section class="section"><header><h2>Transporter credit score</h2><small>weakest first</small></header><div class="body flush tablewrap"><table><thead><tr><th>Transporter</th><th>Score</th><th class="num">Balance</th><th class="num">Oldest unpaid</th><th class="num">Avg days to pay</th><th class="num">Limit used</th><th class="num">Payments (90 d)</th><th class="num">Suggested limit</th></tr></thead><tbody>
+{% for x in d.scores %}<tr><td><b>{{ x.party.name }}</b></td>
+<td><span class="badge {{ {'A':'locked','B':'open','C':'submitted','D':'stop'}[x.grade] }}">{{ x.grade }} · {{ x.score }}</span><br><small class="muted">{% for k, v in x.parts.items() %}{{ k }} {{ v }}{{ ' · ' if not loop.last }}{% endfor %}</small></td>
+<td class="num">{{ x.balance|rs }}</td><td class="num">{{ x.oldest_days }} d</td><td class="num">{{ (x.avg_days ~ ' d') if x.avg_days is not none else '—' }}</td><td class="num">{{ (x.use_pct ~ ' %') if x.use_pct is not none else 'no limit' }}</td>
+<td class="num">{{ x.payments_90 }}</td><td class="num">{{ x.suggested_limit|rs if x.suggested_limit else '—' }}</td></tr>
+{% else %}<tr><td colspan="8" class="empty">No transporters with entries yet.</td></tr>{% endfor %}</tbody></table></div>
+<div class="body"><p class="hint" style="margin:0">Score out of 100: days to pay (40, payments settle the oldest bills first), oldest unpaid bill (25), use of credit limit (20), regular payments in the last 90 days (15). A ≥ 80 · B ≥ 60 · C ≥ 40 · D below. Suggested limit = 1.5 × average monthly credit of the last 90 days.</p></div></section>
+
+{% else %}
+<section class="section"><header><h2>This month vs last month</h2><small>{{ d.now['from']|d }} – {{ d.now.to|d }} compared with the same days of last month ({{ d.same['from']|d }} – {{ d.same.to|d }})</small></header>
+<div class="body flush tablewrap"><table><thead><tr><th></th><th class="num">This month</th><th class="num">Same days last month</th><th class="num">Change</th><th class="num">Whole last month</th></tr></thead><tbody>
+{% for r in d.rows %}<tr><td><b>{{ r.label }}</b></td><td class="num">{{ r.now|rs if r.money else (r.now|qty(0) ~ ' L') }}</td><td class="num">{{ r.same|rs if r.money else (r.same|qty(0) ~ ' L') }}</td>
+<td class="num">{% if r.pct is not none %}<span class="trend {{ 'up' if r.pct >= 0 else 'down' }}">{{ '↑' if r.pct >= 0 else '↓' }} {{ r.pct|abs }} %</span>{% else %}—{% endif %}</td><td class="num">{{ r.full|rs if r.money else (r.full|qty(0) ~ ' L') }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+{% endblock %}

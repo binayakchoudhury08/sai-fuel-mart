@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Nozzle Management{% endblock %}
+{% block content %}
+{% set NAMES = {'HSD':'HSD (High Speed Diesel)','MS':'MS (Petrol)','CNG':'CNG'} %}
+{% for f, rows in groups %}
+<h2 class="fuelhead">{{ NAMES.get(f.code, f.name) }}</h2>
+<div class="nozzlegrid">{% for r in rows %}{% set done = r.saved %}
+  <div class="nozzle" title="{% if done %}Today: {{ r.sale_qty|qty }} {{ f.unit }} · {{ r.amount|rs }}{% else %}Today’s reading not entered yet{% endif %}">
+    <svg class="pump" viewBox="0 0 44 52" aria-hidden="true"><rect x="5" y="5" width="24" height="42" rx="4" fill="#1D5BEB"/><rect x="9" y="10" width="16" height="10" rx="2" fill="#fff"/>
+      <rect x="3" y="45" width="28" height="5" rx="2" fill="#0A1A3F"/><path d="M29 17 h5 l4 5 v15 a3 3 0 0 1-6 0 v-7" fill="none" stroke="#0A1A3F" stroke-width="2.6"/></svg>
+    <div><b>{{ r.nozzle.name }}</b>
+      <span class="st {{ 'ready' if (r.rate and r.rate > 0) else 'pending' }}">{{ 'Ready' if (r.rate and r.rate > 0) else 'No price' }}</span>
+      <span class="price">₹ {{ r.rate if r.rate else '—' }}/{{ 'kg' if f.code == 'CNG' else 'L' }}</span></div>
+    <span class="dot {{ '' if done else 'pending' }}"></span>
+  </div>{% endfor %}</div>
+{% else %}<div class="section"><p class="empty">No nozzles yet.{% if can('setup') %} <a href="{{ url_for('admin.settings') }}#nozzles">Add nozzles in Settings.</a>{% endif %}</p></div>{% endfor %}
+<p class="hint" style="margin-top:14px">Green dot = today’s meter reading entered · amber = not yet. {% if can('closing_enter') %}<a href="{{ url_for('day.day_view', d=today.isoformat()) }}#readings">Enter readings</a>{% endif %}</p>
+{% endblock %}

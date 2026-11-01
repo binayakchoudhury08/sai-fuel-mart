@@ -1,0 +1,111 @@
+{% from "_logo.html" import logo %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A1630"><title>Attendance · {{ station_name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ VERSION }}">
+<style>
+  body{background:#F3F5F9;margin:0}
+  .at-top{position:sticky;top:0;z-index:5;background:#0A1630;color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px}
+  .at-top .row{display:flex;align-items:center;gap:10px}
+  .at-top h1{font:700 1.3rem var(--cond);margin:0;flex:1;color:#fff}
+  .at-top small{color:#AFC0E3}
+  .at-top::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:5px;background:linear-gradient(180deg,#1E4FD8 0 3px,#D7262E 3px 5px)}
+  .at-count{display:flex;gap:8px;margin-top:10px}
+  .at-count span{flex:1;text-align:center;border-radius:10px;padding:6px 4px;background:rgba(255,255,255,.08);font-size:.8rem;color:#C9D6F2}
+  .at-count b{display:block;font:700 1.35rem var(--cond);color:#fff}
+  .at-note{margin:14px 14px 0;padding:10px 12px;border-radius:12px;font-size:.88rem}
+  .at-note.open{background:#E9F7EF;color:#14653D}.at-note.closed{background:#FFF4E5;color:#8A4B00}
+  .at-list{padding:12px 12px 90px;display:grid;gap:10px}
+  .pc{background:#fff;border:1px solid #E3E8F0;border-radius:16px;padding:12px;display:grid;grid-template-columns:52px 1fr;gap:6px 12px;align-items:center}
+  .pc .av{width:52px;height:52px;border-radius:14px;background:#EAF0FF;display:grid;place-items:center;font:700 1.3rem var(--cond);color:#1E4FD8;overflow:hidden}
+  .pc .av img{width:100%;height:100%;object-fit:cover}
+  .pc b{font-size:1.05rem}.pc small{color:#6B7891;display:block}
+  .pc .acts{grid-column:1/-1;display:grid;grid-template-columns:1.6fr 1fr;gap:8px;margin-top:4px}
+  .pc .acts button{min-height:52px;border-radius:12px;font:700 1rem var(--font);border:0;cursor:pointer}
+  .bp{background:#14804A;color:#fff}.bp:disabled{background:#B9C5BE}
+  .ba{background:#fff;color:#C0262D;border:1.5px solid #F0C4C6!important}
+  .pc.is-P{border-color:#9ED9B7;background:#F3FBF6}.pc.is-A{border-color:#F3C2C4;background:#FFF6F6}
+  .st{grid-column:2;font-weight:700}.st.P{color:#14804A}.st.A{color:#C0262D}
+  #cam{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column}
+  #cam[hidden]{display:none}
+  #cam .bar{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;color:#fff}
+  #cam .bar b{flex:1;font-size:1.1rem}
+  #cam video,#cam img{flex:1;width:100%;object-fit:cover;min-height:0}
+  #cam .ctl{display:flex;align-items:center;justify-content:space-around;padding:18px 16px calc(env(safe-area-inset-bottom) + 22px)}
+  #cam .shoot{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:#14804A}
+  #cam .ghost{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:12px;padding:12px 16px;font:600 .95rem var(--font)}
+  #msg{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:60;background:#0E1A33;color:#fff;padding:12px 14px;border-radius:12px;font-weight:600;text-align:center}
+  #msg[hidden]{display:none}#msg.bad{background:#C0262D}
+</style></head>
+<body>
+<div id="root" data-start="{{ url_for('staff.attendance_start') }}" data-post="{{ url_for('staff.attendance_photo') }}" data-absent-url="{{ url_for('staff.attend_absent') }}"
+     data-date="{{ d.isoformat() }}" data-user="{{ user.full_name or user.username }}" data-station="{{ station }}">
+<input type="hidden" id="csrf" value="{{ csrf_token() }}">
+<header class="at-top"><div class="row">{{ logo(30) }}<h1>Attendance</h1><small>{{ d.strftime('%a %d %b') }}</small></div>
+  <div class="at-count"><span><b id="cP">{{ counts.P }}</b>Present</span><span><b id="cA">{{ counts.A }}</b>Absent</span><span><b id="cN">{{ counts.N }}</b>Not marked</span></div></header>
+{% if not mobile and not owner %}<div class="at-note closed">Open this on the phone — attendance is marked from the phone.</div>
+{% elif not storage %}<div class="at-note closed">Photo storage is not set up yet. Ask the owner.</div>
+{% elif in_window %}<div class="at-note open">Present by photo until {{ rules.end }}. Each person once. Absent needs no photo.</div>
+{% else %}<div class="at-note closed">Present by photo is open {{ rules.start }}–{{ rules.end }}. You can still mark Absent.</div>{% endif %}
+<main class="at-list">
+{% for p in people %}{% set st = 'P' if p.status in ('P','H') else ('A' if p.status == 'A' else '') %}
+<div class="pc {{ 'is-' ~ st if st }}" id="pc{{ p.id }}">
+  <div class="av">{% if p.photo_path %}<img src="{{ url_for('staff.attendance_photo_file', sid=p.id, d=d.isoformat()) }}" alt="">{% else %}{{ p.name[:1] }}{% endif %}</div>
+  <div><b>{{ p.name }}</b><small>{{ p.designation or 'Staff' }}{% if p.shift %} · {{ p.shift }}{% endif %}</small></div>
+  {% if st == 'P' %}<div class="st P">✓ Present{% if p.captured_at %} · {{ p.captured_at.astimezone(IST).strftime('%I:%M %p') }}{% endif %}</div>
+  {% elif st == 'A' %}<div class="st A">✗ Absent</div>
+  {% else %}<div class="acts"><button class="bp" data-present="{{ p.id }}" data-name="{{ p.name }}" {% if not ((in_window or owner) and storage and (mobile or owner)) %}disabled{% endif %}>📷 Present</button>
+    <button class="ba" data-absent="{{ p.id }}" data-name="{{ p.name }}">✗ Absent</button></div>{% endif %}
+</div>{% else %}<p class="empty">No staff yet — add staff on the website.</p>{% endfor %}
+</main>
+<div id="cam" hidden><div class="bar"><b id="camname">Staff</b><span id="camgps" class="badge">GPS…</span></div>
+  <video id="v" playsinline muted autoplay></video><img id="pv" hidden alt="">
+  <div class="ctl"><button class="ghost" id="cancel">Cancel</button><button class="shoot" id="shoot" aria-label="Take photo"></button><button class="ghost" id="flip">⟲ Flip</button></div></div>
+<div id="msg" hidden></div>
+</div>
+<script src="{{ url_for('static', filename='js/livecam.js') }}?v={{ VERSION }}"></script>
+<script>
+(function(){
+  var LC = window.LiveCam, root = document.getElementById("root"), $ = function(id){ return document.getElementById(id); };
+  var cam = $("cam"), v = $("v"), pv = $("pv"), cur = null, facing = "user", busy = false;
+  function toast(t, bad){ var m = $("msg"); m.textContent = t; m.className = bad ? "bad" : ""; m.hidden = false; clearTimeout(m._t); m._t = setTimeout(function(){ m.hidden = true; }, bad ? 4500 : 2200); }
+  function count(k, d){ var e = $("c" + k); e.textContent = Math.max(0, (+e.textContent) + d); }
+  function done(id, html, cls){ var c = $("pc" + id); c.classList.add(cls); var a = c.querySelector(".acts"); if (a) a.outerHTML = html; }
+  if (LC && LC.watchGps) LC.watchGps(function(l){ $("camgps").textContent = l ? "GPS ±" + l.acc + " m" : "No GPS"; });
+  document.querySelectorAll("[data-present]").forEach(function(b){ b.addEventListener("click", function(){
+    cur = { id: b.dataset.present, name: b.dataset.name }; $("camname").textContent = cur.name;
+    cam.hidden = false; pv.hidden = true; v.hidden = false; busy = false; LC.start(v, facing);
+  }); });
+  $("cancel").onclick = function(){ if (busy) return; LC.stop(); cam.hidden = true; };
+  $("flip").onclick = function(){ facing = facing === "user" ? "environment" : "user"; LC.start(v, facing); };
+  $("shoot").onclick = function(){
+    if (busy || !v.videoWidth) { if (!v.videoWidth) toast("Camera is starting…"); return; }
+    busy = true; var at = Date.now(), l = LC.loc || {};
+    LC.snap(v, v.videoWidth, v.videoHeight, ["Attendance · " + cur.name, LC.ist(new Date(at)) + " IST",
+      (l.lat ? "GPS " + l.lat + ", " + l.lng : "GPS not available") + " · by " + root.dataset.user + " · " + root.dataset.station], facing === "user")
+    .then(function(blob){
+      pv.src = URL.createObjectURL(blob); pv.hidden = false; v.hidden = true; toast("Saving…");
+      return LC.upload({ csrf: $("csrf").value, startUrl: root.dataset.start, finishUrl: root.dataset.post,
+        startFields: { staff_id: cur.id, work_date: root.dataset.date, kind: "in" }, photo: blob,
+        finishFields: { staff_id: cur.id, work_date: root.dataset.date, kind: "in", captured_at: String(at), lat: l.lat, lng: l.lng } })
+      .then(function(){
+        LC.stop(); cam.hidden = true;
+        var c = $("pc" + cur.id); c.querySelector(".av").innerHTML = '<img src="' + pv.src + '" alt="">';
+        done(cur.id, '<div class="st P">✓ Present · ' + new Date(at).toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata"}) + '</div>', "is-P");
+        count("P", 1); count("N", -1); toast(cur.name + " — present ✓");
+      });
+    }).catch(function(e){ busy = false; pv.hidden = true; v.hidden = false; toast(e.message || "Not saved — try again", true); });
+  };
+  document.querySelectorAll("button[data-absent]").forEach(function(b){ b.addEventListener("click", function(){
+    if (!confirm("Mark " + b.dataset.name + " absent today?")) return;
+    var f = new FormData(); f.append("_csrf", $("csrf").value); f.append("staff_id", b.dataset.absent);
+    b.disabled = true;
+    fetch(root.dataset.absentUrl, { method: "POST", body: f, credentials: "same-origin" }).then(function(r){ return r.json(); })
+    .then(function(r){
+      if (!r.ok) { b.disabled = false; toast(r.error, true); return; }
+      done(b.dataset.absent, '<div class="st A">✗ Absent</div>', "is-A"); count("A", 1); count("N", -1); toast(b.dataset.name + " — absent");
+    }).catch(function(){ b.disabled = false; toast("No internet — try again", true); });
+  }); });
+})();
+</script>
+</body></html>

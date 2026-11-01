@@ -1,0 +1,20 @@
+{# One tab bar for everything under Settings. In-page tabs carry data-show; the others are pages that show the same bar. #}
+{% macro settings_tabs(active='', inpage=False) -%}
+{% set T = [
+  ('station',  'Station Info',     url_for('admin.settings') ~ '#general', 'setup'),
+  ('prices',   'Fuel Prices',      url_for('admin.settings') ~ '#rates',   'setup'),
+  ('payments', 'Payment Methods',  url_for('admin.settings') ~ '#modes',   'setup'),
+  ('users',    'Users',            url_for('auth.users'),                  'users'),
+  ('perms',    'Permissions',      url_for('admin.permissions'),           'owner'),
+  ('access',   'Temporary Access', url_for('admin.access'),                'owner'),
+  ('auto',     'Automation',       url_for('main.automation_settings'),    'owner'),
+  ('photos',   'Photos',           url_for('admin.settings') ~ '#photo',   'owner'),
+  ('system',   'System',           url_for('admin.settings') ~ '#history', 'setup'),
+] %}
+<nav class="tabs settabs" {% if inpage %}data-tabs{% endif %}>
+{% for key, label, href, perm in T if can(perm) %}
+  {% set local = inpage and key in ('station','prices','payments','photos','system') %}
+  <a href="{{ href.split('#')[1] and ('#' ~ href.split('#')[1]) if local else href }}" {% if local %}data-show="{{ key }}"{% endif %} class="{{ 'on' if key == active }}">{{ label }}</a>
+{% endfor %}
+</nav>
+{%- endmacro %}
