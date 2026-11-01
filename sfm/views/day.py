@@ -589,13 +589,15 @@ def closing_scan_read(d, sid):
     import time
     from flask import jsonify
     from ..closing_scan import work_part
+    from ..closing_scan import PART_KEYS
     part = request.form.get("part")
-    if part not in ("top", "bottom"):
+    if part not in PART_KEYS:
         return jsonify({"ok": False, "error": "Unknown part."}), 400
+    careful = request.form.get("careful") == "1"
     t = time.time()
     with db.tx() as cur:
         cur.execute("UPDATE closing_scans SET status='reading', error=NULL WHERE id=%s AND status='failed'", (sid,))
-    work_part(sid, part)
+    work_part(sid, part, careful)
     s = db.one("SELECT status, parts, error FROM closing_scans WHERE id=%s", (sid,))
     done = part in ((s or {}).get("parts") or {})
     return jsonify({"ok": done, "part": part, "state": (s or {}).get("status"), "seconds": round(time.time() - t, 1),
@@ -621,7 +623,8 @@ def closing_scan_retry(d, sid):
     s = db.one("SELECT status, parts FROM closing_scans WHERE id=%s", (sid,))
     if not s or s["status"] not in ("reading", "failed"):
         return jsonify({"ok": False, "error": "Nothing to retry."}), 400
-    todo = [p for p in ("top", "bottom") if p not in (s["parts"] or {})]
+    from ..closing_scan import PART_KEYS
+    todo = [p for p in PART_KEYS if p not in (s["parts"] or {})]
     with db.tx() as cur:
         cur.execute("UPDATE closing_scans SET status='reading', error=NULL WHERE id=%s", (sid,))
     _start_closing_workers(sid, todo)

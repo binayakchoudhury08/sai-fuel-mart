@@ -22,6 +22,8 @@ PAGE = {"date": "29.09.26",
  "lube": [{"text": "LAALGHOD 1Ltr 1x260", "qty": "1", "rate": "260", "amount": "260"}, {"text": "RACER 2T 20ml 4x14", "qty": "4", "rate": "14", "amount": "56"},
           {"text": "Petrol Plus 5ml 2x10", "qty": "2", "rate": "10", "amount": "20"}],
  "after_lube": "907926", "cng": {"qty": "239.11", "rate": "97.70", "amount": "23361"}, "collection": "931287",
+ "cng_meters": {"nozzles": [{"closing": "1150.00", "opening": "1000.00", "diff": "150.00"}, {"closing": "2089.11", "opening": "2000.00", "diff": "89.11"}],
+                "total": "239.11", "testing": "", "net": "239.11"},
  "lines": [{"sign": "+", "name": "S.V.T", "amount": "700000"}, {"sign": "+", "name": "S.R.C", "amount": "36500"}, {"sign": "+", "name": "V.N.S Logistics", "amount": "91047"},
            {"sign": "=", "name": "", "amount": "1758834"},
            {"sign": "-", "name": "Phonepe", "amount": "217282"}, {"sign": "-", "name": "Card swipe", "amount": "136970"}, {"sign": "-", "name": "HPCL OTP", "amount": "856869"},
@@ -38,11 +40,11 @@ c.execute("SELECT id FROM pump.tanks WHERE fuel_code='MS' LIMIT 1"); ms_t = c.fe
 c.execute("SELECT id FROM pump.tanks WHERE fuel_code='HSD' LIMIT 1"); hsd_t = c.fetchone()[0]
 c.execute("UPDATE pump.nozzles SET active=FALSE")
 noz = {}
-for code, tank, names in (("MS", ms_t, ["MS-A", "MS-B", "MS-C"]), ("HSD", hsd_t, ["HSD-A", "HSD-B", "HSD-C"]), ("CNG", None, ["CNG-A"])):
+for code, tank, names in (("MS", ms_t, ["MS-A", "MS-B", "MS-C"]), ("HSD", hsd_t, ["HSD-A", "HSD-B", "HSD-C"]), ("CNG", None, ["CNG-A", "CNG-B"])):
     for i, nm in enumerate(names):
         c.execute("INSERT INTO pump.nozzles (name, fuel_code, tank_id, sort, active) VALUES (%s,%s,%s,%s,TRUE) RETURNING id", (nm, code, tank, i))
         noz[nm] = c.fetchone()[0]
-for nm, op in (("MS-A", "689529.75"), ("MS-B", "1025198.50"), ("MS-C", "28725.92"), ("HSD-A", "5679369.26"), ("HSD-B", "4521566.54"), ("HSD-C", "458435.89"), ("CNG-A", "1000")):
+for nm, op in (("MS-A", "689529.75"), ("MS-B", "1025198.50"), ("MS-C", "28725.92"), ("HSD-A", "5679369.26"), ("HSD-B", "4521566.54"), ("HSD-C", "458435.89"), ("CNG-A", "1000"), ("CNG-B", "2000")):
     c.execute("INSERT INTO pump.nozzle_readings (business_date, nozzle_id, opening, closing, testing, rate) VALUES (%s,%s,%s,%s,0,100)", (D - timedelta(days=1), noz[nm], Decimal(op) - 1, op))
 for code, r in (("MS", "110.32"), ("HSD", "101.98"), ("CNG", "97.70")):
     c.execute("INSERT INTO pump.fuel_rates (fuel_code, effective_from, rate) VALUES (%s,'2026-09-01',%s) ON CONFLICT (fuel_code, effective_from) DO UPDATE SET rate=EXCLUDED.rate", (code, r))
@@ -95,19 +97,20 @@ import json
 c.execute("INSERT INTO pump.closing_scans (business_date, created_by, raw) VALUES (%s,'boss',%s) RETURNING id", (D, json.dumps(extra)))
 sid = c.fetchone()[0]
 h = cl.get(f"/day/{D}/scan/{sid}").get_data(as_text=True)
-form = {"_csrf": "t", "_ft": uuid.uuid4().hex, "cng_open": "1000"}
+form = {"_csrf": "t", "_ft": uuid.uuid4().hex}
 for nm in ("open_", "close_", "test_", "lube_qty_", "amt_", "cng_qty", "page_cash", "dip_"):
-    for name, val in re.findall(rf'name="({nm}[^"]*)" value="([^"]*)"', h): form[name] = val
+    for name, val in re.findall(rf'name="({nm}[^"]*)"[^>]*?value="([^"]*)"', h): form[name] = val
 for name in re.findall(r'name="(lube_use_\d+)"', h): form[name] = "1"
 for name, sel in re.findall(r'<select name="((?:kind|target|lube_prod)_\d+)">(.*?)</select>', h, re.S):
-    m = re.search(r'<option value="([^"]*)" selected', sel); form[name] = m.group(1) if m else ""
+    m = re.search(r'<option value="([^"]*)"[^>]*\sselected', sel); form[name] = m.group(1) if m else ""
 with cl.session_transaction() as s: s["_csrf"] = "t"
 r = cl.post(f"/day/{D}/scan/{sid}/save", data=form, follow_redirects=True)
 txt = r.get_data(as_text=True)
-c.execute("SELECT COUNT(*) FROM pump.nozzle_readings WHERE business_date=%s", (D,)); check(c.fetchone()[0] == 7, "7 meter readings saved (3 MS, 3 HSD, CNG)")
+c.execute("SELECT COUNT(*) FROM pump.nozzle_readings WHERE business_date=%s", (D,)); check(c.fetchone()[0] == 8, "8 meter readings saved (3 MS, 3 HSD, 2 CNG)")
 c.execute("SELECT SUM(testing) FROM pump.nozzle_readings r JOIN pump.nozzles n ON n.id=r.nozzle_id WHERE business_date=%s AND n.fuel_code='MS'", (D,))
 check(c.fetchone()[0] == 15, "MS testing 15 L saved")
-c.execute("SELECT closing FROM pump.nozzle_readings WHERE business_date=%s AND nozzle_id=%s", (D, noz["CNG-A"])); check(c.fetchone()[0] == Decimal("1239.11"), "CNG closing = typed opening 1000 + 239.11")
+c.execute("SELECT closing FROM pump.nozzle_readings WHERE business_date=%s AND nozzle_id IN (%s,%s) ORDER BY nozzle_id", (D, noz["CNG-A"], noz["CNG-B"]))
+check([x[0] for x in c.fetchall()] == [Decimal("1150.00"), Decimal("2089.11")], "CNG: both nozzles' closing readings saved from the page (quantity 239.11, rate from Settings)")
 c.execute("SELECT p.name, d.amount FROM pump.day_credit d JOIN pump.parties p ON p.id=d.party_id WHERE business_date=%s ORDER BY 1", (D,))
 cr = dict(c.fetchall())
 check(cr.get("R.K. Roadways") == 229805 and cr.get("Gajalaxmi") == 58740 and cr.get("Sai Hitech") == 39500,
@@ -126,40 +129,51 @@ gap = Decimal(res["expected"]) - Decimal(res["page"])
 check(Decimal("499") <= gap <= Decimal("501") and not res["recon_ok"],
       f"system cash = page cash except the skipped unknown ₹500 line (+ paise rounding): gap ₹{gap}; step 3 still asks for the missing slips")
 check("Transporter credit totals don’t match the slips" in txt, "after saving: tells the manager that slips are still missing")
-print("Reading in two halves in the background (with a timeout and Retry)")
+print("Reading in four parts at the same time (with a timeout and a careful Retry)")
 os.environ["WA_INLINE_WORK"] = "1"
 from sfm.util import UserError
 CALLS = []
-def fake_part(img_b64, mime, part):
-    CALLS.append(part)
-    if part == "bottom" and CALLS.count("bottom") == 1:
+def split(part):
+    if part == "left":
+        return {"left": copy.deepcopy(PAGE["lines"][:12])}
+    if part == "right":
+        return {"right": copy.deepcopy(PAGE["lines"][12:]), "final_cash": PAGE["final_cash"], "dips": copy.deepcopy(PAGE["dips"])}
+    return {k: copy.deepcopy(PAGE[k]) for k in cs.PART_KEYS[part] if k in PAGE}
+def fake_part(img_b64, mime, part, careful=False):
+    CALLS.append(part + ("*" if careful else ""))
+    if part == "right" and not careful:
         raise UserError("Google took too long to answer. Press Retry.")
-    keys = cs.PART_KEYS[part]
-    return {k: copy.deepcopy(PAGE[k]) for k in keys}
+    return split(part)
 cs.read_part = fake_part
 D2 = date(2026, 9, 30)
 with cl.session_transaction() as s_: s_["_csrf"] = "t"
 r = cl.post(f"/day/{D2}/scan", data={"_csrf": "t", "photo": (__import__("io").BytesIO(b"\xff\xd8\xff" + b"0" * 200), "c.jpg")}, content_type="multipart/form-data")
 job = r.json
-def read(part):
+def read(part, careful=False):
     with cl.session_transaction() as s_: s_["_csrf"] = "t"
-    return cl.post(job["read"], data={"_csrf": "t", "part": part}).json
-r1, r2 = read("top"), read("bottom")
-check(r1["ok"] and not r2["ok"] and "took too long" in r2["error"], f"half 1 read ✓, half 2 timed out → shown with the reason: {r2['error']}")
-r3 = read("bottom")
-check(r3["ok"] and r3["state"] == "review" and CALLS == ["top", "bottom", "bottom"], f"Retry re-reads only half 2 → ready for review (reads: {CALLS})")
+    return cl.post(job["read"], data={"_csrf": "t", "part": part, **({"careful": "1"} if careful else {})}).json
+rs_ = [read(p_) for p_ in ("meters", "sales", "left", "right")]
+check(all(x["ok"] for x in rs_[:3]) and not rs_[3]["ok"] and "took too long" in rs_[3]["error"],
+      f"3 parts read ✓, the right column timed out → shown with the reason: {rs_[3]['error']}")
+r3 = read("right", careful=True)
+check(r3["ok"] and r3["state"] == "review" and CALLS == ["meters", "sales", "left", "right", "right*"],
+      f"Retry re-reads only that part, carefully → ready for review (reads: {CALLS})")
 sid2 = int(job["review"].rstrip("/").split("/")[-1])
 c.execute("SELECT raw, img FROM pump.closing_scans WHERE id=%s", (sid2,)); raw2, img2 = c.fetchone()
 check(img2 is None and raw2["final_cash"] == "30432" and len(raw2["lines"]) == len(PAGE["lines"]) and raw2["ms"]["total"] == "1152.67",
       "the two halves joined into the full page (photo copy removed after reading)")
 h2 = cl.get(job["review"]).get_data(as_text=True)
 check("≠ yesterday’s closing in the system" in h2, "review opens; reusing the 29th page as the 30th is caught (openings ≠ yesterday’s closings)")
-EMPTY = {"top": {"date": "30.09.26"}}
-def empty_part(img_b64, mime, part):
-    return EMPTY.get(part, {k: copy.deepcopy(PAGE[k]) for k in cs.PART_KEYS[part]})
+EMPTY = {"meters": {"date": "30.09.26"}}
+def empty_part(img_b64, mime, part, careful=False):
+    return EMPTY.get(part, split(part))
 cs.read_part = empty_part
 with cl.session_transaction() as s_: s_["_csrf"] = "t"
 job = cl.post(f"/day/{D2}/scan", data={"_csrf": "t", "photo": (__import__("io").BytesIO(b"\xff\xd8\xff0"), "c.jpg")}, content_type="multipart/form-data").json
-e1 = read("top")
-check(not e1["ok"] and "meter readings could not be read" in e1["error"], "a half that comes back empty is not accepted — Retry offered")
+e1 = read("meters")
+check(not e1["ok"] and "meter readings could not be read" in e1["error"], "a part that comes back empty is not accepted — Retry offered")
+print("A lube line the reader missed is caught")
+nolube = copy.deepcopy(PAGE); nolube["lube"] = nolube["lube"][:2]
+nl = analyse(nolube)
+check(any("lube line is missing" in f_ for f_ in nl["flags"]), "page’s lube total ≠ lines read → “a lube line is missing or misread”")
 print(); print("FAILED:" if FAILS else "ALL CLOSING-SCAN CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]

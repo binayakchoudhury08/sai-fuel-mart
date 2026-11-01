@@ -213,4 +213,4 @@ def monthly_bills(cur, low):
             docs.append((bill_filename(p["name"], start, "pdf", end), transport_bill_pdf(p, rows, start, end, st).getvalue(), "application/pdf"))
     if len(parties) > 25:
         lines.append(f"(first 25 of {len(parties)} — the rest from the website)")
-    return {"docs": docs, "caption": f"{first:%B %Y}", "reply": "\n".join(lines)}
+    return {"docs": docs, "caption": f"{first:%B %Y}", "reply": "\n".join(lines), "summary": True}

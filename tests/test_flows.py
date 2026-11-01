@@ -344,12 +344,18 @@ mon = T.strftime("%b %Y")
 check(f"SVT Logistics/SVT Logistics Bill {mon}.pdf" in names and f"SVT Logistics/SVT Logistics Bill {mon}.xlsx" in names
       and any(n.startswith("SVT Logistics/Daily PDF/") for n in names) and any(n.startswith("SVT Logistics/Daily Excel/") for n in names),
       f"month ZIP: month bill PDF+Excel and daily PDF+Excel {names}")
-r = owner.get(f"/transport/download?period=month&month={T.strftime('%Y-%m')}&fmt=zip")
+import psycopg2 as _pg
+_c = _pg.connect(os.environ["DATABASE_URL"]).cursor()
+_m = T.strftime('%Y-%m')
+_c.execute("""SELECT DISTINCT p.name FROM pump.party_txns x JOIN pump.parties p ON p.id=x.party_id
+              WHERE NOT x.voided AND x.kind IN ('fuel','cash_advance') AND to_char(x.business_date,'YYYY-MM')=%s ORDER BY 1""", (_m,))
+_who = [r[0] for r in _c.fetchall()]          # transporters with entries this month (on the 1st this may be fewer)
+r = owner.get(f"/transport/download?period=month&month={_m}&fmt=zip")
 folders = sorted({n.split("/")[0] for n in zipfile.ZipFile(io.BytesIO(r.data)).namelist()})
-check("SVT Logistics" in folders and "Sharma Transport" in folders, f"all-transporters ZIP: separate folder each {folders}")
-r = owner.get(f"/transport/download?period=month&month={T.strftime('%Y-%m')}&fmt=pdf")
-zn = zipfile.ZipFile(io.BytesIO(r.data)).namelist() if r.mimetype == "application/zip" else []
-check(len(zn) == 2 and all(n.endswith(".pdf") for n in zn), f"all transporters + PDF → one PDF per transporter {zn}")
+check(folders == _who and _who, f"all-transporters ZIP: a separate folder for each transporter with entries this month {folders}")
+r = owner.get(f"/transport/download?period=month&month={_m}&fmt=pdf")
+zn = zipfile.ZipFile(io.BytesIO(r.data)).namelist() if r.mimetype == "application/zip" else ([r.headers.get("Content-Disposition", "")] if r.mimetype == "application/pdf" else [])
+check(len(zn) == len(_who) and all(".pdf" in n for n in zn), f"all transporters + PDF → one PDF per transporter {zn}")
 r = owner.get(f"/transport/download?party={svt}&period=month&month={T.strftime('%Y-%m')}&fmt=pdf")
 check(r.data[:4] == b"%PDF" and mon in r.headers.get("Content-Disposition", ""), "month PDF bill named by month")
 r = owner.get(f"/transport/bill.pdf?party={svt}&from={T.isoformat()}&to={T.isoformat()}", follow_redirects=True)

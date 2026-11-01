@@ -142,7 +142,7 @@
       if (veh && !veh.value && vs.length===1) veh.value = vs[0];
     }
     function upd(){
-      var fo = fuel && fuel.options[fuel.selectedIndex], r = num(rate && rate.value) || num(fo && fo.dataset.rate);
+      var fo = fuel && fuel.options ? fuel.options[fuel.selectedIndex] : null, r = num(rate && rate.value) || num(fo && fo.dataset.rate);
       if (rate && !rate.value && fo) rate.placeholder = fo.dataset.rate || "";
       var qty = num(q && q.value); if (!qty && amt && num(amt.value) && r) qty = num(amt.value)/r;
       var fa = Math.round(qty*r), c = Math.round(num(cash && cash.value));   // whole rupees, like the saved slip

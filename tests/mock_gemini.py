@@ -45,10 +45,14 @@ class H(BaseHTTPRequestHandler):
         if ok and "DAILY CLOSING" in _text:                      # closing page halves
             src = open(os.path.join(os.path.dirname(__file__), "test_closing_scan.py")).read()
             ns = {}; exec(src[src.index("PAGE = {"):src.index("k = psycopg2")], {}, ns)
-            keys = ["lines", "final_cash", "dips"] if "Read ONLY what comes after COLLECTION" in _text else ["date", "ms", "hsd", "ms_sale", "hsd_sale", "fuel_total", "lube", "after_lube", "cng", "collection"]
+            P = ns["PAGE"]
+            if "Read ONLY the LEFT column" in _text: out_ = {"left": P["lines"][:12]}
+            elif "Read ONLY the RIGHT column" in _text: out_ = {"right": P["lines"][12:], "final_cash": P["final_cash"], "dips": P["dips"]}
+            elif "Read ONLY the nozzle readings" in _text: out_ = {k: P[k] for k in ("date", "ms", "hsd", "cng_meters", "ms_sale", "hsd_sale")}
+            else: out_ = {k: P[k] for k in ("fuel_total", "lube", "after_lube", "cng", "collection")}
             with open("/tmp/gemini_calls.log", "a") as lg:
-                lg.write(json.dumps({"t": __import__("time").time(), "think": body["generationConfig"].get("thinkingConfig")}) + "\n")
-            data = json.dumps({"candidates": [{"content": {"parts": [{"text": json.dumps({k: ns["PAGE"][k] for k in keys})}]}}]}).encode()
+                lg.write(json.dumps({"t": __import__("time").time(), "think": body["generationConfig"].get("thinkingConfig"), "model": self.path.split("/models/")[1].split(":")[0]}) + "\n")
+            data = json.dumps({"candidates": [{"content": {"parts": [{"text": json.dumps(out_)}]}}]}).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data); return
         parts = body["contents"][0]["parts"]

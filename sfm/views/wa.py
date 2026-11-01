@@ -162,7 +162,7 @@ def _process(msgs):
             if not wa.send_list(phone, body + note, button, sections):
                 wa.send_text(phone, reply.get("fallback", wa.MENU) + note)
         elif isinstance(reply, dict) and reply.get("docs"):
-            if reply.get("reply") and len(reply["docs"]) > 1:
+            if reply.get("reply") and (len(reply["docs"]) > 1 or reply.get("summary")):
                 wa.send_text(phone, reply["reply"])
             for name, data, mime in reply["docs"]:
                 wa.send_document(phone, name, data, mime, reply.get("caption", ""))

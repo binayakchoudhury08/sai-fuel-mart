@@ -1,5 +1,17 @@
 # Sai Fuel Mart — changes
 
+## 3.21.0 — Scan closing page: fast, complete, CNG nozzles, live shortage
+
+- The page is read in 4 focused parts at the same time (meter readings · lube/CNG/collection · left column · right
+  column & cash) with the fast model (Flash-Lite, minimal thinking); each part up to 55 s. ↻ Retry carefully re-reads
+  only the failed part with the stronger model. Photos sent at 1800 px.
+- Completeness: lube lines must add up to the page's lube total ("a lube line is missing or misread"); every running
+  total must match (names the lines to check); a part that comes back empty counts as failed.
+- CNG: 2 nozzles read like MS/HSD (opening / closing from the page); quantity from the nozzles, rate from Settings.
+- Check screen: live bar — sales, expected cash, page cash → matches / short (≤ ₹10 OK) / SHORT / excess — updates as
+  any number is edited, before saving (like manual Daily Closing).
+- Fixed: a script error on Credit Transport (slip preview) and a duplicated script on the check screen.
+
 ## 3.20.0 — WhatsApp assistant: owner's website in chat
 
 - Bill photos are read the moment each one arrives (inside that message), so "done" answers at once; a photo

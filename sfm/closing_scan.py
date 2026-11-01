@@ -28,6 +28,7 @@ do not calculate or correct anything.
 - ms_sale / hsd_sale: "MS SALE = litres x rate = amount".
 - fuel_total: the total of the two sales. lube: each lube line (text as written, quantity, rate, amount).
   after_lube: the total after lube lines.
+- cng_meters: the CNG nozzle columns (usually 2) — closing, opening, difference — exactly like MS / HSD, if written.
 - cng: "C.N.G = qty x rate = amount". collection: the number next to COLLECTION.
 - lines: EVERY line after COLLECTION that has a + or − amount, in order: first the left column top to bottom, then the
   right column top to bottom. sign "+" or "-"; name exactly as written (e.g. "S.V.T", "Phonepe", "HPCL OTP",
@@ -47,6 +48,9 @@ SCHEMA = {"type": "OBJECT", "properties": {
     "date": _N, "ms": _FUEL, "hsd": _FUEL, "ms_sale": _SALE, "hsd_sale": _SALE, "fuel_total": _N,
     "lube": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"text": _N, "qty": _N, "rate": _N, "amount": _N}}},
     "after_lube": _N, "cng": {"type": "OBJECT", "properties": {"qty": _N, "rate": _N, "amount": _N}}, "collection": _N,
+    "cng_meters": _FUEL,
+    "left": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"sign": _N, "name": _N, "amount": _N}}},
+    "right": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"sign": _N, "name": _N, "amount": _N}}},
     "lines": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"sign": _N, "name": _N, "amount": _N}}},
     "final_cash": _N,
     "dips": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {"fuel": _N, "dip": _N, "litres": _N, "adjust": _N, "net": _N}}}},
@@ -59,53 +63,78 @@ def read_closing(image_bytes, mime="image/jpeg"):
 
 
 # The page is read in two halves at the same time (each its own request), so neither runs into Vercel's 60 s limit.
-PART_KEYS = {"top": ["date", "ms", "hsd", "ms_sale", "hsd_sale", "fuel_total", "lube", "after_lube", "cng", "collection"],
-             "bottom": ["lines", "final_cash", "dips"]}
-PART_NOTE = {"top": "Read ONLY the upper part: date, MS and HSD nozzle readings, the two SALE lines, the lube lines, CNG and COLLECTION. "
-                    "Do not read anything below COLLECTION.",
-             "bottom": "Read ONLY what comes after COLLECTION: every + / − line in both columns with the running totals, the final "
-                       "cash, and the dip stock lines. Do not read the meter readings."}
+PART_KEYS = {"meters": ["date", "ms", "hsd", "cng_meters", "ms_sale", "hsd_sale"],
+             "sales": ["fuel_total", "lube", "after_lube", "cng", "collection"],
+             "left": ["left"],
+             "right": ["right", "final_cash", "dips"]}
+PART_LABEL = {"meters": "meter readings", "sales": "lube, CNG & collection", "left": "left column", "right": "right column & cash"}
+PART_NOTE = {
+    "meters": "Read ONLY the nozzle readings: MS columns, HSD columns and CNG columns (closing row, opening row, difference row), "
+              "each block's total / testing / net, and the MS SALE and HSD SALE lines. Nothing else.",
+    "sales": "Read ONLY: the total of MS + HSD sale, EVERY lube line (do not skip any — each has quantity x rate), the total after "
+             "lube, the C.N.G line and COLLECTION. Nothing else.",
+    "left": "Read ONLY the LEFT column below COLLECTION, top to bottom: every + and − line (name and amount) and every underlined "
+            "running total (sign \"=\"). Return them in 'left'. Do not skip any line. Ignore the right column.",
+    "right": "Read ONLY the RIGHT column below the sales (it starts with the amount carried over from the left column), top to "
+             "bottom: every − / + line and every underlined running total (sign \"=\", include words like EXP in its name). Return "
+             "them in 'right', then final_cash (the last total) and the dip stock lines. Do not skip any line."}
 
 
-def read_part(image_b64, mime, part):
+def read_part(image_b64, mime, part, careful=False):
     keys = PART_KEYS[part]
-    schema = {"type": "OBJECT", "properties": {k: SCHEMA["properties"][k] for k in keys},
-              "required": [k for k in keys if k in ("ms", "hsd", "lines")]}
+    schema = {"type": "OBJECT", "properties": {k: SCHEMA["properties"][k] for k in keys}}
     img = {"inline_data": {"mime_type": mime, "data": image_b64}}
-    return _ask([img, {"text": PROMPT + "\n" + PART_NOTE[part]}], "scan", schema=schema, level="minimal")
+    return _ask([img, {"text": PROMPT + "\n" + PART_NOTE[part]}], "closing-careful" if careful else "closing",
+                schema=schema, level="minimal", budget=55)
 
 
-def work_part(sid, part):
-    """Background worker: read one half; when both halves are in, the scan is ready for review."""
+def _part_ok(part, got):
+    if part == "meters":
+        return bool((got.get("ms") or {}).get("nozzles") or (got.get("hsd") or {}).get("nozzles")), "the meter readings"
+    if part == "sales":
+        return bool(got.get("collection") or got.get("lube") or got.get("fuel_total")), "lube / CNG / collection"
+    if part == "left":
+        return bool(got.get("left")), "the left column lines"
+    return bool(got.get("right") or got.get("final_cash")), "the right column"
+
+
+def merge(parts):
+    raw = {}
+    for k in ("meters", "sales", "right"):
+        raw.update({x: y for x, y in (parts.get(k) or {}).items() if x not in ("left", "right")})
+    raw["lines"] = list((parts.get("left") or {}).get("left") or []) + list((parts.get("right") or {}).get("right") or [])
+    return raw
+
+
+def work_part(sid, part, careful=False):
+    """Read one part of the page; when all four are in, the scan is ready for review."""
     from . import db
     from .util import UserError
     row = db.one("SELECT img, parts, status FROM closing_scans WHERE id=%s", (sid,))
     if not row or row["status"] not in ("reading", "failed") or part in (row["parts"] or {}):
         return
     try:
-        got = read_part(row["img"], "image/jpeg", part)
+        got = read_part(row["img"], "image/jpeg", part, careful)
         got.pop("_model", None)
-        if part == "top" and not ((got.get("ms") or {}).get("nozzles") or (got.get("hsd") or {}).get("nozzles")):
-            raise UserError("the meter readings could not be read — press Retry, or retake the photo flat and sharp")
-        if part == "bottom" and not got.get("lines"):
-            raise UserError("the credit / digital / expense lines could not be read — press Retry, or retake the photo")
+        ok, what = _part_ok(part, got)
+        if not ok:
+            raise UserError(f"{what} could not be read — press Retry")
         with db.tx() as cur:
             cur.execute("UPDATE closing_scans SET parts = parts || %s::jsonb WHERE id=%s", (json.dumps({part: got}), sid))
     except UserError as e:
         with db.tx() as cur:
-            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"{'Meter readings' if part == 'top' else 'Lines / cash'}: {e}", sid))
+            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"{PART_LABEL[part]}: {e}", sid))
     except Exception as e:
         with db.tx() as cur:
-            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"Reading failed ({type(e).__name__}). Press Retry.", sid))
+            cur.execute("UPDATE closing_scans SET error=%s WHERE id=%s", (f"{PART_LABEL[part]}: reading failed ({type(e).__name__})", sid))
     with db.tx() as cur:
         cur.execute("SELECT parts, error, status FROM closing_scans WHERE id=%s FOR UPDATE", (sid,))
         r = cur.fetchone()
         if r["status"] not in ("reading", "failed"):
             return
         p = r["parts"] or {}
-        if "top" in p and "bottom" in p:
-            raw = dict(p["top"]); raw.update(p["bottom"])
-            cur.execute("UPDATE closing_scans SET raw=%s, status='review', img=NULL, error=NULL WHERE id=%s", (json.dumps(raw), sid))
+        if all(k in p for k in PART_KEYS):
+            cur.execute("UPDATE closing_scans SET raw=%s, status='review', img=NULL, error=NULL WHERE id=%s", (json.dumps(merge(p)), sid))
         elif r["error"]:
             cur.execute("UPDATE closing_scans SET status='failed' WHERE id=%s", (sid,))
 
@@ -199,7 +228,10 @@ def analyse(cur, d, raw):
     rates = rates_for(cur, d)
     flags, notdone = [], []
     fuels = {}
-    for code, key in (("MS", "ms"), ("HSD", "hsd")):
+    for code, key in (("MS", "ms"), ("HSD", "hsd"), ("CNG", "cng_meters")):
+        if code == "CNG" and not (raw.get("cng_meters") or {}).get("nozzles"):
+            fuels["CNG"] = {"rows": [], "movement": Decimal(0), "testing": Decimal(0), "net": Decimal(0), "page_amount": None}
+            continue
         fuels[code], f = _fuel_rows(cur, d, code, raw.get(key) or {})
         flags += f
         sale = raw.get(f"{key}_sale") or {}
@@ -240,9 +272,15 @@ def analyse(cur, d, raw):
             lf.append(f"page rate {rt} ≠ product price {prod['sale_rate']}")
         lube.append({"i": i, "text": txt, "qty": q, "rate": rt, "amount": a, "product": prod, "flags": lf})
         flags += [f"Lube “{txt}”: {x}" for x in lf]
-    # CNG
+    # CNG: quantity from its 2 nozzles (when written), rate from Settings
     cng = raw.get("cng") or {}
     cq, cr_, ca = num(cng.get("qty")), num(cng.get("rate")), num(cng.get("amount"))
+    if fuels["CNG"]["rows"]:
+        if cq is not None and abs(fuels["CNG"]["net"] - cq) > Decimal("0.02"):
+            flags.append(f"CNG: nozzles add up to {fuels['CNG']['net']}, the page’s CNG line says {cq}")
+        cq = fuels["CNG"]["net"]
+    if rates.get("CNG") and cr_ and cr_ != Decimal(rates["CNG"]):
+        flags.append(f"CNG: page rate {cr_} ≠ saved price {rates['CNG']}")
     if cq and cr_ and ca is not None and abs(_r(cq * cr_) - ca) > 1:
         flags.append(f"CNG {cq} × {cr_} = {_r(cq * cr_)}, written {ca}")
     cur.execute("SELECT id, name FROM nozzles WHERE fuel_code='CNG' AND active ORDER BY sort, id LIMIT 1")
@@ -253,6 +291,8 @@ def analyse(cur, d, raw):
     lube_sum = sum((l["amount"] or 0 for l in lube), Decimal(0))
     if fuel_total is not None and abs(fuel_total - sales) > 1:
         flags.append(f"MS + HSD sale = {sales}, written {fuel_total}")
+    if fuel_total is not None and after_lube is not None and abs((after_lube - fuel_total) - lube_sum) > 1:
+        flags.append(f"Lube: the page’s lube total is {after_lube - fuel_total}, but the lube lines read add up to {lube_sum} — a lube line is missing or misread")
     if coll is not None and abs(coll - (sales + lube_sum + (ca or 0))) > 1:
         flags.append(f"Collection written {coll}, but sales {sales} + lube {lube_sum} + CNG {ca or 0} = {sales + lube_sum + (ca or 0)}")
     # ± lines with running totals
@@ -316,7 +356,7 @@ def save(cur, d, form, a):
     done = {"readings": 0, "digital": 0, "credit": 0, "payments": 0, "expenses": 0, "lube": 0, "slips": 0, "dips": 0}
     who = current_user()["username"]
     # meter readings — testing of each fuel goes on its first nozzle (as much as it moved), the rest on the next
-    for code in ("MS", "HSD"):
+    for code in ("MS", "HSD", "CNG"):
         test_left = Decimal(g(f"test_{code}") or 0)
         for r in a["fuels"][code]["rows"]:
             n = r["nozzle"]
@@ -340,7 +380,7 @@ def save(cur, d, form, a):
             done["readings"] += 1
     # CNG: manager types the opening; closing = opening + page quantity
     cn = a["cng"]["nozzle"]
-    if cn and g("cng_open") and g("cng_qty"):
+    if cn and not a["fuels"]["CNG"]["rows"] and g("cng_open") and g("cng_qty"):
         op, q = Decimal(g("cng_open")), Decimal(g("cng_qty"))
         rate = a["rates"].get("CNG")
         if rate:

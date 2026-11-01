@@ -51,6 +51,8 @@ SCHEMA = {
 
 
 def _key(job="scan"):
+    if job.startswith("closing"):
+        return os.environ.get("GEMINI_API_KEY", "")
     if job == "message":
         return os.environ.get("GEMINI_API_KEY_MESSAGE") or os.environ.get("GEMINI_API_KEY", "")
     return os.environ.get("GEMINI_API_KEY", "")
@@ -63,7 +65,16 @@ def gemini_ready(job="scan"):
 MESSAGE_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
 
 
+CLOSING_FAST = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+
+
 def _models(job="scan"):
+    if job == "closing":
+        own = [m.strip() for m in os.environ.get("GEMINI_MODEL", "").split(",") if m.strip()]
+        return CLOSING_FAST + [m for m in own if m not in CLOSING_FAST]
+    if job == "closing-careful":
+        own = [m.strip() for m in os.environ.get("GEMINI_MODEL", "").split(",") if m.strip()]
+        return own + [m for m in DEFAULT_MODELS if m not in own]
     env = "GEMINI_MODEL_MESSAGE" if job == "message" else "GEMINI_MODEL"
     own = [m.strip() for m in os.environ.get(env, "").split(",") if m.strip()]
     base = MESSAGE_MODELS if job == "message" else DEFAULT_MODELS
@@ -153,7 +164,7 @@ def _call(model, parts, schema=True, job="scan", think=True, timeout=None, level
     raise UserError(f"The page reader refused the photo ({r.status_code}): {msg[:160]}")
 
 
-def _ask(parts, job="scan", started=None, schema=True, level=None):
+def _ask(parts, job="scan", started=None, schema=True, level=None, budget=None):
     """Try each free model this key has; a busy / limited / retired model falls through to the next one.
     Stops in time (BUDGET) so the request always gets a proper answer before Vercel's 60 s limit."""
     import time
@@ -163,22 +174,23 @@ def _ask(parts, job="scan", started=None, schema=True, level=None):
     have = _available(job)
     models = [m for m in _models(job) if not have or m in have] or _models(job)
     last = ""
+    limit = budget or BUDGET
     for attempt, model in enumerate(models):
-        left = BUDGET - (time.time() - started)
+        left = limit - (time.time() - started)
         if left < 6:
             break
         try:
-            out = _call(model, parts, schema=schema, job=job, timeout=min(25 if job == "message" else 40, left - 2), level=level)
+            out = _call(model, parts, schema=schema, job=job, timeout=min(25 if job == "message" else (52 if job.startswith("closing") else 40), left - 2), level=level)
             out["_model"] = model
             return out
         except _Busy as e:
             last = str(e)
-            if last.startswith("429") and attempt == 0 and BUDGET - (time.time() - started) > 15:
+            if last.startswith("429") and attempt == 0 and limit - (time.time() - started) > 15:
                 time.sleep(3)        # free tier: short per-minute limit — wait a moment, then the next model
             continue
     if last.startswith("429"):
         raise UserError("The free reader has reached its limit for now. Wait a minute and press Retry.")
-    if last == "network" or time.time() - started >= BUDGET - 6:
+    if last == "network" or time.time() - started >= limit - 6:
         raise UserError("Google took too long to answer. Press Retry.")
     raise UserError("The reader is not answering right now. Press Retry in a minute.")
 
