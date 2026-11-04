@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.28.1
+- Tally robot: when the virtual computer is Stopped, Connect starts it (up to ~5 min) and the page reloads several
+  times — the robot now waits through the reloads (up to 6 min) instead of crashing ("Execution context was
+  destroyed"), and tells WhatsApp it is starting.
+
 ## 3.28.0 — The adjustment is automatic (owner's rule)
 - "excel add 2/11" adjusts the day itself and sends the photo of all sheets with their ledgers:
   1. payments received are paid from the app money first — DTPLUS, then Paytm, then PhonePe; the rest is cash;

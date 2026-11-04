@@ -66,16 +66,32 @@ def login(ctx):
     return page
 
 
+def _safe(fn, default=None):
+    """Page checks while Tally Cloud reloads the page (starting the virtual computer) must not crash the robot."""
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
 def connect(page):
+    stopped = _safe(lambda: page.get_by_text("Stopped").count(), 0)
+    if stopped:
+        step("starting", "Starting the virtual computer (it was Stopped) — up to 5 minutes…")
     with page.context.expect_page(timeout=600000) as newp:
         page.get_by_text("Connect", exact=True).click()
     desk = newp.value
-    desk.wait_for_load_state("domcontentloaded")
-    desk.set_viewport_size({"width": 1600, "height": 900})
-    for _ in range(100):                                    # the virtual computer takes up to ~5 minutes to start
-        if desk.locator("canvas").count() and "cloudaccess" in desk.url:
+    _safe(lambda: desk.wait_for_load_state("domcontentloaded"))
+    _safe(lambda: desk.set_viewport_size({"width": 1600, "height": 900}))
+    ready = False
+    for _ in range(120):                                    # up to 6 minutes; the page reloads several times
+        if _safe(lambda: "token=" in desk.url and desk.locator("canvas").count() > 0, False):
+            ready = True
             break
         time.sleep(3)
+    if not ready:
+        raise RuntimeError("the virtual computer did not open within 6 minutes")
+    _safe(lambda: desk.wait_for_load_state("networkidle", timeout=30000))
     time.sleep(10)
     dismiss_popups(desk)
     step("connect", "Virtual computer connected", desk)
@@ -87,11 +103,8 @@ def dismiss_popups(desk):
     (not page buttons): click their "Okay" (measured from a real screenshot: ~x 593, y 453 at 1600×900), then Enter."""
     for label in ("Okay", "OK", "Ok"):
         b = desk.get_by_role("button", name=label)
-        if b.count():
-            try:
-                b.first.click(timeout=2000)
-            except Exception:
-                pass
+        if _safe(lambda: b.count(), 0):
+            _safe(lambda: b.first.click(timeout=2000))
     for _ in range(2):
         desk.mouse.click(593, 453); time.sleep(1)       # "Okay" of the alert
         desk.mouse.click(498, 286); time.sleep(0.5)     # focus the alert's title bar …
@@ -104,7 +117,7 @@ SIDE = {"power": 0, "fullscreen": 1, "notifications": 2, "File Manager": 3, "per
 
 
 def _fm_open(desk):
-    return desk.get_by_text("Navigate to folders").count() > 0 or desk.get_by_text("Drop files here").count() > 0
+    return _safe(lambda: desk.get_by_text("Navigate to folders").count() > 0 or desk.get_by_text("Drop files here").count() > 0, False)
 
 
 def side_button(desk, title):
