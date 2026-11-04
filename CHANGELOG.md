@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.28.3
+- Tally robot: the remote desktop is embedded inside Tally Cloud's session page — "connected" = the remote screen
+  is showing (any address), and the side panel, File Manager, folders, upload box and download button are found
+  inside that embedded desktop.
+
 ## 3.28.2
 - Tally robot: "connected" = the remote screen is there (page or frame) and it is past the connecting page — the
   address loses its token after loading, so 3.28.1 waited 6 minutes for nothing. Error screenshots show the remote
