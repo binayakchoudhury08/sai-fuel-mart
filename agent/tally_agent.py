@@ -16,6 +16,12 @@ from datetime import date
 import requests
 from playwright.sync_api import sync_playwright
 
+try:                                   # used to see whether Tally is on the screen
+    from PIL import Image  # noqa: F401
+except ImportError:
+    import subprocess
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pillow==11.0.0"], check=False)
+
 SITE, SECRET, JOB = os.environ["SFM_SITE"].rstrip("/"), os.environ["SFM_SECRET"], int(os.environ["JOB_ID"])
 H = {"x-cron-secret": SECRET}
 LOGIN = "https://in.cloudaccess.tallysolutions.com/login"
@@ -191,22 +197,71 @@ def upload_xml(desk, name, xml):
     return month
 
 
+def _tally_on_screen(desk):
+    """True when the TallyPrime window is showing: its top bar is blue (#1C4F9C-ish); the empty desktop is dark grey
+    (#252525). Looks at a strip across the top of the remote screen (left of the side panel)."""
+    try:
+        import io
+        from PIL import Image
+        im = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+        w, h = im.size
+        blue = total = 0
+        for x in range(int(w * 0.10), int(w * 0.85), 12):
+            for y in range(int(h * 0.01), int(h * 0.12), 6):
+                r, g, b = im.getpixel((x, y))
+                total += 1
+                if b > 100 and b > r + 40 and b > g + 10:
+                    blue += 1
+        return blue / max(total, 1) > 0.25
+    except Exception:
+        return False
+
+
+TALLY_ICON = (60, 135)            # measured on the remote desktop (1600×900): the TallyPrime icon under Disk (D:)
+
+
+def close_side_panel(desk):
+    vw, vh = desk.viewport_size["width"], desk.viewport_size["height"]
+    if _safe(lambda: ui(desk).locator("[title='File Manager'], [aria-label='File Manager']").count(), 0) or True:
+        desk.mouse.click(vw - 129, vh // 2); time.sleep(1)        # » closes the side panel when it is open
+    desk.keyboard.press("Escape"); time.sleep(0.5)
+
+
 def open_tally(desk):
-    desk.mouse.dblclick(80, 270)                               # TallyPrime icon on the virtual desktop
-    time.sleep(25)
-    step("tally", "TallyPrime opened", desk)
+    close_side_panel(desk)
+    dismiss_popups(desk)
+    opened = False
+    for attempt in range(2):
+        desk.mouse.dblclick(*TALLY_ICON)
+        for _ in range(30):                                      # up to 90 s for TallyPrime to start
+            time.sleep(3)
+            if _tally_on_screen(desk):
+                opened = True
+                break
+        if opened:
+            break
+    if not opened:
+        raise RuntimeError("TallyPrime did not open (the screen still shows the desktop) — nothing was imported")
+    time.sleep(5)
+    step("tally", "TallyPrime opened — which company?", desk)
     company = wait_answer("company")
     desk.keyboard.type(company); time.sleep(2); desk.keyboard.press("Enter"); time.sleep(8)
-    step("company", f"Company opened: {company}", desk)
+    if not _tally_on_screen(desk):
+        raise RuntimeError("Tally closed while opening the company — nothing was imported")
+    step("company", f"Company chosen: {company} — check the screenshot shows it", desk)
 
 
 def import_xml(desk, month, name):
+    if not _tally_on_screen(desk):
+        raise RuntimeError("Tally is not on the screen — nothing was imported")
     desk.keyboard.press("Alt+O"); time.sleep(2)                 # O: Import
     desk.keyboard.press("t"); time.sleep(3)                     # Transactions
     for value in ("XML (Data Interchange)", f"{IMPORT_ROOT}\\{month}", name, "Yes"):
         desk.keyboard.type(value); desk.keyboard.press("Enter"); time.sleep(1.5)
     desk.keyboard.press("Control+a"); time.sleep(20)            # A: Accept
-    step("import", f"Imported {name} — check the counts on the screenshot", desk, done=True)
+    if not _tally_on_screen(desk):
+        raise RuntimeError("Tally is not on the screen after the import — check Tally yourself; not confirmed")
+    step("import", f"Import of {name} sent to Tally — the screenshot shows Tally's result (created / altered / errors)", desk, done=True)
 
 
 def ledger_pdf(desk, ledger, d1, d2):

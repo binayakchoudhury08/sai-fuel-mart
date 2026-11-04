@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.28.5
+- Tally robot: closes the side panel and double-clicks the TallyPrime icon at its real place (60, 135); checks the
+  screen shows Tally (its blue top bar) before typing anything — otherwise it stops and says nothing was imported.
+  "Imported" is reported only with Tally on the screen (the previous run reported it while Tally had not opened).
+
 ## 3.28.4
 - Tally robot: a new month folder (e.g. NOV 2026) is created by typing into the File Manager's "New folder name" box
   and pressing Create; if that fails it uploads into the latest month folder (e.g. OCT 2026) and says so — the
