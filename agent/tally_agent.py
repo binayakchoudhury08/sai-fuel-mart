@@ -372,8 +372,10 @@ def select_import_path(desk, folder):
     if not path_dialog(text):
         click_setting(desk, ["File Path"])
         # Explicitly focus the folder selector, regardless of where XML selection landed.
-        remote_type(desk, "Specify Path")
-        desk.keyboard.press("Enter")
+        text, _ = read_screen(desk)
+        if not path_dialog(text):
+            remote_type(desk, "Specify Path")
+            desk.keyboard.press("Enter")
         wait_screen(desk, path_dialog, 15)
     replace_field(desk, folder)
     desk.keyboard.press("Enter")
