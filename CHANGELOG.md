@@ -1,3 +1,10 @@
+## 3.28.8 — Route remote Tally commands before workbook and bill shortcuts
+
+- Fix `tally check` being rewritten to workbook `daily check`.
+- Fix `tally ledger ... pdf` being intercepted by transporter bill exports.
+- Explicit Tally commands replace stale confirmation/adjustment modes and preserve their full dates.
+- Add full WhatsApp routing regressions; do not change the separate unresolved folder rejection.
+
 ## 3.28.7 — Folder dialog handling, Day Book checks, and ledger PDFs
 
 - Confirm the requested month folder is accepted before entering the XML filename; stop on invalid path dialogs.

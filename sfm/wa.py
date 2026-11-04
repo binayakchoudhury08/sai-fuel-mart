@@ -579,6 +579,8 @@ def _which_party(cur, low):
 def wants_documents(low):
     """PDF/Excel words, or the word "bill" together with a date ("svt bill yesterday"). Plain "bill" or
     "bill svt" starts the photo bill-message flow instead."""
+    if re.match(r"^tally\s+(?:check|day\s*book|ledger|import|status)\b", low):
+        return False  # remote Tally reports are not transporter bill exports
     if re.match(r"^(all |monthly )?bills\b", low):
         return False                       # "bills october" = every transporter's bill (owner command)
     if re.match(r"^(excel|tally excel|xml|daily check|check|cash)\b", low):
@@ -775,6 +777,18 @@ def handle(cur, phone, user, msg):
         mtype = "text"
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
+
+    # Explicit remote-Tally commands must precede workbook normalization,
+    # transporter-document shortcuts, and stale local confirmation sessions.
+    if mtype == "text" and (user.get("role") or "") == "owner" and re.match(
+            r"^tally\s+(?:check|day\s*book|ledger|import|status)\b", low):
+        from . import tally_jobs
+        if state.get("mode"):
+            save_state(cur, phone, {}, touch=True)
+        reply = tally_jobs.handle(cur, phone, low, text)
+        return reply if reply is not None else (
+            "Use *tally check 2/11/2026*, *tally ledger svt nov 2026 pdf*, "
+            "*tally import 2/11/2026*, or *tally status*.")
 
     # ---- photos for a bill message: each photo is read right away, inside its own message
     if mtype in ("image", "document"):

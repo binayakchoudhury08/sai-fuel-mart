@@ -103,7 +103,7 @@ def counted_cash(cur, d):
 
 
 # ------------------------------------------------------------------ plain sentences → one workbook command
-CMD_START = r"^(excel|tally excel|xml|daily check|cash|tally import|tally ledger)\b"
+CMD_START = r"^(excel|tally excel|xml|daily check|cash|tally import|tally ledger|tally check|tally day\s*book|tally status)\b"
 
 
 def remember_day(cur, phone, d):

@@ -407,3 +407,52 @@ def test_pdf_verification_rejects_old_month():
     canvas.drawString(40, 800, COMPANY + ' SVT LOGISTICS 1-Oct-26 to 31-Oct-26'); canvas.save()
     with pytest.raises(RuntimeError, match='could not be verified'):
         robot.verify_pdf(data.getvalue(), 'SVT LOGISTICS', COMPANY, date(2026,11,1), date(2026,11,30))
+
+
+def test_full_whatsapp_router_does_not_normalize_remote_check_to_workbook():
+    from sfm import wa_tally
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 19}]
+    with patch.object(wa, 'session', return_value={'state': {}}), \
+         patch.object(wa_tally, 'normalize', side_effect=AssertionError('Must not normalize remote commands')), \
+         patch.object(wa, 'documents_reply', side_effect=AssertionError('Must not return transporter bills')), \
+         patch.object(jobs, 'start_github') as dispatch:
+        out = wa.handle(cursor, 'test', {'role':'owner'}, {'type':'text','text':{'body':'tally check 2/11/2026'}})
+    assert 'Day Book' in out and 'secure PIN' in out
+    dispatch.assert_called_once_with(19)
+
+
+def test_remote_ledger_pdf_bypasses_transporter_pdf_and_stale_confirmation():
+    from sfm import wa_tally
+    for state in ({}, {'mode':'confirm'}, {'mode':'adj'}, {'mode':'bill'}):
+        with patch.object(wa, 'session', return_value={'state':state}), patch.object(wa, 'save_state'), \
+             patch.object(jobs, 'handle', return_value='Remote ledger job') as handler, \
+             patch.object(wa_tally, 'normalize', side_effect=AssertionError('wrong route')), \
+             patch.object(wa, 'documents_reply', side_effect=AssertionError('wrong PDF')):
+            out = wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':'tally ledger svt nov 2026 pdf'}})
+            assert out == 'Remote ledger job'
+            assert handler.call_args.args[2] == 'tally ledger svt nov 2026 pdf'
+
+
+def test_remote_commands_survive_normalization_and_are_not_bill_documents():
+    from sfm import wa_tally
+    for text in ('tally check 2/11/2026', 'tally daybook 2/11/2026', 'tally day book 2/11/2026',
+                 'tally ledger svt nov 2026 pdf', 'tally status'):
+        assert wa_tally.normalize(Mock(), text) == text
+        assert not wa.wants_documents(text)
+    assert wa.wants_documents('svt pdf november')
+
+
+def test_malformed_remote_command_never_falls_into_workbook():
+    with patch.object(wa, 'session', return_value={'state':{}}), patch.object(jobs, 'handle', return_value=None):
+        out = wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':'tally check'}})
+        assert 'tally check 2/11/2026' in out
+
+
+def test_workbook_daily_check_route_remains_available():
+    from sfm import wa_tally
+    with patch.object(wa, 'session', return_value={'state':{}}), \
+         patch.object(wa_tally, 'normalize', return_value='daily check 2/11/2026'), \
+         patch.object(jobs, 'handle', return_value=None), \
+         patch.object(wa_tally, 'handle', return_value='Workbook check'):
+        out = wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':'daily check 2/11/2026'}})
+        assert out == 'Workbook check'
