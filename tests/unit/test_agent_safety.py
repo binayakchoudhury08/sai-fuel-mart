@@ -489,3 +489,43 @@ def test_session_poll_claims_only_same_owner_queued_report():
 def test_active_job_cannot_advertise_idle_session():
     with backend(job('submitting')):
         assert jobs.session_next(1) == {'ok': False}
+
+
+def test_missing_ledger_prompts_for_party():
+    with patch.object(wa,'session',return_value={'state':{}}),patch.object(wa,'save_state') as save:
+        out=wa.handle(Mock(),'test',{'role':'owner'},{'type':'text','text':{'body':'tally ledger'}})
+        assert 'Which ledger party name?' in out
+        assert save.call_args.args[2]['mode']=='tally_ledger_party'
+
+
+def test_party_reply_and_party_alias_reach_remote_ledger():
+    for body,state in [('osl',{'mode':'tally_ledger_party'}),('r.k ledger',{})]:
+        with patch.object(wa,'session',return_value={'state':state}),patch.object(wa,'save_state'),patch.object(jobs,'handle',return_value='remote') as handler:
+            assert wa.handle(Mock(),'test',{'role':'owner'},{'type':'text','text':{'body':body}})=='remote'
+            assert handler.call_args.args[2].startswith('tally ledger ')
+
+
+def test_ledger_shortcuts_are_d_a_l():
+    from datetime import date
+    d=Mock()
+    with patch.object(robot,'gateway'),patch.object(robot,'wait_screen'),patch.object(robot,'set_period'),patch.object(robot,'remote_type'):
+        robot.open_report(d,'Ledger Vouchers',COMPANY,date(2026,11,1),date(2026,11,30),ledger='OSL')
+    assert [c.args[0] for c in d.keyboard.press.call_args_list][:3]==['d','a','l']
+
+
+def test_daybook_uses_k_and_single_date_f2():
+    from datetime import date
+    d=Mock()
+    with patch.object(robot,'gateway'),patch.object(robot,'wait_screen'),patch.object(robot,'replace_field'):
+        robot.open_report(d,'Day Book',COMPANY,date(2026,11,3),date(2026,11,3))
+    assert [c.args[0] for c in d.keyboard.press.call_args_list][:2]==['k','F2']
+
+
+def test_both_daybook_outcomes_include_photo():
+    from datetime import date
+    for content,expected in [('HSD Sales 123',True),('No vouchers',False)]:
+        text=f'Day Book {COMPANY} 2-Nov-26 {content}'
+        with patch.object(robot,'open_report',return_value=(text,'photo')),patch.object(robot,'wait_screen',return_value=(text,'photo')),patch.object(robot.time,'sleep'),patch.object(robot,'step') as step:
+            assert robot.daybook_check(Mock(),COMPANY,date(2026,11,2),date(2026,11,2)) is expected
+            assert step.call_args.kwargs['png']=='photo'
+            assert ('YES' if expected else 'NO DATA FOUND') in step.call_args.args[1]

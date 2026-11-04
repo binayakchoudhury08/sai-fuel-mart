@@ -779,8 +779,15 @@ def handle(cur, phone, user, msg):
     low = re.sub(r"\s+", " ", text.strip().lower())
 
     low = re.sub(r"^check\s+tally\b", "tally check", low)
-    if re.fullmatch(r"svt\s+ledger(?:\s+pdf)?", low):
-        low = "tally ledger svt this month pdf"
+    if mtype == "text" and user.get("role") == "owner":
+        if low in ("ledger", "ledger pdf", "tally ledger", "tally ledger pdf"):
+            save_state(cur, phone, {"mode": "tally_ledger_party"}, touch=True)
+            return "Which ledger party name? (e.g. OSL, SVT, R.K.)"
+        if state.get("mode") == "tally_ledger_party" and not re.match(r"^(tally|check|menu|stop|cancel)\b", low):
+            low = "tally ledger " + low + " this month pdf"
+        alias = re.fullmatch(r"(.+?)\s+ledger(?:\s+pdf)?", low)
+        if alias and not low.startswith("tally "):
+            low = f"tally ledger {alias[1]} this month pdf"
     # Explicit remote-Tally commands must precede workbook normalization,
     # transporter-document shortcuts, and stale local confirmation sessions.
     if mtype == "text" and (user.get("role") or "") == "owner" and re.match(

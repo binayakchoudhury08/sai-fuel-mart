@@ -455,14 +455,32 @@ def set_period(desk, d1, d2):
     replace_field(desk, d2.strftime("%d-%m-%Y")); desk.keyboard.press("Enter")
 
 
+def gateway(desk, company):
+    for _ in range(8):
+        text, _ = read_screen(desk)
+        if "gateway of tally" in text.lower() and compact(company) in compact(text) and not any(
+                word in text.lower() for word in ("import transactions", "specify file path", "export configuration")):
+            return
+        desk.keyboard.press("Escape"); time.sleep(0.5)
+    raise RuntimeError("Could not verify company Gateway before report shortcuts")
+
+
 def open_report(desk, report, company, d1, d2, ledger=None):
-    desk.keyboard.press("Alt+G"); time.sleep(1)
-    desk.keyboard.type(report, delay=30); desk.keyboard.press("Enter")
+    gateway(desk, company)
     if ledger:
+        for key in ("d", "a", "l"):
+            desk.keyboard.press(key); time.sleep(0.7)
         wait_screen(desk, lambda t: "ledger" in t.lower())
-        desk.keyboard.type(ledger, delay=30); desk.keyboard.press("Enter")
+        remote_type(desk, ledger); desk.keyboard.press("Enter")
+    else:
+        desk.keyboard.press("k")
     wait_screen(desk, lambda t: compact(report) in compact(t) and compact(company) in compact(t))
-    set_period(desk, d1, d2)
+    if report == "Day Book" and d1 == d2:
+        desk.keyboard.press("F2")
+        wait_screen(desk, lambda t: "date" in t.lower())
+        replace_field(desk, d1.strftime("%d-%m-%Y")); desk.keyboard.press("Enter")
+    else:
+        set_period(desk, d1, d2)
     def verified(text):
         return (compact(report) in compact(text) and compact(company) in compact(text)
                 and date_visible(text, d1) and date_visible(text, d2)
@@ -480,12 +498,32 @@ def daybook_check(desk, company, d1, d2, done=True):
     text, png = wait_screen(desk, lambda t: "day book" in t.lower() and compact(company) in compact(t)
                             and date_visible(t, d1) and date_visible(t, d2)
                             and "list of voucher types" not in t.lower())
-    empty = any(x in text.lower() for x in ("no vouchers", "no entries", "no transactions"))
-    observation = ("No entries are shown in this Day Book view; expected vouchers are not confirmed."
-                   if empty else "Review the dated Day Book screenshot and match voucher numbers/amounts. Entries alone do not prove this XML was fully imported.")
-    step("daybook_checked" if done else "daybook_evidence", f"{company}: Day Book {d1:%d/%m/%Y}–{d2:%d/%m/%Y}. " + observation,
+    # Search the visible report pages; never infer absence from a failed OCR read.
+    seen = set()
+    found = False
+    complete = False
+    for _ in range(30):
+        if not ("day book" in text.lower() and date_visible(text, d1) and compact(company) in compact(text)):
+            raise RuntimeError("Day Book date/company became unreadable; data presence is unconfirmed")
+        found = bool(re.search(r"\b(?:HSD|MS)\b", text, re.I))
+        if found:
+            break
+        fingerprint = " ".join(text.split())
+        if fingerprint in seen or any(v in text.lower() for v in ("no vouchers", "no entries", "no transactions")):
+            complete = True
+            break
+        seen.add(fingerprint)
+        desk.keyboard.press("PageDown"); time.sleep(0.8)
+        text, png = read_screen(desk)
+    if found:
+        observation = "YES — HSD/MS data found in Day Book. This confirms data presence, not a full XML reconciliation."
+    elif complete:
+        observation = "NO DATA FOUND — no HSD/MS vouchers found in the checked Day Book view."
+    else:
+        raise RuntimeError("Day Book scan limit reached; data presence is unconfirmed")
+    step("daybook_checked" if done else "daybook_evidence", f"{company}: {d1:%d/%m/%Y}–{d2:%d/%m/%Y}. " + observation,
          png=png, done=done)
-    return not empty
+    return found
 
 
 def click_setting(desk, labels):
