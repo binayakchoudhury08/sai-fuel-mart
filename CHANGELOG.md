@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.28.4
+- Tally robot: a new month folder (e.g. NOV 2026) is created by typing into the File Manager's "New folder name" box
+  and pressing Create; if that fails it uploads into the latest month folder (e.g. OCT 2026) and says so — the
+  import then uses that same folder.
+
 ## 3.28.3
 - Tally robot: the remote desktop is embedded inside Tally Cloud's session page — "connected" = the remote screen
   is showing (any address), and the side panel, File Manager, folders, upload box and download button are found

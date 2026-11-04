@@ -7,6 +7,7 @@ Steps (ledger):  login → Connect → TallyPrime → company → Go To Ledger V
 → download it from File Manager → send to WhatsApp.
 """
 import base64
+import re
 import os
 import sys
 import time
@@ -160,9 +161,25 @@ def upload_xml(desk, name, xml):
     month = f"{MON[int(name.split('_to_')[0][-7:-5]) - 1]} {name.split('_to_')[0][-4:]}"
     for part in ("My_Applications", "SFM_TALLY_IMPORT"):
         fm.get_by_text(part, exact=True).first.dblclick(); time.sleep(2)
-    if not fm.get_by_text(month, exact=True).count():          # new month: create the folder
-        fm.locator("button[title*='older'], button[aria-label*='older']").first.click()
-        desk.keyboard.type(month); desk.keyboard.press("Enter"); time.sleep(2)
+    if not _safe(lambda: fm.get_by_text(month, exact=True).count(), 0):     # new month: create the folder
+        _safe(lambda: fm.locator("button[title*='older'], button[aria-label*='older']").first.click(timeout=5000))
+        time.sleep(1)
+        box = fm.get_by_placeholder(re.compile("folder name", re.I))
+        if _safe(lambda: box.count(), 0):
+            box.first.fill(month)
+            _safe(lambda: fm.get_by_role("button", name=re.compile("^create$", re.I)).first.click(timeout=5000))
+        else:
+            desk.keyboard.type(month); desk.keyboard.press("Enter")
+        _safe(lambda: fm.get_by_text(month, exact=True).first.wait_for(timeout=15000))
+    if not _safe(lambda: fm.get_by_text(month, exact=True).count(), 0):     # could not create it → latest month folder
+        folders = _safe(lambda: [t.strip() for t in fm.get_by_text(re.compile(r"^[A-Z]{3,4} \d{4}$")).all_inner_texts()], []) or []
+        def key(t):
+            mon = t.split()[0][:3]
+            return (int(t.split()[1]), MON.index(mon) if mon in MON else -1)
+        if not folders:
+            raise RuntimeError(f"could not create the folder {month}")
+        month = max(folders, key=key)
+        step("folder", f"Could not create the new month folder — using {month}")
     fm.get_by_text(month, exact=True).first.dblclick(); time.sleep(2)
     path = f"/tmp/{name}"
     open(path, "w", encoding="utf8").write(xml)
