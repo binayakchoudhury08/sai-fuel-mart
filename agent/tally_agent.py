@@ -66,6 +66,9 @@ def login(ctx):
     return page
 
 
+LAST_DESK = None
+
+
 def _safe(fn, default=None):
     """Page checks while Tally Cloud reloads the page (starting the virtual computer) must not crash the robot."""
     try:
@@ -83,14 +86,17 @@ def connect(page):
     desk = newp.value
     _safe(lambda: desk.wait_for_load_state("domcontentloaded"))
     _safe(lambda: desk.set_viewport_size({"width": 1600, "height": 900}))
+    global LAST_DESK
+    LAST_DESK = desk
     ready = False
     for _ in range(120):                                    # up to 6 minutes; the page reloads several times
-        if _safe(lambda: "token=" in desk.url and desk.locator("canvas").count() > 0, False):
-            ready = True
+        if _safe(lambda: "/session/" not in desk.url and any(f.locator("canvas").count() > 0 for f in desk.frames), False):
+            ready = True                                    # the remote screen is there (the address loses its token)
             break
         time.sleep(3)
     if not ready:
-        raise RuntimeError("the virtual computer did not open within 6 minutes")
+        raise RuntimeError("the virtual computer did not open within 6 minutes (last address: "
+                           + _safe(lambda: desk.url.split("?")[0], "?") + ")")
     _safe(lambda: desk.wait_for_load_state("networkidle", timeout=30000))
     time.sleep(10)
     dismiss_popups(desk)
@@ -220,7 +226,7 @@ def main():
                 open_tally(desk)
                 ledger_pdf(desk, p["ledger"], date.fromisoformat(p["from"]), date.fromisoformat(p["to"]))
         except Exception as e:
-            step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or page, failed=True)
+            step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK or page, failed=True)
             raise
         finally:
             browser.close()

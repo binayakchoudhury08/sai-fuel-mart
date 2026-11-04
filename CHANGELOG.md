@@ -1,5 +1,10 @@
 # Sai Fuel Mart — changes
 
+## 3.28.2
+- Tally robot: "connected" = the remote screen is there (page or frame) and it is past the connecting page — the
+  address loses its token after loading, so 3.28.1 waited 6 minutes for nothing. Error screenshots show the remote
+  desktop window.
+
 ## 3.28.1
 - Tally robot: when the virtual computer is Stopped, Connect starts it (up to ~5 min) and the page reloads several
   times — the robot now waits through the reloads (up to 6 min) instead of crashing ("Execution context was
