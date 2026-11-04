@@ -279,8 +279,11 @@ def tally_file(jid):
     f = request.files.get("file")
     if not j or not f:
         return jsonify({"ok": False}), 400
-    wa.send_document(j["phone"], f.filename, f.read(), f.mimetype or "application/pdf", f"Tally job #{jid}")
-    return jsonify({"ok": True})
+    data = f.read()
+    if not data.startswith(b"%PDF-"):
+        return jsonify({"ok": False, "error": "Expected PDF"}), 400
+    ok = wa.send_document(j["phone"], f.filename, data, "application/pdf", f"Tally job #{jid}", strict=True)
+    return jsonify({"ok": bool(ok)}), 200 if ok else 502
 
 
 @bp.route("/api/cron/tick", methods=["GET", "POST"])

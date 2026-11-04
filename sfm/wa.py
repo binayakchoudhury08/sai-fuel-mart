@@ -140,9 +140,11 @@ def send_image(phone, png, caption="", strict=False):
     return _send(phone, {"type": "image", "image": {"id": up.json()["id"], "caption": caption[:900]}})
 
 
-def send_document(phone, filename, data, mime, caption=""):
+def send_document(phone, filename, data, mime, caption="", strict=False):
     """Send a PDF / Excel file. Meta: upload to WhatsApp, then send it as a document."""
     if provider() == "twilio":
+        if strict:
+            return False
         return send_text(phone, f"📄 {filename} is ready on the website (Twilio needs a public link to send files).")
     h = {"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}"}
     up = requests.post(f"{GRAPH}/{ver()}/{os.environ.get('WA_PHONE_ID')}/media", headers=h, timeout=30,
@@ -150,6 +152,8 @@ def send_document(phone, filename, data, mime, caption=""):
     if up.status_code >= 300 or not up.json().get("id"):
         import logging
         logging.getLogger("sfm").warning("WhatsApp upload failed %s: %s", up.status_code, up.text[:300])
+        if strict:
+            return False
         return send_text(phone, f"❌ Could not attach {filename}. Download it from the website.")
     return _send(phone, {"type": "document", "document": {"id": up.json()["id"], "filename": filename, "caption": caption[:900]}})
 

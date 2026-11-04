@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import shutil
 import importlib.util
+import csv
 from pathlib import Path
 from datetime import date
 
@@ -172,7 +173,7 @@ def side_button(desk, title):
 def upload_xml(desk, name, xml):
     side_button(desk, "File Manager")
     fm = next((f for f in desk.frames if _safe(lambda: f.get_by_text("Drop files here").count() > 0, False)), ui(desk))
-    month = f"{MON[int(name.split('_to_')[0][-7:-5]) - 1]} {name.split('_to_')[0][-4:]}"
+    month = import_month(name)
     for part in ("My_Applications", "SFM_TALLY_IMPORT"):
         fm.get_by_text(part, exact=True).first.dblclick(); time.sleep(2)
     if not _safe(lambda: fm.get_by_text(month, exact=True).count(), 0):     # new month: create the folder
@@ -229,6 +230,20 @@ def close_side_panel(desk):
     desk.keyboard.press("Escape"); time.sleep(0.5)
 
 
+def recover_tally_screen(desk):
+    """Dismiss only recognised abandoned import dialogs, never Accept them."""
+    for _ in range(6):
+        text, _ = read_screen(desk)
+        low = text.lower()
+        if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats")):
+            desk.keyboard.press("Escape"); time.sleep(0.5)
+            continue
+        if "gateway of tally" in low or "select company" in low or "list of companies" in low:
+            return
+        raise RuntimeError("Tally is on an unrecognised screen; return to Gateway of Tally and try again")
+    raise RuntimeError("Previous import dialog could not be closed safely")
+
+
 def open_tally(desk):
     close_side_panel(desk)
     dismiss_popups(desk)
@@ -247,6 +262,7 @@ def open_tally(desk):
     if not opened:
         raise RuntimeError("TallyPrime did not open (the screen still shows the desktop) — nothing was imported")
     time.sleep(5)
+    recover_tally_screen(desk)
     step("tally", "TallyPrime opened — which company?", desk)
     company = wait_answer("company")
     text, _ = read_screen(desk)
@@ -304,6 +320,49 @@ def result_counts(text):
     return counts
 
 
+def import_month(name):
+    match = re.fullmatch(r"SFM_Tally_Import_(\d{2}-\d{2}-\d{4})_to_\d{2}-\d{2}-\d{4}(?:_job\d+)?\.xml", name)
+    if not match:
+        raise RuntimeError("Unexpected import filename")
+    from datetime import datetime
+    start = datetime.strptime(match[1], "%d-%m-%Y")
+    return f"{MON[start.month - 1]} {start.year}"
+
+
+def replace_field(desk, value):
+    # Tally fields do not reliably implement Windows Shift+End selection.
+    # Home + Delete clears the focused field without Ctrl+A (which would submit).
+    desk.keyboard.press("Home")
+    for _ in range(260):
+        desk.keyboard.press("Delete")
+    desk.keyboard.type(value, delay=30)
+
+
+def path_dialog(text):
+    return "specify file path" in text.lower() or "specify folder path" in text.lower()
+
+
+def path_error(text):
+    return any(x in text.lower() for x in ("incorrect file", "invalid path", "path does not exist", "file not found"))
+
+
+def select_import_path(desk, folder):
+    text, _ = read_screen(desk)
+    if not path_dialog(text):
+        # File Path is a selector, not a free-text filename field.
+        desk.keyboard.type("Specify Path", delay=40)
+        desk.keyboard.press("Enter")
+        wait_screen(desk, path_dialog, 15)
+    replace_field(desk, folder)
+    desk.keyboard.press("Enter")
+    # Never type a filename while the path modal or its error is still open.
+    def accepted(text):
+        if path_error(text):
+            raise RuntimeError(f"Tally rejected folder {folder}; filename was NOT entered")
+        return not path_dialog(text) and compact(folder) in compact(text)
+    wait_screen(desk, accepted, 20)
+
+
 def import_xml(desk, month, name, company, expected):
     if not _tally_on_screen(desk):
         raise RuntimeError("Tally is not on the screen — nothing was imported")
@@ -313,16 +372,17 @@ def import_xml(desk, month, name, company, expected):
     # Do not type the long display label into Tally's format selector.
     desk.keyboard.type("XML", delay=40)
     desk.keyboard.press("Enter"); time.sleep(1)
-    for value in (f"{IMPORT_ROOT}\\{month}", name):
-        desk.keyboard.press("Home")
-        desk.keyboard.press("Shift+End")
-        desk.keyboard.type(value, delay=25)
-        desk.keyboard.press("Enter"); time.sleep(1)
+    if month != import_month(name):
+        raise RuntimeError("Upload month does not match requested file date")
+    select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
+    replace_field(desk, name)
+    desk.keyboard.press("Enter")
     def filled(text):
         value = compact(text)
         return (compact(name) in value and compact(f"{IMPORT_ROOT}\\{month}") in value
                 and compact(company) in value and "xml" in value
-                and "list of file formats" not in text.lower())
+                and "list of file formats" not in text.lower()
+                and not path_dialog(text) and not path_error(text))
     _, png = wait_screen(desk, filled, 15)
     step("awaiting_import", f"Review company {company}, file {name}, {expected} vouchers. "
          "Reply IMPORT to submit this file, or STOP to cancel. No import submitted yet.", png=png)
@@ -341,30 +401,154 @@ def import_xml(desk, month, name, company, expected):
         step("review_required", f"Tally result for {name}: {counts}. Expected {expected} vouchers. "
              "Check Day Book before retrying; a partial import may have occurred.", png=png)
         return
+    from datetime import datetime
+    dates = re.findall(r"\d{2}-\d{2}-\d{4}", name)
+    d1, d2 = [datetime.strptime(v, "%d-%m-%Y").date() for v in dates]
+    desk.keyboard.press("Escape")  # close the verified import statistics
+    if not daybook_check(desk, company, d1, d2, done=False):
+        step("review_required", "Import statistics were returned, but Day Book shows no entries. Check filters and vouchers before retrying.", desk)
+        return
     step("import_verified", f"Tally result for {name}: created {counts['created']}, "
          f"altered {counts['altered']}, errors 0, ignored 0. Expected {expected} vouchers.",
          png=png, done=True, evidence={"counts": counts, "filename": name})
 
 
-def ledger_pdf(desk, ledger, d1, d2):
-    desk.keyboard.press("Alt+G"); time.sleep(2); desk.keyboard.type("Ledger Vouchers"); desk.keyboard.press("Enter"); time.sleep(2)
-    desk.keyboard.type(ledger); time.sleep(1); desk.keyboard.press("Enter"); time.sleep(4)
-    desk.keyboard.press("F2"); time.sleep(1)
-    desk.keyboard.type(d1.strftime("%d-%m-%Y")); desk.keyboard.press("Enter"); desk.keyboard.type(d2.strftime("%d-%m-%Y")); desk.keyboard.press("Enter"); time.sleep(4)
-    step("ledger", f"Ledger {ledger} {d1:%d/%m}–{d2:%d/%m}", desk)
-    desk.keyboard.press("Alt+E"); time.sleep(2); desk.keyboard.press("c"); time.sleep(2)   # Export → Current
-    pdf_name = f"{ledger.replace(' ', '_')}_{d1:%d%m%y}_{d2:%d%m%y}.pdf"
-    desk.keyboard.type("PDF"); desk.keyboard.press("Enter"); desk.keyboard.type(r"D:\My_Files"); desk.keyboard.press("Enter")
-    desk.keyboard.type(pdf_name); desk.keyboard.press("Enter"); desk.keyboard.press("Control+a"); time.sleep(10)
+def date_visible(text, value):
+    tokens = re.findall(r"\b(\d{1,2})[-/ .]([A-Za-z]{3,9}|\d{1,2})[-/ .](\d{2}|\d{4})\b", text)
+    for d, m, y in tokens:
+        month = int(m) if m.isdigit() else next((i+1 for i, name in enumerate(MON) if name.lower() == m[:3].lower()), 0)
+        year = int(y) + (2000 if len(y) == 2 else 0)
+        if (int(d), month, year) == (value.day, value.month, value.year):
+            return True
+    return False
+
+
+def set_period(desk, d1, d2):
+    desk.keyboard.press("Alt+F2")
+    wait_screen(desk, lambda t: "period" in t.lower() and "from" in t.lower() and "to" in t.lower())
+    replace_field(desk, d1.strftime("%d-%m-%Y")); desk.keyboard.press("Enter")
+    replace_field(desk, d2.strftime("%d-%m-%Y")); desk.keyboard.press("Enter")
+
+
+def open_report(desk, report, company, d1, d2, ledger=None):
+    desk.keyboard.press("Alt+G"); time.sleep(1)
+    desk.keyboard.type(report, delay=30); desk.keyboard.press("Enter")
+    if ledger:
+        wait_screen(desk, lambda t: "ledger" in t.lower())
+        desk.keyboard.type(ledger, delay=30); desk.keyboard.press("Enter")
+    wait_screen(desk, lambda t: compact(report) in compact(t) and compact(company) in compact(t))
+    set_period(desk, d1, d2)
+    def verified(text):
+        return (compact(report) in compact(text) and compact(company) in compact(text)
+                and date_visible(text, d1) and date_visible(text, d2)
+                and "change period" not in text.lower()
+                and (not ledger or compact(ledger) in compact(text)))
+    return wait_screen(desk, verified)
+
+
+def daybook_check(desk, company, d1, d2, done=True):
+    text, png = open_report(desk, "Day Book", company, d1, d2)
+    # Restore hidden rows, and select all voucher types. These only change the view.
+    desk.keyboard.press("Alt+U")
+    desk.keyboard.press("F4"); time.sleep(1)
+    desk.keyboard.type("All Vouchers", delay=40); desk.keyboard.press("Enter")
+    text, png = wait_screen(desk, lambda t: "day book" in t.lower() and compact(company) in compact(t)
+                            and date_visible(t, d1) and date_visible(t, d2)
+                            and "list of voucher types" not in t.lower())
+    empty = any(x in text.lower() for x in ("no vouchers", "no entries", "no transactions"))
+    observation = ("No entries are shown in this Day Book view; expected vouchers are not confirmed."
+                   if empty else "Review the dated Day Book screenshot and match voucher numbers/amounts. Entries alone do not prove this XML was fully imported.")
+    step("daybook_checked" if done else "daybook_evidence", f"{company}: Day Book {d1:%d/%m/%Y}–{d2:%d/%m/%Y}. " + observation,
+         png=png, done=done)
+    return not empty
+
+
+def click_setting(desk, labels):
+    """Locate the visible setting, rather than typing through guessed export fields."""
+    from PIL import Image
+    image = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+    image = image.resize((image.width * 2, image.height * 2))
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "settings.png"; image.save(path)
+        result = subprocess.run(["tesseract", str(path), "stdout", "--psm", "6", "tsv"],
+                                capture_output=True, text=True, timeout=15, check=True)
+    rows = {}
+    for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t"):
+        if not word.get("text", "").strip():
+            continue
+        key = tuple(word[k] for k in ("block_num", "par_num", "line_num"))
+        rows.setdefault(key, []).append(word)
+    matches = []
+    for words in rows.values():
+        for label in labels:
+            parts = label.lower().split()
+            for i in range(len(words) - len(parts) + 1):
+                group = words[i:i+len(parts)]
+                if [compact(w["text"]) for w in group] == [compact(t) for t in parts]:
+                    matches.append((int(group[0]["left"])/2, (int(group[0]["top"])+int(group[0]["height"])/2)/2))
+    if len(set(matches)) != 1:
+        raise RuntimeError("Could not uniquely locate export setting: " + "/".join(labels))
+    x, y = matches[0]
+    desk.mouse.click(x+4, y)
+    desk.keyboard.press("Enter"); time.sleep(0.5)
+
+
+def configure_pdf(desk, pdf_name):
+    click_setting(desk, ["File Format"])
+    desk.keyboard.type("PDF", delay=40); desk.keyboard.press("Enter")
+    click_setting(desk, ["Folder Path", "File Path"])
+    replace_field(desk, r"D:\My_Files"); desk.keyboard.press("Enter")
+    text, _ = read_screen(desk)
+    if path_error(text) or path_dialog(text):
+        raise RuntimeError("PDF destination was not accepted")
+    click_setting(desk, ["File Name", "Filename"])
+    replace_field(desk, pdf_name); desk.keyboard.press("Enter")
+    desk.keyboard.press("Control+a")  # accepts export configuration, not vouchers
+    wait_screen(desk, lambda t: "export" in t.lower() and "pdf" in t.lower()
+                and compact(pdf_name) in compact(t) and compact(r"D:\My_Files") in compact(t))
+    desk.keyboard.press("e")
+
+
+def verify_pdf(data, ledger, company, d1, d2):
+    if not data.startswith(b"%PDF-"):
+        raise RuntimeError("Downloaded file is not a PDF")
+    if importlib.util.find_spec("pypdf") is None:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pypdf==5.1.0"], check=True)
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(data))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    if not (compact(ledger) in compact(text) and compact(company) in compact(text)
+            and date_visible(text, d1) and date_visible(text, d2)):
+        raise RuntimeError("PDF ledger/company/period could not be verified; file was not sent")
+
+
+def ledger_pdf(desk, ledger, d1, d2, company):
+    text, png = open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
+    step("ledger", f"Verified ledger view: {ledger}, {company}, {d1:%d/%m/%Y}–{d2:%d/%m/%Y}", png=png)
+    desk.keyboard.press("Control+e")
+    wait_screen(desk, lambda t: "export" in t.lower())
+    desk.keyboard.press("c")
+    wait_screen(desk, lambda t: "file format" in t.lower())
+    pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d%m%y}_{d2:%d%m%y}_job{JOB}.pdf"
+    configure_pdf(desk, pdf_name)
     side_button(desk, "File Manager")
     fm = next((f for f in desk.frames if _safe(lambda: f.get_by_text("Drop files here").count() > 0, False)), ui(desk))
     fm.get_by_text("My_Files", exact=True).first.dblclick(); time.sleep(2)
     with desk.expect_download(timeout=120000) as dl:
-        row = fm.get_by_text(pdf_name).first
+        row = fm.get_by_text(pdf_name, exact=True).first
+        row.wait_for(timeout=120000)
         row.hover()
-        fm.locator("button[title*='ownload'], [aria-label*='ownload']").first.click()
+        container = row.locator("xpath=ancestor::*[.//button[contains(@title,'ownload') or contains(@aria-label,'ownload')]][1]")
+        button = container.locator("button[title*='ownload'], button[aria-label*='ownload']")
+        if button.count() != 1:
+            raise RuntimeError("Could not identify the download button for the requested PDF")
+        button.click()
     path = dl.value.path()
-    api("/file", method="POST", files={"file": (pdf_name, open(path, "rb"), "application/pdf")})
+    data = Path(path).read_bytes()
+    verify_pdf(data, ledger, company, d1, d2)
+    response = api("/file", method="POST", files={"file": (pdf_name, data, "application/pdf")}).json()
+    if not response.get("ok"):
+        raise RuntimeError("WhatsApp rejected the PDF; delivery is not confirmed")
     step("pdf", f"Ledger PDF sent: {pdf_name}", None, done=True)
 
 
@@ -406,8 +590,12 @@ def main():
                 company = open_tally(desk)
                 import_xml(desk, month, p["name"], company, p["vouchers"])
             else:
-                open_tally(desk)
-                ledger_pdf(desk, p["ledger"], date.fromisoformat(p["from"]), date.fromisoformat(p["to"]))
+                company = open_tally(desk)
+                d1, d2 = date.fromisoformat(p["from"]), date.fromisoformat(p["to"])
+                if p.get("report") == "daybook":
+                    daybook_check(desk, company, d1, d2)
+                else:
+                    ledger_pdf(desk, p["ledger"], d1, d2, company)
         except Exception as e:
             step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK or page, failed=True)
             raise

@@ -5,6 +5,7 @@ screenshot after every step. tally ledger svt this month → ledger PDF.
 The PIN is never stored: it waits in the database only until the agent reads it (then deleted; expires in 10 min)."""
 import json
 import hashlib
+import calendar
 import os
 import re
 from datetime import date
@@ -66,11 +67,13 @@ def handle(cur, phone, low, text):
     if job and job["waiting"] == "company" and not low.startswith(("tally", "menu", "hi")):
         cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL WHERE id=%s", (text.strip()[:120], job["id"]))
         return f"🏢 Opening *{text.strip()}*…"
+    low = re.sub(r"\s+pdf$", "", low.strip())
+    mc = re.fullmatch(r"tally\s+(?:check|day\s*book)\s+(.+)", low)
     again = bool(re.match(r"^tally\s+import\s+again\b", low))
     low = re.sub(r"^tally\s+import\s+again\b", "tally import", low)
     m = re.match(r"^tally\s+import\s+(.+?)(?:\s+(?:to|-)\s+(.+))?$", low)
     ml = re.match(r"^tally\s+ledger\s+(.+?)\s+(this month|last month|month|[a-z]+(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$", low)
-    if not (m or ml):
+    if not (m or ml or mc):
         return None
     # Serialize job creation across owners: one shared Tally desktop, no queued PIN expiry.
     cur.execute("SELECT pg_advisory_xact_lock(734109)")
@@ -78,7 +81,14 @@ def handle(cur, phone, low, text):
     active = cur.fetchone()
     if active:
         return f"Tally job #{active['id']} is still active. Finish it before starting another."
-    if m:
+    if mc:
+        w = _when(mc.group(1))
+        if not w or w[0] != "day":
+            return "Write a specific date: *tally check 2/11/2026*"
+        # Report jobs use the existing read-only ledger job category; no schema change.
+        params = {"report": "daybook", "from": w[1].isoformat(), "to": w[1].isoformat()}
+        kind, what = "ledger", f"check Day Book for {w[1]:%d/%m/%Y} (read only)"
+    elif m:
         w1, w2 = _when(m.group(1)), (_when(m.group(2)) if m.group(2) else None)
         a = w1[1] if w1 else None
         b = (w2[1] if w2 else a)
@@ -107,7 +117,7 @@ def handle(cur, phone, low, text):
         if not w:
             return "Write: *tally ledger svt this month*"
         first = w[1].replace(day=1)
-        last = min(today(), (first.replace(month=first.month % 12 + 1, year=first.year + (first.month == 12)) - __import__("datetime").timedelta(days=1)))
+        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
         from .tally_site import current, masters, name_map, norm
         said = ml.group(1).strip()
         ledger = name_map(cur).get("party", {}).get(said)
@@ -203,6 +213,8 @@ def agent_step(jid, step, message, png=None, done=False, failed=False, evidence=
             return False
         uncertain = j["state"] == "submitting" and failed
         state = "review_required" if uncertain else ("failed" if failed else ("done" if done else step))
+        if step == "daybook_evidence" and j["state"] == "submitting":
+            state = "submitting"
         if uncertain:
             message = "Import outcome UNCONFIRMED. Check Day Book before retrying. " + message
         # Mark waiting before delivering the screenshot so a quick reply is not lost.

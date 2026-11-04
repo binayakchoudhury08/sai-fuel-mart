@@ -1,3 +1,16 @@
+# 3.28.7 update
+
+- `tally check 2/11/2026` or `tally daybook 2/11/2026`: read-only Day Book screenshot for the selected company and date. Supply the PIN/company when requested. This does not import or modify vouchers.
+- `tally ledger svt nov 2026 pdf`: SVT ledger for 1–30 November 2026. The agent verifies company, ledger and period on the report and in the downloaded PDF before sending.
+- Folder selection now explicitly opens Specify Path, clears the folder field and verifies it closed on the intended month before entering the filename. It never falls back to October for a November file.
+- An import result is followed by a separate Day Book screenshot. Visible rows alone are not a full reconciliation; an empty/filtered report is not treated as proof that no import ever occurred. Compare voucher numbers and amounts before any retry.
+- Previous import dialogs are dismissed with Escape before entering a company name.
+- PDF export configuration uses visible setting labels; if the installed Tally version has a different layout, the agent stops with a screenshot instead of sending a stale/wrong PDF.
+- PDF verification installs pypdf 5.1.0 on the agent runner if missing.
+- 40 offline regression tests passed, including period parsing, folder rejection, read-only report commands, PDF content identity, and failed document delivery. No live Day Book or SVT PDF was retrieved during code preparation.
+
+References: https://help.tallysolutions.com/day-book-tally/ and https://help.tallysolutions.com/export-data-in-tally/ .
+
 # Tally agent repair — 3.28.6
 
 ## What the supplied screenshot proves

@@ -1,3 +1,11 @@
+## 3.28.7 — Folder dialog handling, Day Book checks, and ledger PDFs
+
+- Confirm the requested month folder is accepted before entering the XML filename; stop on invalid path dialogs.
+- Add `tally check 2/11/2026` and inspect Day Book after import statistics.
+- November ledger PDF requests use 1–30 November, Alt+F2 period selection, PDF identity checks, and strict delivery acknowledgement.
+- Safely close abandoned import dialogs before selecting a company.
+- 40 focused regression tests pass; live Tally navigation still requires a real session.
+
 # 3.28.6 — Tally import verification and faster agent setup
 
 Verified import screenshots, IMPORT/STOP approval, immutable XML snapshots, unique job filenames, replay protection, uncertain-import warnings, and tally status. See TALLY_AGENT_GUIDE.md for deployment and test limitations.

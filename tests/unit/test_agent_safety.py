@@ -29,6 +29,7 @@ def run_import(answer='IMPORT', result=RESULT, changed=False):
     with patch.object(robot, '_tally_on_screen', return_value=True), patch.object(robot, 'wait_screen', side_effect=wait), \
          patch.object(robot, 'read_screen', return_value=('wrong file' if changed else FORM, 'image')), \
          patch.object(robot, 'wait_answer', return_value=answer), patch.object(robot.time, 'sleep'), \
+         patch.object(robot, 'select_import_path'), patch.object(robot, 'daybook_check', return_value=True), \
          patch.object(robot, 'step') as step:
         error = None
         try:
@@ -168,7 +169,7 @@ def test_xml_snapshot_hash_checked_and_no_reconversion():
 
 
 def test_strict_media_does_not_treat_text_fallback_as_picture():
-    response = Mock(status_code=500)
+    response = Mock(status_code=500, text='upload failed')
     with patch.object(wa, 'provider', return_value='meta'), patch.object(wa.requests, 'post', return_value=response), \
          patch.object(wa, 'send_text') as send:
         assert wa.send_image('test', b'png', strict=True) is False
@@ -269,3 +270,140 @@ def test_runtime_missing_ocr_fails_outside_actions():
          patch.dict(os.environ, {'GITHUB_ACTIONS': 'false'}):
         with pytest.raises(RuntimeError, match='Tesseract OCR is required'):
             robot.ensure_runtime()
+
+
+def test_month_comes_from_import_date_not_previous_folder():
+    assert robot.import_month(NAME) == 'NOV 2026'
+    assert robot.import_month(NAME.replace('.xml', '_job10.xml')) == 'NOV 2026'
+    assert robot.import_month(NAME.replace('02-11', '02-10')) == 'OCT 2026'
+
+
+def test_path_error_never_advances_to_filename():
+    import pytest
+    desk = Mock()
+    with patch.object(robot, 'read_screen', return_value=('Specify File Path', 'image')), \
+         patch.object(robot, 'wait_screen', side_effect=lambda d, predicate, seconds: predicate('Incorrect File/Folder Path')):
+        with pytest.raises(RuntimeError, match='filename was NOT entered'):
+            robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
+    assert [c.args[0] for c in desk.keyboard.type.call_args_list] == [robot.IMPORT_ROOT + '\\NOV 2026']
+
+
+def test_folder_acceptance_rejects_open_modal_and_old_month():
+    desk = Mock()
+    def wait(desk, predicate, seconds):
+        assert not predicate('Specify File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
+        assert not predicate('File Path ' + robot.IMPORT_ROOT + '\\OCT 2026')
+        assert predicate('File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
+    with patch.object(robot, 'read_screen', return_value=('Specify File Path', 'image')), \
+         patch.object(robot, 'wait_screen', side_effect=wait):
+        robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
+
+
+def test_field_replacement_never_uses_accept_shortcut():
+    desk = Mock(); robot.replace_field(desk, 'folder')
+    keys = [c.args[0] for c in desk.keyboard.press.call_args_list]
+    assert keys[0] == 'Home' and keys.count('Delete') == 260
+    assert 'Control+a' not in keys and 'Shift+End' not in keys
+
+
+def test_date_verification_requires_month_and_year():
+    from datetime import date
+    day = date(2026, 11, 2)
+    assert robot.date_visible('2-Nov-26', day)
+    assert robot.date_visible('02-11-2026', day)
+    assert not robot.date_visible('2-Oct-26', day)
+    assert not robot.date_visible('2-Nov-25', day)
+
+
+def test_period_uses_alt_f2():
+    from datetime import date
+    desk = Mock()
+    with patch.object(robot, 'wait_screen'):
+        robot.set_period(desk, date(2026,11,1), date(2026,11,30))
+    assert desk.keyboard.press.call_args_list[0].args[0] == 'Alt+F2'
+    assert [c.args[0] for c in desk.keyboard.type.call_args_list] == ['01-11-2026', '30-11-2026']
+
+
+def test_daybook_command_creates_read_only_report_job():
+    import json
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 11}]
+    with patch.object(jobs, 'start_github'):
+        out = jobs.handle(cursor, 'test', 'tally check 2/11/2026', 'tally check 2/11/2026')
+    insert = next(c for c in cursor.execute.call_args_list if 'INSERT INTO tally_jobs' in c.args[0])
+    assert insert.args[1][1] == 'ledger'
+    params = json.loads(insert.args[1][2])
+    assert params == {'report': 'daybook', 'from': '2026-11-02', 'to': '2026-11-02'}
+    assert 'read only' in out
+
+
+def test_svt_nov_pdf_uses_full_november():
+    import json
+    from sfm import tally_site
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 12}]
+    with patch.object(jobs, 'start_github'), \
+         patch.object(tally_site, 'name_map', return_value={'party': {'svt': 'SVT LOGISTICS'}}), \
+         patch.object(tally_site, 'current', return_value=(None, None)):
+        jobs.handle(cursor, 'test', 'tally ledger svt nov 2026 pdf', 'tally ledger svt nov 2026 pdf')
+    insert = next(c for c in cursor.execute.call_args_list if 'INSERT INTO tally_jobs' in c.args[0])
+    params = json.loads(insert.args[1][2])
+    assert params['from'] == '2026-11-01' and params['to'] == '2026-11-30'
+    assert params['ledger'] == 'SVT LOGISTICS'
+
+
+def test_strict_pdf_send_does_not_claim_text_fallback_is_attachment():
+    response = Mock(status_code=500, text='upload failed')
+    with patch.object(wa, 'provider', return_value='meta'), patch.object(wa.requests, 'post', return_value=response), \
+         patch.object(wa, 'send_text') as send:
+        assert wa.send_document('test', 'svt.pdf', b'%PDF-1.4', 'application/pdf', strict=True) is False
+        send.assert_not_called()
+
+
+def test_pdf_endpoint_returns_failure_when_delivery_fails():
+    import io
+    from flask import Flask
+    from sfm.views.wa import bp
+    app = Flask(__name__); app.register_blueprint(bp)
+    with patch.dict(os.environ, {'CRON_SECRET': 'secret'}), \
+         patch.object(db, 'one', return_value={'phone': 'test'}), \
+         patch.object(wa, 'send_document', return_value=False):
+        resp = app.test_client().post('/api/tally/job/1/file', headers={'x-cron-secret':'secret'},
+            data={'file': (io.BytesIO(b'%PDF-1.4 test'), 'svt.pdf')}, content_type='multipart/form-data')
+        assert resp.status_code == 502 and resp.json['ok'] is False
+
+
+def test_daybook_evidence_preserves_uncertain_submission_marker():
+    with backend(job()) as (cursor, sender):
+        assert jobs.agent_step(1, 'daybook_evidence', 'Day Book screenshot', png=b'image')
+        update = next(c for c in cursor.execute.call_args_list if 'log = log' in c.args[0])
+        assert update.args[1][0] == 'submitting'
+
+
+def test_abandoned_path_error_is_dismissed_before_company_typing():
+    desk = Mock()
+    screens = [('Incorrect File/Folder Path Specify File Path', ''), ('Specify File Path', ''),
+               ('Import Transactions', ''), ('Gateway of Tally', '')]
+    with patch.object(robot, 'read_screen', side_effect=screens), patch.object(robot.time, 'sleep'):
+        robot.recover_tally_screen(desk)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape'] * 3
+    desk.keyboard.type.assert_not_called()
+
+
+def test_pdf_verification_accepts_exact_company_ledger_period():
+    import io
+    from datetime import date
+    from reportlab.pdfgen.canvas import Canvas
+    data = io.BytesIO(); canvas = Canvas(data)
+    canvas.drawString(40, 800, COMPANY)
+    canvas.drawString(40, 780, 'SVT LOGISTICS')
+    canvas.drawString(40, 760, '1-Nov-26 to 30-Nov-26'); canvas.save()
+    robot.verify_pdf(data.getvalue(), 'SVT LOGISTICS', COMPANY, date(2026,11,1), date(2026,11,30))
+
+
+def test_pdf_verification_rejects_old_month():
+    import io, pytest
+    from datetime import date
+    from reportlab.pdfgen.canvas import Canvas
+    data = io.BytesIO(); canvas = Canvas(data)
+    canvas.drawString(40, 800, COMPANY + ' SVT LOGISTICS 1-Oct-26 to 31-Oct-26'); canvas.save()
+    with pytest.raises(RuntimeError, match='could not be verified'):
+        robot.verify_pdf(data.getvalue(), 'SVT LOGISTICS', COMPANY, date(2026,11,1), date(2026,11,30))
