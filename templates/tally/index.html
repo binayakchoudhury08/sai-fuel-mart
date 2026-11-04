@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden with context %}{% from "_settings_tabs.html" import settings_tabs with context %}{% block title %}Tally Excel{% endblock %}
+{% block content %}
+{{ settings_tabs('tally') }}
+<section class="section"><header><h2>Your Tally workbook</h2>
+  {% if meta %}<small>current: #{{ meta.id }} · {{ meta.created_at.astimezone(IST).strftime('%d %b %I:%M %p') if IST else meta.created_at }} · {{ meta.note }}</small>{% endif %}</header>
+<div class="body btnrow">
+  <form method="post" action="{{ url_for('tally.upload') }}" enctype="multipart/form-data" class="btnrow">{{ hidden() }}
+    <input type="file" name="book" accept=".xlsx" required><button class="btn secondary small">{{ 'Replace with an upload' if meta else 'Upload SFM_Daily_Readings.xlsx' }}</button></form>
+  {% if meta %}<a class="btn small" href="{{ url_for('tally.download') }}">⬇ Download current workbook</a>{% endif %}
+</div></section>
+{% if meta %}
+<section class="section"><header><h2>Date</h2></header><div class="body btnrow">
+  <form method="get" class="btnrow"><input type="date" name="d" value="{{ d.isoformat() }}"><button class="btn small secondary">Open</button></form>
+  <form method="post" action="{{ url_for('tally.add') }}" class="btnrow" data-confirm="Add {{ d.strftime('%d/%m/%Y') }} from Daily Closing to the workbook?">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}">
+    <button class="btn small">➕ Add {{ d.strftime('%d/%m/%Y') }} from Daily Closing</button></form>
+  <form method="post" action="{{ url_for('tally.convert') }}" class="btnrow">{{ hidden() }}
+    <input type="date" name="from" value="{{ d.isoformat() }}"><span>to</span><input type="date" name="to" value="{{ d.isoformat() }}"><button class="btn small go">Convert to Tally XML</button></form>
+</div>
+<p class="hint" style="padding:0 18px 14px">Adds meters (closing), credit (HSD SALES), lube, expenses (PAYMENT) and payments received (RECEIPT). MS / CNG / digital you adjust below. No row is ever deleted; dates are written like your recent rows.</p></section>
+
+{% if missing %}<section class="section"><header><h2>Tally names needed</h2><small>once — remembered after</small></header>
+<div class="body flush tablewrap"><table class="mini"><thead><tr><th>Kind</th><th>In the website</th><th>Tally name</th><th></th></tr></thead><tbody>
+{% for k, s_, guess in missing %}<tr><td>{{ kinds[k] }}</td><td><b>{{ s_ }}</b></td>
+<td colspan="2"><form method="post" action="{{ url_for('tally.names') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="site" value="{{ s_ }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+<select name="tally" required><option value="">Choose…</option>{% for c in choices[k] %}<option {% if c == guess %}selected{% endif %}>{{ c }}</option>{% endfor %}</select><button class="btn small">Save</button></form></td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+{% if check %}<section class="section"><header><h2>Daily check — {{ d.strftime('%d/%m/%Y') }}</h2></header><div class="body flush tablewrap"><table class="mini">
+<tbody>{% for k in ('HSD qty','HSD amount','MS qty','MS amount','CNG qty','CNG amount','Lube amount','Cash sales','Cash receipt','Cash payment') %}<tr><td>{{ k }}</td><td class="num">{{ check[k] }}</td></tr>{% endfor %}
+{% for k, v in check.digital.items() %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}
+</tbody><tfoot><tr><td><b>Final cash balance</b></td><td class="num"><b>{{ check['Final cash balance']|rs }}</b></td></tr></tfoot></table></div></section>{% endif %}
+
+{% if view %}{% set pay = ('PAYMENT','RECEIPT') %}
+{% for sh in sheets %}<section class="section" id="{{ sh.replace(' ','-') }}"><header><h2>{{ sh }}</h2><small>{{ view[sh]|length }} rows · change anything, then Save</small></header>
+<div class="body flush tablewrap"><table class="mini cs-cards"><thead><tr><th>Row</th>
+{% if sh in pay %}<th>{{ 'Paid from' if sh == 'PAYMENT' else 'Received in' }}</th><th>{{ 'Paid to' if sh == 'PAYMENT' else 'Received from' }}</th><th class="num">Amount</th>
+{% elif sh == 'LUBE SALES' %}<th>Party</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th>
+{% else %}<th>Party</th><th class="num">Amount</th><th class="num">Rate</th>{% endif %}<th></th></tr></thead><tbody>
+{% for r in view[sh] %}<tr><td colspan="6"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow" style="flex-wrap:wrap">{{ hidden() }}
+<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ sh }}"><input type="hidden" name="row" value="{{ r.row }}"><small class="muted">#{{ r.row }}</small>
+{% if sh in pay %}<input name="party" value="{{ r['from'] }}" list="ledgers" style="max-width:180px"><input name="to" value="{{ r.to }}" list="ledgers" style="max-width:200px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px">
+{% elif sh == 'LUBE SALES' %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:120px"><input name="item" value="{{ r.item }}" list="items" style="max-width:200px"><input name="qty" value="{{ r.qty }}" inputmode="decimal" style="max-width:80px"><input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px"><span class="muted">= {{ r.amount }}</span>
+{% else %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:220px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px"><input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px" title="rate"><span class="muted">{{ r.qty }} L</span>{% endif %}
+<button class="btn small secondary">Save</button></form></td></tr>
+{% else %}<tr><td colspan="6" class="empty">No rows on this date.</td></tr>{% endfor %}</tbody></table>
+<form method="post" action="{{ url_for('tally.set_row') }}" class="body btnrow" style="flex-wrap:wrap">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ sh }}"><b>Add row</b>
+{% if sh in pay %}<input name="from_ledger" placeholder="{{ 'Paid from' if sh == 'PAYMENT' else 'Received in' }} (Cash)" list="ledgers" style="max-width:180px"><input name="name" placeholder="{{ 'Paid to' if sh == 'PAYMENT' else 'Received from' }}" list="ledgers" required style="max-width:200px"><input name="amount" placeholder="Amount" inputmode="decimal" required style="max-width:120px">
+{% elif sh == 'LUBE SALES' %}<input name="name" placeholder="Item" list="items" required style="max-width:200px"><input name="amount" placeholder="Qty" inputmode="decimal" required style="max-width:80px"><input name="rate" placeholder="Rate" inputmode="decimal" required style="max-width:90px">
+{% else %}<input name="name" placeholder="Party — Phone Pe / Paytm / Cash / transporter" list="ledgers" required style="max-width:260px"><input name="amount" placeholder="Amount" inputmode="decimal" required style="max-width:120px">{% endif %}
+<button class="btn small">Add</button></form></div></section>{% endfor %}
+<datalist id="ledgers">{% for c in choices.get('party', []) %}<option>{{ c }}</option>{% endfor %}</datalist>
+<datalist id="items">{% for c in choices.get('item', []) %}<option>{{ c }}</option>{% endfor %}</datalist>
+<section class="section" id="METER-READING"><header><h2>METER READING</h2><small>change a closing → the next day’s opening follows</small></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>Meter</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Testing</th><th class="num">Net</th><th class="num">Amount</th></tr></thead><tbody>
+{% for r in view[meter] %}<tr><td>{{ r.meter }}</td><td class="num">{{ r.opening }}</td>
+<td class="num"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ meter }}"><input type="hidden" name="meter" value="{{ r.meter }}">
+<input name="closing" value="{{ r.closing }}" inputmode="decimal" style="max-width:130px"><button class="btn small secondary">Save</button></form></td>
+<td class="num">{{ r.testing }}</td><td class="num">{{ r.net }}</td><td class="num">{{ r.amount }}</td></tr>{% else %}<tr><td colspan="6" class="empty">No meter rows on this date.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+
+<section class="section"><header><h2>Versions</h2><small>every change is kept</small></header><div class="body flush tablewrap"><table class="mini"><tbody>
+{% for v in versions %}<tr><td>#{{ v.id }}</td><td>{{ v.created_at.strftime('%d %b %H:%M') }}</td><td>{{ v.note }}</td><td>{{ v.created_by }}</td>
+<td>{% if not loop.first %}<form method="post" action="{{ url_for('tally.restore', vid=v.id) }}" data-confirm="Make version #{{ v.id }} the current workbook again?">{{ hidden() }}<button class="btn small secondary">Restore</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+{% endblock %}

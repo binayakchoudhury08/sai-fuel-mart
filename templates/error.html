@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}{{ title }}{% endblock %}
+{% block content %}<div class="section"><div class="body"><h1>{{ title }}</h1><p class="muted">{{ message }}</p>
+<p style="margin-top:14px" class="btnrow"><a class="btn" href="javascript:history.back()">Go back</a><a class="btn secondary" href="/dashboard">Overview</a></p></div></div>{% endblock %}
+{% block bare %}<div class="authpage"><div class="authbox"><h1>{{ title }}</h1><p class="muted">{{ message }}</p>
+<p style="margin-top:14px"><a class="btn" href="/login">Sign in</a></p></div></div>{% endblock %}

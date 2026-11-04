@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Search{% endblock %}
+{% block content %}
+<form method="get" class="section"><div class="body formrow"><div><input name="q" value="{{ q }}" placeholder="Transporter, vehicle no., slip, challan, nozzle, tank, staff, page…" autofocus></div><div style="flex:0"><button class="btn">Search</button></div></div></form>
+{% if q|length < 2 %}<p class="muted">Type at least 2 letters.</p>
+{% elif not groups %}<div class="section"><p class="empty">Nothing found for “{{ q }}”.</p></div>
+{% else %}{% for g, items in groups.items() %}
+<section class="section"><header><h2>{{ g }}</h2><small>{{ items|length }}</small></header><div class="body flush">
+{% for t, d, h in items %}<a class="alert-row" href="{{ h }}"><span class="sev low">›</span><span><b>{{ t }}</b><small>{{ d }}</small></span></a>{% endfor %}
+</div></section>{% endfor %}{% endif %}
+{% endblock %}

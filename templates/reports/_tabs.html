@@ -1,0 +1,11 @@
+{% set tabs = [('reports.index','Daily sales & cash'),('reports.nozzles','Nozzles'),
+  ('transport.index','Transport bills'),('reports.outstanding','Outstanding'),('reports.credit_register','Party entries'),
+  ('reports.digital','Digital collections'),('reports.tanks','Tanks'),('reports.analytics','Analytics')] %}
+<nav class="btnrow noprint" style="margin-bottom:10px" aria-label="Reports">
+{% for ep, label in tabs %}<a class="btn small {{ '' if request.endpoint==ep else 'secondary' }}" href="{{ url_for(ep) }}">{{ label }}</a>{% endfor %}
+</nav>
+<div class="btnrow noprint" style="margin-bottom:14px"><span class="hint">More downloads:</span>
+<a class="btn small secondary" href="{{ url_for('reports.lube_xlsx') }}">Lube stock Excel</a>
+<a class="btn small secondary" href="{{ url_for('reports.attendance_xlsx') }}">Attendance Excel (this month)</a>
+{% if can('backup') %}<a class="btn small secondary" href="{{ url_for('reports.business_xlsx') }}">Business Excel with charts</a>
+<a class="btn small secondary" href="{{ url_for('reports.backup') }}">Full backup</a>{% endif %}</div>

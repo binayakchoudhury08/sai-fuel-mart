@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Check scanned pages{% endblock %}
+{% block content %}
+<form method="post" action="{{ url_for('transport.scan_batch_save', bid=b.id) }}" data-scan>{{ hidden() }}
+<section class="section scansum"><div class="body">
+  <div class="fields"><div><label>Transporter (all pages)</label><select name="party" required><option value="">Choose…</option>
+    {% for p in parties %}<option value="{{ p.id }}" {% if p.id == party_id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+    <div><label>Fuel</label><input value="HSD" readonly></div></div>
+  <h3 style="margin:14px 0 8px">{{ pages|length }} page{{ 's' if pages|length != 1 }} · {{ grand.entries }} entries · {{ grand.qty|qty(0) }} L · {{ grand.total|rs }}</h3>
+  <div class="chips">{% for pg in pages %}<a class="chip {{ 'okchip' if pg.ok and not pg.flags else 'warnchip' }}" href="#page-{{ pg.scan.id }}">
+    {{ '✓' if pg.ok and not pg.flags else '⚠' }} {{ pg.scan.bill_no or 'page ' ~ loop.index }} <i>{{ pg.entries|length }} entr{{ 'y' if pg.entries|length == 1 else 'ies' }}{% if pg.flags %} · {{ pg.flags }} to check{% endif %}</i></a>{% endfor %}</div>
+</div></section>
+
+{% for pg in pages %}{% set s = pg.scan %}{% set sid = s.id %}
+<section class="section scanpage" id="page-{{ sid }}">
+  <header><h2>Challan {{ s.bill_no or '?' }} <small class="muted" style="font-weight:500">· {{ pg.entries|length }} entr{{ 'y' if pg.entries|length == 1 else 'ies' }} · written to “{{ s.written_party }}”{% if (s.raw or {}).get('_pass') == 2 %} · read twice (checked again){% endif %}</small></h2>
+    <span class="badge {{ 'locked' if pg.checks.qty_ok and pg.checks.amount_ok else 'stop' }}">{{ 'Page totals match' if pg.checks.qty_ok and pg.checks.amount_ok else 'Page totals do not match' }}</span></header>
+  <div class="scanwrap">
+    <aside class="scanphoto">{% if s.photo_path %}<a href="{{ url_for('transport.scan_photo', sid=sid) }}" target="_blank" rel="noopener"><img loading="lazy" src="{{ url_for('transport.scan_photo', sid=sid) }}" alt="Page {{ loop.index }}"></a><small class="muted">Tap to zoom</small>{% else %}<p class="muted">Photo not stored.</p>{% endif %}</aside>
+    <div class="scanform">
+      <div class="body" style="padding-bottom:6px"><div class="fields"><div><label>Challan No. (Bill No.)</label><input name="challan_{{ sid }}" value="{{ s.bill_no }}"></div></div></div>
+      {% for n in pg.notes %}<div class="notice" style="margin:0 18px 10px">{{ n }}</div>{% endfor %}
+      <input type="hidden" name="rows_{{ sid }}" value="{{ pg.entries|length }}">
+      <div class="body flush tablewrap"><table class="scantable"><thead><tr><th></th><th>Date</th><th>Vehicle No.</th><th>Slip No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">Fuel ₹</th><th class="num">Cash ₹</th><th class="num">Total ₹</th></tr></thead><tbody>
+      {% for e in pg.entries %}{% set i = loop.index0 %}<tr class="{{ 'warnrow' if e.notes else '' }}" data-row data-page="{{ sid }}">
+        <td><input type="checkbox" name="use_{{ sid }}_{{ i }}" value="1" checked aria-label="Save this row"><br><small class="muted">L{{ e.lines|join('+') }}</small></td>
+        <td data-label="Date"><input type="date" name="date_{{ sid }}_{{ i }}" value="{{ e.date.isoformat() if e.date else '' }}" required></td>
+        <td data-label="Vehicle No."><input name="vehicle_{{ sid }}_{{ i }}" value="{{ e.vehicle }}" data-veh>{% if e.suggest %}<button type="button" class="linkbtn" data-use="{{ e.suggest }}">use {{ e.suggest }}</button>{% endif %}</td>
+        <td data-label="Slip No."><input name="slip_{{ sid }}_{{ i }}" value="{{ e.slip_no }}"></td>
+        <td class="num" data-label="HSD Qty"><input name="qty_{{ sid }}_{{ i }}" value="{{ e.qty if e.qty else '' }}" inputmode="decimal" data-qty></td>
+        <td class="num" data-label="Rate"><input name="rate_{{ sid }}_{{ i }}" value="{{ e.rate or rate_hsd or '' }}" inputmode="decimal" data-rate></td>
+        <td class="num" data-fuel data-label="Fuel ₹">{{ e.fuel_amount|rs }}</td>
+        <td class="num" data-label="Cash ₹"><input name="cash_{{ sid }}_{{ i }}" value="{{ e.cash|int if e.cash else '' }}" inputmode="decimal" data-cash></td>
+        <td class="num" data-label="Total ₹"><b data-total>{{ (e.fuel_amount + e.cash)|rs }}</b></td></tr>
+      {% if e.notes %}<tr class="noterow"><td></td><td colspan="8">⚠ {{ e.notes|join(' · ') }}</td></tr>{% endif %}
+      {% endfor %}</tbody>
+      <tfoot><tr><td colspan="4">This page (ticked rows)</td><td class="num" data-sumqty="{{ sid }}"></td><td></td><td></td><td></td><td class="num"><b data-sumtot="{{ sid }}"></b></td></tr>
+        <tr><td colspan="4" class="muted">Written on the page</td><td class="num muted">{{ pg.checks.total_qty if pg.checks.total_qty is not none else '—' }}</td><td></td><td></td><td></td><td class="num muted">{{ pg.checks.total_amount|rs if pg.checks.total_amount is not none else '—' }}</td></tr></tfoot></table></div>
+    </div>
+  </div>
+</section>
+{% endfor %}
+
+<section class="section savebar"><div class="body btnrow">
+  <div style="flex:1"><b>All pages:</b> <span data-grandn></span> entries · <span data-grandq></span> L · <b data-grandt></b></div>
+  <button class="btn go" style="min-width:200px;min-height:50px">Save all</button></div>
+  <div class="body" style="padding-top:0"><p class="hint" style="margin:0">Every ticked row becomes one Credit transport entry. You can still edit, delete or add entries later, on any date.</p></div></section>
+</form>
+<form method="post" action="{{ url_for('transport.scan_batch_discard', bid=b.id) }}" style="margin-top:8px">{{ csrf() }}<button class="btn small secondary">Discard these pages</button></form>
+<script>
+(function(){
+  var f = document.querySelector("[data-scan]"); if (!f) return;
+  function n(v){ v = parseFloat(String(v || "").replace(/,/g, "")); return isNaN(v) ? 0 : v; }
+  function rs(v){ return "₹" + Math.round(v).toLocaleString("en-IN"); }
+  function calc(){
+    var pages = {}, gn = 0, gq = 0, gt = 0;
+    f.querySelectorAll("[data-row]").forEach(function(r){
+      var q = n(r.querySelector("[data-qty]").value), rate = n(r.querySelector("[data-rate]").value), c = Math.round(n(r.querySelector("[data-cash]").value));
+      var fuel = q ? Math.round(q * rate) : 0, t = fuel + c, pid = r.dataset.page;
+      r.querySelector("[data-fuel]").textContent = rs(fuel); r.querySelector("[data-total]").textContent = rs(t);
+      pages[pid] = pages[pid] || { q: 0, t: 0 };
+      if (r.querySelector("input[type=checkbox]").checked) { pages[pid].q += q; pages[pid].t += t; gn++; gq += q; gt += t; }
+    });
+    Object.keys(pages).forEach(function(pid){
+      f.querySelector('[data-sumqty="' + pid + '"]').textContent = pages[pid].q.toLocaleString("en-IN");
+      f.querySelector('[data-sumtot="' + pid + '"]').textContent = rs(pages[pid].t);
+    });
+    f.querySelector("[data-grandn]").textContent = gn; f.querySelector("[data-grandq]").textContent = gq.toLocaleString("en-IN"); f.querySelector("[data-grandt]").textContent = rs(gt);
+  }
+  f.addEventListener("input", calc); f.addEventListener("change", calc);
+  f.querySelectorAll("[data-use]").forEach(function(b){ b.addEventListener("click", function(){ b.closest("td").querySelector("[data-veh]").value = b.dataset.use; b.remove(); }); });
+  calc();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% from "_macros.html" import csrf with context %}{% from "_settings_tabs.html" import settings_tabs with context %}{% block title %}Settings{% endblock %}
+{% block content %}
+{{ settings_tabs('system') }}
+<section class="section"><header><h2>WhatsApp connection</h2></header><div class="body stack">
+<p>Meta forwards WhatsApp messages only to apps <b>subscribed</b> to your WhatsApp Business Account. If “hi” gets two grey ticks but no answer, and the check page shows nothing received, this is usually missing.</p>
+{% if err %}<div class="notice">{{ err }}</div>{% endif %}
+<div class="tablewrap"><table class="mini"><thead><tr><th>WhatsApp Business Account</th><th>App subscribed?</th><th>Detail</th></tr></thead><tbody>
+{% for w, ok, detail in status %}<tr><td>{{ w }}</td><td>{% if ok %}<span class="match ok">✓ yes</span>{% else %}<span class="match bad">✗ no</span>{% endif %}</td><td>{{ detail }}</td></tr>
+{% else %}<tr><td colspan="3" class="empty">{{ 'No WhatsApp account found for this token.' if ready else 'WhatsApp settings missing in Vercel.' }}</td></tr>{% endfor %}</tbody></table></div>
+<form method="post">{{ csrf() }}<button class="btn" {% if not ready %}disabled{% endif %}>Connect WhatsApp account to the app</button></form>
+<p class="hint">Safe to press more than once. After “Connected”, send <b>hi</b> from your WhatsApp, then look at <a href="/api/wa/webhook" target="_blank">the check page</a>.</p>
+</div></section>
+{% endblock %}

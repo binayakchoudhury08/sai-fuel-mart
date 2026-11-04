@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden with context %}{% from "_settings_tabs.html" import settings_tabs with context %}{% block title %}Settings{% endblock %}
+{% block content %}
+{{ settings_tabs('attend') }}
+<section class="section"><header><h2>Check-in right now</h2><span class="badge {{ 'stop' if 'closed' in rules.label else 'locked' }}">{{ rules.label }}</span></header>
+<div class="body stack">
+  <div class="btnrow">
+  {% for act, lab, cls in (('open30','Open now 30 min',''),('open60','Open now 1 hour',''),('close','Close now','secondary')) %}
+    <form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline">{{ hidden() }}<input type="hidden" name="next" value="{{ url_for('admin.attendance_hours') }}">
+      <button class="btn small {{ cls }}" name="action" value="{{ act }}">{{ lab }}</button></form>{% endfor %}
+    <form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline-flex;gap:6px;align-items:center">{{ hidden() }}<input type="hidden" name="next" value="{{ url_for('admin.attendance_hours') }}">
+      <input type="time" name="until" required style="max-width:130px"><button class="btn small secondary" name="action" value="until">Open until</button></form>
+    {% if rules.today_changed %}<form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline">{{ hidden() }}<input type="hidden" name="next" value="{{ url_for('admin.attendance_hours') }}">
+      <button class="btn small secondary" name="action" value="normal">Back to normal</button></form>{% endif %}
+  </div>
+  <p class="hint">These change <b>today only</b>. Tomorrow the normal hours below come back by themselves.</p>
+</div></section>
+<section class="section"><header><h2>Normal check-in hours (every day)</h2></header>
+<form method="post" action="{{ url_for('staff.attendance_rules_save') }}" class="body fields">{{ hidden() }}<input type="hidden" name="next" value="{{ url_for('admin.attendance_hours') }}">
+  <div><label>Morning opens</label><input type="time" name="start" value="{{ normal.start }}" required></div>
+  <div><label>Morning closes</label><input type="time" name="end" value="{{ normal.end }}" required></div>
+  <div><label>Evening opens (empty = no evening)</label><input type="time" name="start2" value="{{ normal.start2 }}"></div>
+  <div><label>Evening closes</label><input type="time" name="end2" value="{{ normal.end2 }}"></div>
+  <div style="align-self:end"><button class="btn">Save normal hours</button></div>
+</form>
+<div class="body"><p class="hint">Only the owner can change hours. WhatsApp: <b>attendance open 1h</b> · <b>attendance open till 1pm</b> · <b>attendance close</b> · <b>attendance normal</b> · <b>attendance hours 6am to 1pm</b> · <b>attendance evening 6:30pm to 8:30pm</b> · <b>attendance evening off</b></p></div>
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+# Tally Cloud robot — started by the website (WhatsApp "tally import …" / "tally ledger …"). Free GitHub Actions minutes.
+name: tally-agent
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Tally job id from the website"
+        required: true
+concurrency: { group: tally-agent, cancel-in-progress: false }   # one Tally session at a time
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install the robot browser
+        run: |
+          pip install playwright==1.49.1 requests==2.32.3
+          python -m playwright install --with-deps chromium
+      - name: Run the Tally job
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          SFM_SITE: ${{ secrets.SFM_SITE }}            # https://sai-fuel-mart.vercel.app
+          SFM_SECRET: ${{ secrets.SFM_SECRET }}        # same value as CRON_SECRET in Vercel
+          TALLY_EMAIL: ${{ secrets.TALLY_EMAIL }}
+          TALLY_PASSWORD: ${{ secrets.TALLY_PASSWORD }}
+        run: python agent/tally_agent.py

@@ -1,0 +1,14 @@
+{# Tank card as in the design: icon + name, Level % bar, Capacity, Current #}
+{% macro tankcard(name, code, pct, capacity, current, extra='', href='') -%}
+{% set fc = {'MS':'#F5B301','HSD':'#16A34A','CNG':'#22C55E'}.get(code, '#1D5BEB') %}
+<{{ 'a' if href else 'div' }} class="tankcard t2" style="--fc:{{ fc }}" {% if href %}href="{{ href }}"{% endif %}>
+  <div class="thead">
+    <span class="tico"><svg viewBox="0 0 28 34" aria-hidden="true"><rect x="3" y="4" width="22" height="28" rx="4" fill="none" stroke="{{ fc }}" stroke-width="2.4"/>
+      <rect x="5" y="{{ (30 - ((pct or 0)|float) * 0.24)|round(1) }}" width="18" height="{{ (((pct or 0)|float) * 0.24)|round(1) }}" rx="2" fill="{{ fc }}"/><rect x="10" y="1" width="8" height="4" rx="1.5" fill="{{ fc }}"/></svg></span>
+    <div><h3>{{ name }}</h3>{% if extra %}<small class="tmeta">{{ extra|safe }}</small>{% endif %}</div></div>
+  <div class="lvl"><span>Level</span><span>{{ (pct ~ '%') if pct is not none else '—' }}</span></div>
+  <div class="levelbar"><i style="width:{{ [pct or 0, 100]|min }}%"></i></div>
+  <dl><dt>Capacity</dt><dd>{{ capacity|qty(0) }} {{ 'kg' if code=='CNG' else 'L' }}</dd>
+      <dt>Current</dt><dd>{{ (current|qty(0)) if current is not none else '—' }} {{ 'kg' if code=='CNG' else 'L' }}</dd></dl>
+</{{ 'a' if href else 'div' }}>
+{%- endmacro %}

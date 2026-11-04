@@ -1,0 +1,94 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% from "_head.html" import head %}{% block title %}Employee Attendance{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="datenav"><input type="date" value="{{ d.isoformat() }}" max="{{ today.isoformat() }}" data-gotodate="/staff?d=__D__" aria-label="Date"></div>
+<span style="flex:1"></span>{% if can('salary') %}<a class="btn secondary" href="{{ url_for('staff.salary') }}">Salary</a>{% endif %}
+{% if can('staff_manage') %}<a class="btn" href="#addstaff">Add Employee</a>{% endif %}</div>
+
+<div class="stats"><div><b class="pos">{{ present }}</b><span>Present</span></div><div><b class="{{ 'neg' if total - present else '' }}">{{ total - present }}</b><span>Not marked (absent)</span></div>
+<div><b>{{ total }}</b><span>Staff</span></div></div>
+
+{% if user.role == 'owner' %}{% from "_macros.html" import hidden with context %}{% set next = url_for('staff.index') %}{% include "staff/_today_hours.html" %}{% endif %}
+<a class="takeproof" href="{{ url_for('staff.attend') }}" style="margin-bottom:12px"><span>📱</span><div><b>Quick attendance</b><small>One screen: 📷 Present or ✗ Absent for each person — made for the phone</small></div></a>
+{% if my_standin %}<div class="flash success">You are the attendance stand-in from {{ my_standin.date_from|d }} to {{ my_standin.date_to|d }}. Same rules: today only, live photo, once per person.</div>{% elif backup_id == user.id %}<div class="flash success">You are the backup person for attendance.</div>{% endif %}
+{% if user.role != 'owner' %}<div class="flash {{ 'info' if in_window else 'error' }}">{% if not is_today %}You can only mark attendance for today.{% elif in_window %}Check-in is open now ({{ rules.label }}). Each person is marked once, by live photo. Not marked = Absent.{% else %}Check-in is open {{ rules.label }} only. Anyone not marked is Absent; only the owner can change it.{% endif %}</div>{% endif %}
+{% if can('attendance_photo') and not mobile %}<div class="flash info">Live photos are taken on the phone: open this page in the app or on the manager’s phone.</div>{% endif %}
+{% if can('attendance_photo') and not storage %}<div class="notice">Photo storage isn’t set up yet (Supabase Storage). Ask the owner.</div>{% endif %}
+
+<section class="section" style="--sc:var(--c-staff)"><header><h2><span class="n">✓</span>{{ d.strftime('%A, %d %B') }}</h2></header>
+<div class="body flush" id="att" data-start="{{ url_for('staff.attendance_start') }}" data-post="{{ url_for('staff.attendance_photo') }}"
+     data-date="{{ d.isoformat() }}" data-station="{{ station }}" data-user="{{ user.full_name or user.username }}">
+<input type="hidden" id="csrf" value="{{ csrf_token() }}">
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Role</th><th>Shift</th><th>Status</th><th>Check in</th><th>Check out</th></tr></thead><tbody>
+{% for s in staff if s.active %}{% set m = marks.get(s.id) %}{% set owner = user.role == 'owner' %}{% set snap_ok = can('attendance_photo') and mobile and storage %}
+<tr id="staff-{{ s.id }}">
+  <td><div style="display:flex;align-items:center;gap:10px">{% if m and m.photo_path %}<img class="face" style="width:40px;height:40px;border-radius:12px;object-fit:cover" loading="lazy" src="{{ url_for('staff.attendance_photo_file', sid=s.id, d=d.isoformat()) }}" alt="">{% else %}<span class="avatar" style="width:40px;height:40px;border-radius:12px">{{ s.name[:1] }}</span>{% endif %}<b>{{ s.name }}</b></div></td>
+  <td>{{ s.designation or 'Staff' }}</td><td>{{ s.shift or '—' }}</td>
+  <td>{% if m and m.status == 'P' %}<span class="badge locked">Present</span>{% elif m and m.status == 'H' %}<span class="badge locked">Half day</span>{% elif m %}<span class="badge {{ 'stop' if m.status=='A' else 'submitted' }}">{{ dict(STATUS)[m.status] }}</span>{% else %}<span class="badge stop">Absent</span>{% endif %}</td>
+  <td>{% if m and m.captured_at %}{{ m.captured_at.strftime('%I:%M %p') }}{% elif m and m.status in ('P','H') %}<small class="muted">set by owner</small>{% elif snap_ok and (owner or in_window) %}<button type="button" class="btn small" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="in">📷 Check in</button>{% else %}—{% endif %}
+    {% if owner and snap_ok and m %}<button type="button" class="btn small secondary" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="in" title="Owner: replace the check-in photo">Retake</button>{% endif %}</td>
+  <td>{% if m and m.checkout_at %}<a href="{{ url_for('staff.attendance_photo_file', sid=s.id, d=d.isoformat(), kind='out') }}" target="_blank" rel="noopener">{{ m.checkout_at.strftime('%I:%M %p') }}</a>{% elif m and m.status in ('P','H') and snap_ok and (owner or is_today) %}<button type="button" class="btn small secondary" data-snap="{{ s.id }}" data-name="{{ s.name }}" data-kind="out">📷 Check out</button>{% else %}—{% endif %}</td>
+</tr>
+{% else %}<tr><td colspan="6" class="empty">No staff yet.</td></tr>{% endfor %}</tbody></table></div>
+</div></section>
+
+{# live camera, full screen #}
+<div id="camsheet" hidden style="position:fixed;inset:0;z-index:60;background:#0B0A26;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;color:#fff">
+    <b id="camname" style="flex:1">Staff</b><span id="camgps" class="badge">GPS…</span>
+    <button type="button" class="btn small secondary" id="camclose">Close</button></div>
+  <div class="viewfinder" style="flex:1;aspect-ratio:auto;max-height:none"><video id="camvideo" playsinline muted autoplay></video><img id="camprev" hidden alt="Photo preview"></div>
+  <div style="padding:14px 18px calc(18px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <button type="button" class="btn secondary" id="camflip">⟲ Flip</button>
+    <button type="button" class="shutter" id="camshoot" aria-label="Take photo"></button>
+    <button type="button" class="btn go" id="camsave" disabled>Mark present</button></div>
+  <p id="cammsg" style="color:#fff;text-align:center;margin:0 0 12px;min-height:1.4em"></p>
+</div>
+
+{% if user.role == 'owner' %}
+<section class="section"><details class="add" style="border-top:0"><summary>Mark or change attendance without a photo (owner only)</summary><div class="body">
+<form method="post" action="{{ url_for('staff.save_attendance') }}">{{ hidden() }}<input type="hidden" name="work_date" value="{{ d.isoformat() }}">
+<div class="tablewrap"><table><thead><tr><th>Staff</th><th>Status</th></tr></thead><tbody>
+{% for s in staff if s.active %}{% set m = marks.get(s.id) %}<tr><td>{{ s.name }}{% if m and m.marked_via=='photo' %} <small>(photo)</small>{% endif %}</td>
+<td><select name="st_{{ s.id }}" style="max-width:220px"><option value="" {% if not m %}selected{% endif %}>Not marked (absent)</option>
+{% for k, lbl in STATUS %}<option value="{{ k }}" {% if m and m.status==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select></td></tr>{% endfor %}</tbody></table></div>
+<div class="fields" style="margin-top:12px"><div class="wide"><label>Reason (kept in the audit log)</label><input name="reason" placeholder="e.g. came late, phone camera not working"></div></div>
+<p style="margin-top:10px"><button class="btn">Save changes</button></p></form></div></details></section>
+{% endif %}
+
+{% if user.role == 'owner' %}
+<section class="section"><details class="add" style="border-top:0"><summary>Attendance rules, backup &amp; stand-in (owner)</summary><div class="body">
+<form method="post" action="{{ url_for('staff.attendance_rules_save') }}" class="formrow">{{ csrf() }}
+  <div><label>Check-in opens</label><input type="time" name="start" value="{{ rules.start }}"></div>
+  <div><label>Check-in closes</label><input type="time" name="end" value="{{ rules.end }}"></div>
+  <div><label>Evening opens (blank = no evening)</label><input type="time" name="start2" value="{{ rules.start2 }}"></div>
+  <div><label>Evening closes</label><input type="time" name="end2" value="{{ rules.end2 }}"></div>
+  <div style="flex:0"><button class="btn">Save</button></div></form>
+<p class="hint">Managers: today only, once per person, by live photo, inside these hours. Only you can change, replace or delete attendance on any day.</p>
+<hr style="border:0;border-top:1px solid var(--line-2);margin:14px 0">
+<form method="post" action="{{ url_for('staff.attendance_backup_save') }}" class="formrow">{{ csrf() }}
+  <div><label>Backup person (always allowed, for sudden absences)</label><select name="user_id"><option value="">— nobody —</option>
+    {% for u in users %}<option value="{{ u.id }}" {% if u.id == backup_id %}selected{% endif %}>{{ u.full_name or u.username }} ({{ ROLE_LABEL[u.role] }})</option>{% endfor %}</select></div>
+  <div style="flex:0"><button class="btn secondary">Save backup</button></div></form>
+<p class="hint">Planned leave? Give a stand-in for those dates in <a href="{{ url_for('admin.access') }}">Settings → Temporary Access → “Take attendance (stand-in)”</a> — future dates allowed; it ends by itself.</p>
+{% if standins %}<p style="margin-top:8px"><b>Stand-ins:</b> {% for x in standins %}{{ x.full_name or x.username }} ({{ x.date_from.strftime('%d %b') }}–{{ x.date_to.strftime('%d %b') }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}</div></details></section>
+{% endif %}
+
+{% if can('staff_manage') %}
+<section class="section"><header><h2>Staff list</h2></header><div class="body flush tablewrap"><table><thead><tr><th>Code</th><th>Name</th><th>Role</th><th>Shift</th><th>Phone</th><th class="num">Monthly salary</th><th></th></tr></thead><tbody>
+{% for s in staff %}<tr class="{% if not s.active %}void{% endif %}"><td>{{ s.emp_code }}</td><td>{{ s.name }}</td><td>{{ s.designation }}</td><td>{{ s.shift }}</td><td>{{ s.phone }}</td><td class="num">{{ s.monthly_salary|inr }}</td>
+<td class="actions keep"><details class="void"><summary style="color:inherit">Edit</summary><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<input type="hidden" name="id" value="{{ s.id }}">
+<label>Code</label><input name="emp_code" value="{{ s.emp_code }}"><label>Name</label><input name="name" value="{{ s.name }}"><label>Role</label><input name="designation" value="{{ s.designation }}">
+<label>Department</label><input name="department" value="{{ s.department }}"><label>Shift</label><input name="shift" value="{{ s.shift }}">
+<label>Phone</label><input name="phone" value="{{ s.phone }}"><label>Monthly salary</label><input name="monthly_salary" value="{{ s.monthly_salary }}">
+<label>Joined</label><input type="date" name="joined_on" value="{{ s.joined_on.isoformat() if s.joined_on else '' }}"><label>Bank account</label><input name="bank_account" value="{{ s.bank_account }}">
+<label>Status</label><select name="active"><option value="1">Working</option><option value="0" {% if not s.active %}selected{% endif %}>Left</option></select><button class="btn small">Save</button></form></details></td></tr>{% endfor %}</tbody></table></div>
+<details class="add" id="addstaff" {% if not staff %}open{% endif %}><summary>Add employee</summary><div class="body"><form method="post" action="{{ url_for('staff.save') }}">{{ hidden() }}<div class="fields">
+<div><label>Employee code</label><input name="emp_code" value="{{ next_code }}" required></div><div><label>Name</label><input name="name" required></div>
+<div><label>Role</label><input name="designation" placeholder="Pump attendant"></div><div><label>Phone</label><input name="phone" inputmode="tel"></div>
+<div><label>Monthly salary (₹)</label><input name="monthly_salary" inputmode="decimal"></div><div><label>Joined</label><input type="date" name="joined_on"></div>
+<div><label>Department</label><input name="department"></div><div><label>Shift</label><select name="shift"><option value="">—</option><option>Day</option><option>Night</option><option>Rotating</option></select></div>
+<div><label>Bank account</label><input name="bank_account"></div></div><p style="margin-top:10px"><button class="btn">Add staff</button></p></form></div></details></section>
+{% endif %}
+<script src="{{ url_for('static', filename='js/livecam.js') }}?v={{ VERSION }}" defer></script>
+<script src="{{ url_for('static', filename='js/attendance.js') }}?v={{ VERSION }}" defer></script>
+{% endblock %}

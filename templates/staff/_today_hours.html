@@ -1,0 +1,21 @@
+{# Owner: change today's check-in hours fast. Include with next=<url>. #}
+<details class="section" style="margin-bottom:12px" {% if rules.today_changed %}open{% endif %}><summary style="padding:12px 16px;cursor:pointer;font-weight:700">⏱ Check-in today: {{ rules.label }}</summary>
+<div class="body stack">
+  <div class="btnrow">
+    {% for act, lab in (('open30','Open now 30 min'),('open60','Open now 1 hour')) %}
+    <form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline">{{ hidden() }}<input type="hidden" name="next" value="{{ next }}">
+      <button class="btn small" name="action" value="{{ act }}">{{ lab }}</button></form>{% endfor %}
+    <form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline-flex;gap:6px;align-items:center">{{ hidden() }}<input type="hidden" name="next" value="{{ next }}">
+      <input type="time" name="until" required style="max-width:130px"><button class="btn small secondary" name="action" value="until">Open until</button></form>
+    {% if rules.today_changed %}<form method="post" action="{{ url_for('staff.attendance_today') }}" style="display:inline">{{ hidden() }}<input type="hidden" name="next" value="{{ next }}">
+      <button class="btn small secondary" name="action" value="normal">Back to normal</button></form>{% endif %}
+  </div>
+  <form method="post" action="{{ url_for('staff.attendance_today') }}" class="fields">{{ hidden() }}<input type="hidden" name="next" value="{{ next }}">
+    <div><label>Today morning from</label><input type="time" name="t_start" value="{{ rules.windows[0][0] if rules.windows else '' }}"></div>
+    <div><label>to</label><input type="time" name="t_end" value="{{ rules.windows[0][1] if rules.windows else '' }}"></div>
+    <div><label>Today evening from</label><input type="time" name="t_start2" value="{{ rules.windows[1][0] if rules.windows|length > 1 else '' }}"></div>
+    <div><label>to</label><input type="time" name="t_end2" value="{{ rules.windows[1][1] if rules.windows|length > 1 else '' }}"></div>
+    <div style="align-self:end"><button class="btn small" name="action" value="custom">Set today’s hours</button></div>
+  </form>
+  <p class="hint">Only for today — tomorrow the normal hours ({{ rules.start }}–{{ rules.end }}{% if rules.start2 %} and {{ rules.start2 }}–{{ rules.end2 }}{% endif %}) come back by themselves.</p>
+</div></details>

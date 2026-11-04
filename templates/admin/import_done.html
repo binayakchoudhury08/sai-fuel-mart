@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Import finished{% endblock %}
+{% block content %}
+<div class="pagehead"><div class="grow"><h1>Import finished</h1><p>{% if report.seconds %}Finished in {{ report.seconds }} seconds. {% endif %}Check the balance comparison below. Differences come from bugs in the old app’s running totals.</p></div></div>
+<div class="stats">{% for k, v in report.counts.items() %}<div><b>{{ v }}</b><span>{{ k }}</span></div>{% endfor %}</div>
+<section class="section"><header><h2>Transporter balances: old app vs rebuilt from entries</h2></header><div class="body flush tablewrap"><table>
+<thead><tr><th>Party</th><th class="num">Old app showed</th><th class="num">Old entries add up to</th><th class="num">Difference (added as adjustment)</th></tr></thead><tbody>
+{% for b in report.balances %}<tr><td>{{ b.name }}</td><td class="num">{{ b.old|inr }}</td><td class="num">{{ b.computed|inr }}</td><td class="num {% if b.diff %}neg{% endif %}">{{ b.diff|inr if b.diff else 'matches' }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% if report.issues %}<section class="section"><header><h2>Rows that needed attention ({{ report.issues|length }})</h2></header><div class="body"><ul>{% for i in report.issues[:300] %}<li>{{ i }}</li>{% endfor %}</ul></div></section>{% endif %}
+<p><a class="btn" href="{{ url_for('admin.settings') }}">Continue to settings</a></p>
+{% endblock %}

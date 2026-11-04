@@ -1,0 +1,4 @@
+{# page header with a coloured module icon: head(icon, colour var, title, subtitle) #}
+{% macro head(icon, color, title, sub='') -%}
+<div class="grow"><span class="modicon" style="--mc:var({{ color }})"><svg><use href="#i-{{ icon }}"/></svg></span><div><h1>{{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div></div>
+{%- endmacro %}

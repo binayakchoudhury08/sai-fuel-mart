@@ -1,0 +1,138 @@
+{% extends "base.html" %}{% from "_macros.html" import hidden, csrf with context %}{% block title %}Check scanned closing{% endblock %}
+{% block content %}
+{% set KIND = [('credit','Credit given (transporter)'),('payment','Payment received'),('digital','Digital collection'),('sai','Sai Hitech slip (Babu)'),('expense','Expense'),('misc','Misc expense (advance)'),('skip','Skip — not saved')] %}
+<form method="post" action="{{ url_for('day.closing_scan_save', d=d.isoformat(), sid=s.id) }}" class="scanwrap" style="padding:0">{{ hidden() }}
+<aside class="scanphoto">{% if s.photo_path %}<a href="{{ url_for('day.closing_scan_photo', d=d.isoformat(), sid=s.id) }}" target="_blank" rel="noopener"><img src="{{ url_for('day.closing_scan_photo', d=d.isoformat(), sid=s.id) }}" alt="Closing page"></a><small class="muted">Tap to zoom</small>{% endif %}</aside>
+<div>
+<section class="section"><header><h2>Closing page — {{ d|d }}</h2>
+  <span class="badge {{ 'locked' if not a.flags and not a.notdone else 'stop' }}">{{ 'All lines add up' if not a.flags and not a.notdone else (a.flags|length + a.notdone|length) ~ ' to check' }}</span></header>
+  {% if already %}<div class="notice" style="margin:12px 18px">A scanned page was already saved for this date. Saving again adds payments, expenses and lube again — only the owner can do it.</div>{% endif %}
+  {% if a.flags or a.notdone %}<div class="body"><ul class="checklist">
+    {% for f in a.notdone %}<li class="bad">⛔ {{ f }}</li>{% endfor %}{% for f in a.flags %}<li>⚠ {{ f }}</li>{% endfor %}</ul></div>{% endif %}
+</section>
+
+{% for code in ('MS','HSD','CNG') %}{% set fu = a.fuels[code] %}{% if fu.rows or code != 'CNG' %}
+<section class="section"><header><h2>{{ code }} meter readings</h2><small>movement {{ fu.movement }}{% if code != 'CNG' %} − testing <input name="test_{{ code }}" data-test="{{ code }}" value="{{ fu.testing }}" style="width:70px;display:inline-block">{% endif %} · rate ₹{{ a.rates.get(code, '—') }}</small></header>
+<div class="body flush tablewrap"><table class="mini cs-cards cs-meter"><thead><tr><th>Nozzle</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Litres</th><th>Check</th></tr></thead><tbody>
+{% for r in fu.rows %}<tr class="{{ 'warnrow' if r.flags }}"><td class="cs-head"><b>{{ r.nozzle.name if r.nozzle else 'column ' ~ r.col }}</b></td>
+  {% if r.nozzle %}<td class="num" data-label="Opening"><input name="open_{{ r.nozzle.id }}" data-open="{{ code }}" value="{{ r.opening if r.opening is not none else '' }}" inputmode="decimal" class="cs-num"></td>
+  <td class="num" data-label="Closing"><input name="close_{{ r.nozzle.id }}" data-close="{{ code }}" value="{{ r.closing if r.closing is not none else '' }}" inputmode="decimal" class="cs-num"></td>{% else %}<td></td><td></td>{% endif %}
+  <td class="num" data-label="Litres">{{ (r.closing - r.opening) if r.closing is not none and r.opening is not none else '—' }}</td>
+  <td data-label="Check">{% if r.flags %}<small class="neg">{{ r.flags|join(' · ') }}</small>{% else %}<span class="match ok">✓</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}{% endfor %}
+
+{% if not a.fuels.CNG.rows %}<section class="section"><header><h2>CNG</h2></header><div class="body fields">
+  <div><label>Opening reading (type it)</label><input name="cng_open" inputmode="decimal" {% if a.cng.nozzle and a.cng.qty %}required{% endif %}></div>
+  <div><label>Quantity (from page)</label><input name="cng_qty" value="{{ a.cng.qty if a.cng.qty is not none else '' }}"></div>
+  <div><label>Rate · amount</label><input value="{{ a.cng.rate or '' }} · {{ a.cng.amount or '' }}" readonly></div>
+  {% if not a.cng.nozzle %}<p class="hint">No CNG nozzle in the system — CNG is not saved.</p>{% endif %}</div></section>{% endif %}
+
+{% if a.lube %}<section class="section"><header><h2>Lube sales</h2></header><div class="body flush tablewrap"><table class="mini cs-cards cs-lube"><thead><tr><th></th><th>On the page</th><th>Product</th><th class="num">Qty</th><th>Check</th></tr></thead><tbody>
+{% for l in a.lube %}<tr class="{{ 'warnrow' if l.flags }}"><td class="cs-tick"><input type="checkbox" name="lube_use_{{ l.i }}" value="1" checked></td><td class="cs-head"><b>{{ l.text }}</b></td>
+<td data-label="Product"><select name="lube_prod_{{ l.i }}"><option value="">Choose…</option>{% for p in products %}<option value="{{ p.id }}" data-rate="{{ p.sale_rate or 0 }}" {% if l.product and l.product.id == p.id %}selected{% endif %}>{{ p.name }} (₹{{ p.sale_rate }})</option>{% endfor %}</select></td>
+<td class="num" data-label="Qty"><input name="lube_qty_{{ l.i }}" value="{{ l.qty if l.qty is not none else '' }}" inputmode="decimal" class="cs-num"></td>
+<td data-label="Check">{% if l.flags %}<small class="neg">{{ l.flags|join(' · ') }}</small>{% else %}<span class="match ok">✓</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>{% endif %}
+
+<section class="section"><header><h2>Payments, digital, credit, expenses</h2><small>collection {{ a.collection|rs if a.collection is not none else '—' }}</small></header>
+<div class="body flush tablewrap"><table class="mini cs-cards cs-lines"><thead><tr><th>On the page</th><th class="num">Amount</th><th>Goes to</th><th>Which</th></tr></thead><tbody>
+{% for l in a.lines %}{% if l.kind == 'total' %}<tr class="cs-total"><td colspan="4" class="muted">= running total {{ l.amount|rs if l.amount is not none else '?' }} {% if l.ok %}✓{% else %}<b class="neg">✗ should be {{ l.running|rs }}</b>{% endif %}</td></tr>
+{% else %}<tr class="{{ 'warnrow' if l.kind == 'unknown' }}"><td class="cs-head"><span class="cs-sign {{ 'plus' if l.sign == '+' else 'minus' }}">{{ l.sign }}</span> <b>{{ l.name }}</b>
+  <span class="cs-amt" data-amt-for="amt_{{ l.i }}">{{ l.amount|rs }}</span>{% if l.note %}<br><small class="muted">{{ l.note }}</small>{% endif %}</td>
+<td class="num" data-label="Amount"><input name="amt_{{ l.i }}" value="{{ l.amount }}" inputmode="decimal" class="cs-num"></td>
+<td data-label="Goes to"><select name="kind_{{ l.i }}">{% for k, lab in KIND %}<option value="{{ k }}" {% if k == l.kind or (l.kind == 'unknown' and k == 'skip') %}selected{% endif %}>{{ lab }}</option>{% endfor %}</select></td>
+<td data-label="Which"><select name="target_{{ l.i }}"><option value="">—</option>
+  <optgroup label="Transporters">{% for p in parties %}<option value="{{ p.id }}" {% if l.kind in ('credit','payment','sai') and l.target_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</optgroup>
+  <optgroup label="Digital">{% for m in modes %}<option value="{{ m.id }}" {% if l.kind == 'digital' and l.target_id == m.id %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</optgroup>
+  <optgroup label="Expense">{% for c in categories %}<option value="{{ c }}" {% if l.kind in ('expense','misc') and l.target == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</optgroup>
+</select></td></tr>{% endif %}{% endfor %}
+</tbody><tfoot><tr class="cs-cash"><td class="cs-head"><b>Cash on the page</b> <span class="cs-amt" data-amt-for="page_cash"></span></td>
+<td class="num" data-label="Amount"><input name="page_cash" value="{{ a.final_cash if a.final_cash is not none else a.page_cash }}" inputmode="decimal" class="cs-num"></td>
+<td colspan="2" class="muted">page adds up to {{ a.page_cash|rs }}</td></tr></tfoot></table></div></section>
+
+{% if a.dips %}<section class="section"><header><h2>Dip stock</h2></header><div class="body fields">
+{% for x in a.dips %}<div><label>{{ x.fuel }} {{ ('· dip ' ~ x.dip) if x.dip else '' }} → litres</label>{% if x.tank %}<input name="dip_{{ x.tank.id }}" value="{{ x.litres if x.litres is not none else '' }}">{% else %}<input value="no {{ x.fuel }} tank" readonly>{% endif %}</div>{% endfor %}
+</div></section>{% endif %}
+
+<section class="section savebar cs-save"><div class="body btnrow"><div style="flex:1" id="live">…</div>
+<button class="btn go" style="min-width:200px" title="Fills the normal Daily Closing — every box stays editable there; the day is final only when you Submit">Fill Daily Closing →<br><small style="font-weight:400">everything stays editable</small></button></div></section>
+</div></form>
+<form method="post" action="{{ url_for('day.closing_scan_discard', d=d.isoformat(), sid=s.id) }}" style="margin-top:8px">{{ csrf() }}<button class="btn small secondary">Discard this scan</button></form>
+<style>
+  .cs-num{max-width:140px;font-variant-numeric:tabular-nums}
+  .cs-amt{display:none}
+  .cs-sign{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-weight:800;font-size:.8rem}
+  .cs-sign.plus{background:#E9F7EF;color:#14804A}.cs-sign.minus{background:#FDECEC;color:#C0262D}
+  @media (max-width: 760px){
+    .scanwrap{display:block!important}
+    .scanphoto{max-height:200px;overflow:hidden;border-radius:12px;margin-bottom:10px}
+    .scanphoto img{width:100%;object-fit:cover;object-position:top}
+    table.cs-cards, table.cs-cards tbody, table.cs-cards tfoot, table.cs-cards tr, table.cs-cards td{display:block;width:100%}
+    table.cs-cards thead{display:none}
+    table.cs-cards tr{border-bottom:1px solid var(--line);padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+    table.cs-cards tbody tr:nth-child(even) td, table.cs-cards tbody tr:hover td{background:transparent}
+    table.cs-cards td{padding:0!important;border:0!important;text-align:left!important;white-space:normal}
+    table.cs-cards td.cs-head{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:1rem}
+    table.cs-cards td[data-label]::before{content:attr(data-label);display:block;font-size:.72rem;color:var(--muted);font-weight:600;margin-bottom:3px}
+    table.cs-cards input, table.cs-cards select{width:100%;max-width:none;min-height:46px;font-size:16px}
+    table.cs-cards .cs-num{font-size:17px;font-weight:600}
+    .cs-amt{display:inline;margin-left:auto;font:700 1.15rem var(--cond);color:var(--ink);white-space:nowrap}
+    table.cs-lines tr > td[data-label="Amount"]{grid-column:1/-1}
+    table.cs-lines tr > td[data-label="Goes to"], table.cs-lines tr > td[data-label="Which"]{grid-column:1/-1}
+    table.cs-cards tr.cs-total{display:block;padding:6px 14px;background:#F7F9FC}
+    table.cs-cards tr.cs-total td{font-size:.85rem}
+    table.cs-cards tr.cs-cash{background:#F3FBF6}
+    table.cs-cards tr.cs-cash td[colspan]{grid-column:1/-1}
+    table.cs-meter tr > td[data-label="Litres"], table.cs-meter tr > td[data-label="Check"]{font-size:.9rem}
+    table.cs-lube tr{grid-template-columns:auto 1fr 1fr}
+    table.cs-lube td.cs-tick{grid-row:1;grid-column:1;width:auto}
+    table.cs-lube td.cs-head{grid-column:2/-1;grid-row:1}
+    table.cs-lube td[data-label="Product"]{grid-column:1/3}
+    table.cs-lube td[data-label="Check"]{grid-column:1/-1}
+    .section header small input{width:64px!important}
+    .savebar.cs-save > .body{display:flex!important;flex-direction:column;align-items:stretch;gap:8px;padding:10px 12px}
+    .savebar.cs-save #live{font-size:.82rem;line-height:1.35}
+    .savebar.cs-save .btn{width:100%;min-height:48px!important}
+    .savebar.cs-save .btn br, .savebar.cs-save .btn small{display:none}
+  }
+</style>
+<script>
+(function(){
+  /* Big Indian-format amounts on phones, updated as you type */
+  function inr(v){ v = parseFloat(String(v || "").replace(/,/g, "")); return isNaN(v) ? "" : "₹" + Math.round(v).toLocaleString("en-IN"); }
+  document.querySelectorAll("[data-amt-for]").forEach(function(el){
+    var inp = document.querySelector('[name="' + el.dataset.amtFor + '"]'); if (!inp) return;
+    var upd = function(){ el.textContent = inr(inp.value); }; inp.addEventListener("input", upd); upd();
+  });
+})();
+(function(){
+  /* Live check, like manual Daily Closing: system's expected cash from the numbers on this screen vs the page's cash. */
+  var R = {{ a.rates|tojson }}, f = document.querySelector("form.scanwrap");
+  function n(v){ v = parseFloat(String(v || "").replace(/,/g, "")); return isNaN(v) ? 0 : v; }
+  function rs(v){ return "₹" + Math.round(v).toLocaleString("en-IN"); }
+  function calc(){
+    var sale = 0;
+    ["MS", "HSD", "CNG"].forEach(function(code){
+      var op = f.querySelectorAll('[data-open="' + code + '"]'), cl = f.querySelectorAll('[data-close="' + code + '"]'), mv = 0;
+      for (var i = 0; i < op.length; i++) mv += n(cl[i].value) - n(op[i].value);
+      var t = f.querySelector('[data-test="' + code + '"]'); mv -= t ? n(t.value) : 0;
+      if (code === "CNG" && !op.length) { var q = f.querySelector('[name=cng_qty]'); mv = q ? n(q.value) : 0; }
+      sale += mv * n(R[code]);
+    });
+    f.querySelectorAll('[name^=lube_use_]').forEach(function(c){
+      if (!c.checked) return; var i = c.name.split("_").pop(), sel = f.querySelector('[name=lube_prod_' + i + ']');
+      var o = sel && sel.selectedOptions[0]; sale += n(f.querySelector('[name=lube_qty_' + i + ']').value) * n(o && o.dataset.rate);
+    });
+    var cash = sale;
+    f.querySelectorAll('[name^=kind_]').forEach(function(k){
+      var i = k.name.split("_").pop(), amt = n(f.querySelector('[name=amt_' + i + ']').value);
+      if (k.value === "payment") cash += amt; else if (k.value !== "skip" && k.value !== "") cash -= amt;
+    });
+    var page = n(f.querySelector('[name=page_cash]').value), short = cash - page, el = document.getElementById("live");
+    var verdict = Math.abs(short) < 1 ? "<b style='color:#14804A'>matches ✓</b>" : short > 0 ? (short <= 10 ? "<b style='color:#14804A'>short " + rs(short) + " ✓ (within ₹10)</b>" : "<b style='color:#C0262D'>SHORT " + rs(short) + " ✗</b>") : "<b style='color:#B45309'>excess " + rs(-short) + "</b>";
+    el.innerHTML = "Sales " + rs(sale) + " · expected cash " + rs(cash) + " · page cash " + rs(page) + " → " + verdict;
+  }
+  f.addEventListener("input", calc); f.addEventListener("change", calc); calc();
+})();
+</script>
+{% endblock %}
