@@ -809,7 +809,7 @@ def handle(cur, phone, user, msg):
         return "✅ Connected to the Sai Fuel Mart assistant.\n\n" + MENU
     if (user.get("role") or "") == "owner" and state.get("mode") != "adj":
         from . import wa_tally
-        nl = wa_tally.normalize(cur, low)
+        nl = wa_tally.normalize(cur, low, phone)
         if nl and nl != low:
             low = text = nl                                   # understood as one workbook command
     if low in ("yes", "y", "ok", "haan", "ha", "confirm") and state.get("mode") != "confirm":
@@ -823,7 +823,10 @@ def handle(cur, phone, user, msg):
         return menu_reply()
     if cmd in ("more",):
         return menu_reply(more=True)
-    if (user.get("role") or "") == "owner" and state.get("mode") == "adj" and not re.match(r"^(excel|cancel|menu|hi)\b", low):
+    if state.get("mode") == "adj" and re.match(r"^(xml|excel|cash|daily|check|tally|upload|change|report|tank|stock|pending|staff|attendance|bills?|menu|hi|hello|cancel|stop|profit|alerts?|rates?|closing)\b", low):
+        save_state(cur, phone, {}, touch=True)              # a new command ends an unfinished adjustment
+        state = {}
+    if (user.get("role") or "") == "owner" and state.get("mode") == "adj":
         from . import wa_tally
         try:
             return wa_tally.adjust(cur, phone, state, low, text)

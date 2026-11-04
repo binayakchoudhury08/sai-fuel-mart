@@ -20,12 +20,19 @@
    (missing ledger / item / meter, per-date reconciliation) — any error blocks the XML and is listed.
 5. **⬇ Download current workbook** any time. **Versions**: every change is kept; **Restore** any earlier one.
 
+## Every day on WhatsApp (3 steps)
+1. **excel add 2/11** → YES → the day is adjusted automatically (your rule) and the photo of all sheets comes.
+2. Check the ledgers. To correct, write it plainly: **change hsd sales from dtplus to cash** · **change ms sales
+   phonepe to paytm** · **change receipt dtplus to cash** → YES → a new photo.
+3. All correct → **upload to tally** (or **xml 2/11** for the file).
+
 ## Stage 2 — the same on WhatsApp (owner only)
 
 | Send | You get |
 |---|---|
 | **excel 1/11** | a table photo: every sheet of that date + daily check |
 | **excel add 2/11** | adds the day from Daily Closing (asks YES) |
+| **excel hsd 1/11 phone pe 1500 L** | litres instead of amount (amount = litres × rate) |
 | **excel adjust 1/11** | tap-menus: sheet → name (your most-used names, or 🔎 search your LEDGER / ITEM MASTER) → type amount → YES |
 | **excel hsd 1/11 phone pe 62084** · **excel ms 1/11 phone pe 188153** · **excel cng 1/11 cash 11634** · **excel payment 1/11 misc exp 620** · **excel receipt 1/11 svt logistics 50000** | changes that row, or adds it (asks YES) |
 | **daily check 1/11** | the check table photo, with the cash counted in Daily Closing |

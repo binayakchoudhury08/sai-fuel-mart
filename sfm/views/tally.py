@@ -132,7 +132,7 @@ def edit():
     sheet = request.form.get("sheet")
     if sheet not in SHEETS + [METER]:
         raise UserError("Unknown sheet.")
-    f = {k: (request.form.get(k) or "").strip() for k in ("party", "item", "to", "amount", "qty", "rate", "meter", "closing")}
+    f = {k: (request.form.get(k) or "").strip() for k in ("party", "item", "to", "amount", "qty", "orig_qty", "rate", "meter", "closing")}
     f["d"] = d
     with db.tx() as cur:
         claim_form_token(cur)

@@ -74,7 +74,7 @@ post("/tally/set", {"d": D.isoformat(), "sheet": "MS SALES", "name": "Phone Pe",
 post("/tally/set", {"d": D.isoformat(), "sheet": "MS SALES", "name": "Phone Pe", "amount": "10480"})
 c.execute("SELECT data FROM pump.tally_books ORDER BY id DESC LIMIT 1"); wb = openpyxl.load_workbook(io.BytesIO(bytes(c.fetchone()[0])), data_only=True)
 ms = wb["MS SALES"]; rows = [r_ for r_ in range(2, ms.max_row + 1) if ms.cell(r_, 2).value not in (None, "") and ms.cell(r_, 3).value == "Phone Pe" and ms.cell(r_, 6).value in (10000, 10480)]
-check(len(rows) == 1 and ms.cell(rows[0], 6).value == 10480 and ms.cell(rows[0], 8).value == 10480, f"MS SALES Phone Pe: added, then changed to 10,480 (one row, day total 10,480)")
+check(len(rows) == 1 and ms.cell(rows[0], 6).value == 10480, f"MS SALES Phone Pe: added, then changed to 10,480 (one row)")
 print("Daily check + convert")
 h = o.get(f"/tally?d={D}").get_data(as_text=True)
 cash = re.search(r"Final cash balance</b></td><td class=\"num\"><b>([^<]+)", h)

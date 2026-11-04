@@ -25,7 +25,11 @@
 <select name="tally" required><option value="">Choose…</option>{% for c in choices[k] %}<option {% if c == guess %}selected{% endif %}>{{ c }}</option>{% endfor %}</select><button class="btn small">Save</button></form></td></tr>{% endfor %}
 </tbody></table></div></section>{% endif %}
 
-{% if check %}<section class="section"><header><h2>Daily check — {{ d.strftime('%d/%m/%Y') }}</h2></header><div class="body flush tablewrap"><table class="mini">
+{% if check %}<section class="section"><header><h2>Meter vs sales — {{ d.strftime('%d/%m/%Y') }}</h2><small>METER READING net / amount against the HSD, MS, CNG SALES sheets</small></header>
+<div class="body flush tablewrap"><table class="mini"><thead><tr><th></th><th class="num">Meter</th><th class="num">Sales sheet</th><th class="num">Difference</th><th></th></tr></thead><tbody>
+{% for label, m, s_, diff, ok in check.match %}<tr class="{{ '' if ok else 'warnrow' }}"><td><b>{{ label }}</b></td><td class="num">{{ m }}</td><td class="num">{{ s_ }}</td><td class="num">{{ diff }}</td><td>{% if ok %}<span class="match ok">✓</span>{% else %}<span class="match bad">✗</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No meter or sales rows on this date.</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="section"><header><h2>Daily check — {{ d.strftime('%d/%m/%Y') }}</h2></header><div class="body flush tablewrap"><table class="mini">
 <tbody>{% for k in ('HSD qty','HSD amount','MS qty','MS amount','CNG qty','CNG amount','Lube amount','Cash sales','Cash receipt','Cash payment') %}<tr><td>{{ k }}</td><td class="num">{{ check[k] }}</td></tr>{% endfor %}
 {% for k, v in check.digital.items() %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}
 </tbody><tfoot><tr><td><b>Final cash balance</b></td><td class="num"><b>{{ check['Final cash balance']|rs }}</b></td></tr></tfoot></table></div></section>{% endif %}
@@ -40,7 +44,9 @@
 <input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ sh }}"><input type="hidden" name="row" value="{{ r.row }}"><small class="muted">#{{ r.row }}</small>
 {% if sh in pay %}<input name="party" value="{{ r['from'] }}" list="ledgers" style="max-width:180px"><input name="to" value="{{ r.to }}" list="ledgers" style="max-width:200px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px">
 {% elif sh == 'LUBE SALES' %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:120px"><input name="item" value="{{ r.item }}" list="items" style="max-width:200px"><input name="qty" value="{{ r.qty }}" inputmode="decimal" style="max-width:80px"><input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px"><span class="muted">= {{ r.amount }}</span>
-{% else %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:220px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px"><input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px" title="rate"><span class="muted">{{ r.qty }} L</span>{% endif %}
+{% else %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:220px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px" title="amount ₹">
+<input name="qty" value="{{ r.qty }}" inputmode="decimal" style="max-width:100px" title="litres"><input type="hidden" name="orig_qty" value="{{ r.qty }}"><span class="muted">L ×</span>
+<input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px" title="rate">{% endif %}
 <button class="btn small secondary">Save</button></form></td></tr>
 {% else %}<tr><td colspan="6" class="empty">No rows on this date.</td></tr>{% endfor %}</tbody></table>
 <form method="post" action="{{ url_for('tally.set_row') }}" class="body btnrow" style="flex-wrap:wrap">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ sh }}"><b>Add row</b>

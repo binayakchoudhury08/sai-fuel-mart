@@ -108,6 +108,10 @@ def day_rows(cur, d, adder):
                    WHERE t.business_date=%s AND t.kind='payment' AND NOT t.voided ORDER BY t.id""", (d,))
     for r in cur.fetchall():
         rows.append((RECEIPT, tn("mode", r["pay_mode"]), tn("party", r["name"]), Decimal(r["credit"])))
+    cur.execute("""SELECT m.name FROM day_collections c JOIN collection_modes m ON m.id=c.mode_id
+                   WHERE c.business_date=%s AND c.amount > 0""", (d,))
+    for r in cur.fetchall():                               # the apps need a Tally name too (asked once)
+        tn("mode", r["name"])
     seen, uniq = set(), []
     for m in missing:
         if m not in seen:
@@ -131,9 +135,23 @@ def add_day(cur, data, d):
         raise UserError("Give these a Tally name first (Settings → Tally names): " + ", ".join(f"{k}: {s}" for k, s in missing))
     if not rows:
         raise UserError(f"No Daily Closing data on {d:%d/%m/%Y}.")
+    for row in [r for r in rows if r[0] == METER]:
+        a.meters(d, row[1])
+    meter_amt = {}                                          # the fuel totals = the meter amounts just written
+    for (sh, ref), val in a.cache.items():
+        if sh == METER and ref.startswith("D") and isinstance(val, str):
+            r_ = ref[1:]
+            nm = val.upper()
+            f_ = "MS" if "PETROL" in nm else ("HSD" if "DIESEL" in nm else ("CNG" if "CNG" in nm else None))
+            amt = a.cache.get((METER, f"L{r_}"))
+            if f_ and amt not in (None, ""):
+                meter_amt[f_] = meter_amt.get(f_, Decimal(0)) + Decimal(str(amt))
+    from .services import rates_for
+    names_ = name_map(cur)
+    rows = rows + auto_split(cur, d, rows, lambda k, s_: names_.get(k, {}).get(s_, s_), rates_for(cur, d), meter_amt)
     for row in rows:
         if row[0] == METER:
-            a.meters(d, row[1])
+            continue
         elif row[0] in SALES:
             a.sale(row[0], d, row[1], row[2], row[3])
         elif row[0] == LUBE:
@@ -187,10 +205,25 @@ def daily_check(view):
         if p.lower() != "cash":
             digital[p] = digital.get(p, Decimal(0)) + num(r["amount"])
     t["digital"] = digital
+    meter = {}
+    for r in view[METER]:
+        n = (r["meter"] or "").upper()
+        fuel = "MS" if "PETROL" in n else ("HSD" if "DIESEL" in n else ("CNG" if "CNG" in n else None))
+        if fuel:
+            q, a_ = meter.get(fuel, (Decimal(0), Decimal(0)))
+            meter[fuel] = (q + num(r["net"]), a_ + num(r["amount"]))
+    t["match"] = []
+    for fuel in ("HSD", "MS", "CNG"):
+        mq, ma = meter.get(fuel, (Decimal(0), Decimal(0)))
+        sq, sa = t[f"{fuel} qty"], t[f"{fuel} amount"]
+        if not (mq or ma or sq or sa):
+            continue
+        t["match"].append((f"{fuel} litres", mq, sq, sq - mq, abs(sq - mq) <= Decimal("1")))
+        t["match"].append((f"{fuel} amount", ma, sa, sa - ma, abs(sa - ma) <= Decimal("10")))
     return t
 
 
-def set_amount(data, sheet, d, name, amount, rate=None, from_ledger=None):
+def set_amount(data, sheet, d, name, amount, rate=None, from_ledger=None, litres=False):
     """WhatsApp / website: '<sheet> <date> <party> <amount>' → change that row, or add it after the day's rows."""
     a = Adder(data)
     v = a.v[sheet]
@@ -205,11 +238,18 @@ def set_amount(data, sheet, d, name, amount, rate=None, from_ledger=None):
     if hit:
         if sheet == LUBE:
             a.change(sheet, hit, qty=amount, rate=rate)
+        elif sheet in (PAYMENT, RECEIPT):
+            a.change(sheet, hit, amount=amount, party=from_ledger)        # also the "received in / paid from" ledger
+        elif litres:
+            a.change(sheet, hit, qty=amount, rate=rate)
         else:
-            a.change(sheet, hit, amount=amount)
+            a.change(sheet, hit, amount=amount, rate=rate)
         what = f"changed row {hit}"
     else:
         if fuel:
+            if litres:
+                rt = Decimal(str(rate if rate is not None else a._val(sheet, f"E{data_end_rows(a.v[sheet])}")))
+                amount = (Decimal(str(amount)) * rt).quantize(Decimal("1"))
             hit = a.sale(fuel, d, name, amount, rate)
         elif sheet in (PAYMENT, RECEIPT):
             hit = a.voucher(sheet, d, from_ledger or "Cash", name, amount)
@@ -261,5 +301,78 @@ def edit_row(data, sheet, row, fields):
         for k in ("amount", "qty", "rate"):
             if k in clean:
                 clean[k] = Decimal(str(clean[k]))
+        if sheet in SALES.values() and "qty" in clean:
+            orig = fields.get("orig_qty")
+            if orig not in (None, "") and Decimal(str(orig)) == clean["qty"]:
+                clean.pop("qty")                                # litres not changed → the amount decides
+            else:
+                clean.pop("amount", None)                       # litres changed → amount = litres × rate
         a.change(sheet, int(row), **clean)
     return a.save()
+
+
+def _app(led):
+    k = norm(led)
+    return "dtplus" if "dtplus" in k or "hpcl" in k else ("paytm" if "paytm" in k else ("phonepe" if "phonepe" in k else None))
+
+
+APPS_FOR_RECEIPTS = ("dtplus", "paytm", "phonepe")          # payments received are paid from these first, in this order
+APPS_FOR_FUEL = ("dtplus", "phonepe", "paytm")              # then the apps fill what cash did not cover: CNG, MS, HSD
+
+
+def _app_rank(led, order):
+    k = norm(led)
+    return next((i for i, key in enumerate(order) if key in k), 9)
+
+
+def auto_split(cur, d, rows, tn, rates, fuel=None):
+    """The owner's adjustment rule (his words, 04 Nov):
+    1. Payments received are paid from the app money first — DTPLUS, then Paytm, then PhonePe; the rest is cash.
+    2. Cash (before expenses) → lube, then CNG, then MS (then HSD only if still left).
+    3. The apps (DTPLUS, PhonePe, Paytm) fill what cash did not cover: CNG, then MS, then HSD.
+    Credit parties are HSD. Rebuilds the RECEIPT rows in `rows` and returns the new sales rows."""
+    fuel = {f: (fuel or {}).get(f, Decimal(0)).quantize(Decimal("1")) for f in ("HSD", "MS", "CNG")}
+    if not any(fuel.values()):
+        return []
+    credit = sum((r[2] for r in rows if r[0] == "HSD"), Decimal(0))
+    cur.execute("""SELECT m.name, c.amount FROM day_collections c JOIN collection_modes m ON m.id=c.mode_id
+                   WHERE c.business_date=%s AND c.amount > 0 ORDER BY m.id""", (d,))
+    apps = {}
+    for r in cur.fetchall():
+        led = tn("mode", r["name"])
+        apps[led] = apps.get(led, Decimal(0)) + Decimal(r["amount"])
+    receipts = [r for r in rows if r[0] == RECEIPT]                      # 1. receipts from the apps first
+    for r in receipts:
+        rows.remove(r)
+    for _sh, _in, party, amt in receipts:
+        left = amt
+        for led in sorted(apps, key=lambda l: _app_rank(l, APPS_FOR_RECEIPTS)):
+            if _app_rank(led, APPS_FOR_RECEIPTS) == 9 or left <= 0:
+                continue
+            take = min(left, apps[led])
+            if take > 0:
+                rows.append((RECEIPT, led, party, take)); apps[led] -= take; left -= take
+        if left > 0:
+            rows.append((RECEIPT, "Cash", party, left))
+    need = dict(fuel)
+    need["HSD"] -= min(credit, need["HSD"])
+    cash_fuel = sum(need.values(), Decimal(0)) - sum(apps.values(), Decimal(0))
+    out = []
+
+    def give(f, led, amt):
+        amt = min(amt, need[f])
+        if amt > 0:
+            need[f] -= amt
+            out.append((f, led, amt, rates.get(f)))
+        return amt
+
+    for f in ("CNG", "MS", "HSD"):                                          # 2. cash (lube is already cash)
+        cash_fuel -= give(f, "Cash", max(cash_fuel, Decimal(0)))
+    for led in sorted(apps, key=lambda l: _app_rank(l, APPS_FOR_FUEL)):    # 3. the apps: CNG, MS, HSD
+        amt = apps[led]
+        for f in ("CNG", "MS", "HSD"):
+            amt -= give(f, led, amt)
+        if amt > 0:
+            out.append(("HSD", led, amt, rates.get("HSD")))
+    return out
+

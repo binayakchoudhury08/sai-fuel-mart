@@ -317,6 +317,8 @@ class Adder:
                 b.put(METER, f"F{r}", value=prev, kind="n")
                 b.put(METER, f"I{r}", value=net, kind="n")
                 b.put(METER, f"L{r}", value=_r2(net * Decimal(str(rate))) if rate is not None else "", kind="n" if rate is not None else "e")
+                if rate is not None:
+                    self.cache[(METER, f"L{r}")] = _r2(net * Decimal(str(rate)))
             b.put(METER, f"H{r}", value=testing, kind="n")
             b.put(METER, f"K{r}", value=rate if rate is not None else "", kind="n" if rate is not None else "e")
             self.added.append((METER, r, f"{name} closing {closing}"))
@@ -327,6 +329,9 @@ class Adder:
         self.cache[(sheet, f"B{r}")] = d
         if party is not None:
             self.b.put(sheet, f"C{r}", value=party, kind="s", formula_keep=False)
+        if sheet in SALES.values() and qty is not None and amount is None:      # litres given → amount = litres × rate
+            rt = Decimal(str(rate if rate is not None else self._val(sheet, f"E{r}")))
+            amount = _r2(Decimal(str(qty)) * rt, "1")
         if sheet in SALES.values() and rate is not None:
             self.b.put(sheet, f"E{r}", value=Decimal(str(rate)), kind="n", formula_keep=False)
             self.cache[(sheet, f"E{r}")] = Decimal(str(rate))

@@ -53,7 +53,7 @@ def handle(cur, phone, low, text):
         a = w1[1] if w1 else None
         b = (w2[1] if w2 else a)
         if not a:
-            return "Write: *tally import 1/11 to 3/11*"
+            return "Which date? e.g. *tally import 2/11*"
         from .tally_convert import convert
         from .tally_site import current
         data, _ = current(cur)

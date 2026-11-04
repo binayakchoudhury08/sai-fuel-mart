@@ -83,38 +83,46 @@ def connect(page):
 
 
 def dismiss_popups(desk):
-    """Tally Cloud shows "Auto-shutdown on timeout" / "Scheduled shutdown" alerts after connecting — press OK."""
-    for _ in range(4):
-        hit = False
-        for label in ("Okay", "OK", "Ok"):
-            b = desk.get_by_role("button", name=label)
-            if b.count():
-                try:
-                    b.first.click(timeout=2000); hit = True; time.sleep(1)
-                except Exception:
-                    pass
-        if not hit:
-            desk.mouse.click(800, 450); desk.keyboard.press("Enter"); time.sleep(1)
-            break
+    """Tally Cloud's "Auto-Shutdown on Timeout" / "Scheduled Shutdown" alerts are drawn inside the remote screen
+    (not page buttons): click their "Okay" (measured from a real screenshot: ~x 593, y 453 at 1600×900), then Enter."""
+    for label in ("Okay", "OK", "Ok"):
+        b = desk.get_by_role("button", name=label)
+        if b.count():
+            try:
+                b.first.click(timeout=2000)
+            except Exception:
+                pass
+    for _ in range(2):
+        desk.mouse.click(593, 453); time.sleep(1)       # "Okay" of the alert
+        desk.mouse.click(498, 286); time.sleep(0.5)     # focus the alert's title bar …
+        desk.keyboard.press("Enter"); time.sleep(1)     # … Enter = its default button
 
 
-SIDE = {"power": 0, "fullscreen": 1, "notifications": 2, "File Manager": 3}
+# The side panel (opened with « at the right edge): power, full screen, notifications, File Manager, permissions,
+# display, help — one button every 72 px, the first 44 px from the top, 49 px from the right edge (measured).
+SIDE = {"power": 0, "fullscreen": 1, "notifications": 2, "File Manager": 3, "permissions": 4, "display": 5, "help": 6}
+
+
+def _fm_open(desk):
+    return desk.get_by_text("Navigate to folders").count() > 0 or desk.get_by_text("Drop files here").count() > 0
 
 
 def side_button(desk, title):
-    """The side panel opens with the « arrow at the right edge; its buttons have no text until hovered, so they are
-    clicked by position (File Manager = 4th, ~90 px apart)."""
     vw, vh = desk.viewport_size["width"], desk.viewport_size["height"]
     btn = desk.locator(f"[title='{title}'], [aria-label='{title}']")
-    if not btn.count():
-        desk.mouse.click(vw - 55, vh // 2); time.sleep(1.5)          # «  open the panel
-        btn = desk.locator(f"[title='{title}'], [aria-label='{title}']")
     if btn.count():
-        btn.first.click()
-    else:
-        desk.mouse.click(vw - 65, 55 + 90 * SIDE[title]); time.sleep(2)
-    if not desk.get_by_text("File Manager").count() and title == "File Manager":
-        raise RuntimeError("the File Manager did not open")
+        btn.first.click(); time.sleep(2)
+        if title != "File Manager" or _fm_open(desk):
+            return
+    if not desk.locator("[title='File Manager'], [aria-label='File Manager']").count():
+        desk.mouse.click(vw - 55, vh // 2); time.sleep(1.5)            # « open the panel (if it is closed)
+    idx = SIDE[title]
+    for i in (idx, idx - 1, idx + 1):                                  # measured position first, then its neighbours
+        desk.mouse.click(vw - 49, 44 + 72 * i); time.sleep(2.5)
+        if title != "File Manager" or _fm_open(desk):
+            return
+        desk.keyboard.press("Escape"); time.sleep(1)                   # a different panel opened — close it
+    raise RuntimeError("the File Manager did not open")
 
 
 def upload_xml(desk, name, xml):

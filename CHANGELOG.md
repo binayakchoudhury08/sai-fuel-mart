@@ -1,5 +1,45 @@
 # Sai Fuel Mart — changes
 
+## 3.28.0 — The adjustment is automatic (owner's rule)
+- "excel add 2/11" adjusts the day itself and sends the photo of all sheets with their ledgers:
+  1. payments received are paid from the app money first — DTPLUS, then Paytm, then PhonePe; the rest is cash;
+  2. cash (before expenses) → lube, then CNG, then MS (HSD only if still left);
+  3. the apps (DTPLUS, PhonePe, Paytm) fill what cash did not cover — CNG, then MS, then HSD; credit parties are HSD.
+  Fuel totals = the meter amounts written into the workbook, so sales = meter on every fuel.
+- Corrections in plain words, the day remembered: "change hsd sales from dtplus to cash", "change ms sales phonepe to
+  paytm", "change receipt dtplus to cash" → YES → new photo. "upload to tally" starts the robot for that day.
+- "excel adjust 2/11" works by row: tap the row → change party / amount / litres, or add a new row.
+
+## 3.27.3
+- Tally robot: side-panel buttons at their measured positions (72 px apart, first at 44 px — File Manager is the 4th;
+  the last run clicked the 5th, Browser Permissions). It checks the File Manager really opened, and if another panel
+  opened it closes it and tries the neighbouring button. The "Auto-Shutdown on Timeout" alert is closed with its
+  "Okay" button (it is drawn inside the remote screen).
+
+## 3.27.2
+- WhatsApp adjustment: choosing "received in / paid from" (or a rate) on an existing row now changes that ledger too,
+  not only the amount (e.g. Cash → VNS Logistics becomes DTPLUS HPCL → VNS Logistics).
+- Meter vs sales check: METER READING net litres and amount per fuel (HSD, MS, CNG) against the HSD / MS / CNG SALES
+  sheets, with ✓ / ✗ and the difference — on the website, in the WhatsApp photo and in "cash <date>".
+
+## 3.27.2
+- WhatsApp adjust: choosing "received in" / "paid from" now also changes that ledger on an existing row (before, only
+  the amount changed — Cash → VNS stayed Cash).
+- Litres editable for HSD / MS / CNG rows (website: litres box; WhatsApp: "excel hsd 2/11 phone pe 1500 L", or "608.79 L"
+  in excel adjust): amount = litres × rate, the qty formula stays.
+- Meter vs sales check (website, table photo, "cash 2/11"): METER READING litres and amount per fuel against the HSD /
+  MS / CNG SALES sheets — ✓ or ✗ with the difference.
+
+## 3.27.2
+- WhatsApp: a new command (xml, excel, cash, tally, menu…) ends an unfinished "excel adjust" instead of being taken
+  as its answer; "Xml convert excel 2/11" = xml 2/11. The XML reply lists all 7 sheets (HSD, MS, CNG, LUBE,
+  METER READING, PAYMENT, RECEIPT) with their voucher counts.
+- Adjusting a PAYMENT / RECEIPT row also changes its "paid from / received in" ledger (was amount only).
+- HSD / MS / CNG litres editable: website (litres box per row) and WhatsApp ("excel hsd 2/11 phone pe 1500 L", or
+  "1500 L" in excel adjust) — amount = litres × rate, the qty formula is kept.
+- Meter vs sales check (website, photo, "cash <date>"): METER READING net litres and amount against the HSD, MS, CNG
+  SALES sheets, ✓ / ✗ with the difference.
+
 ## 3.27.1
 - Meter readings are matched to the pump meters by their readings: each closing goes to the meter of the same fuel
   whose last closing is just below it — mixed-up nozzle names in Tally names no longer matter.

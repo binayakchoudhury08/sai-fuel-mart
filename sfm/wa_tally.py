@@ -59,6 +59,9 @@ def table_png(d, view, check, counted=None):
     lines.append(("head", f"METER READING  ({len(view[METER])} meters)"))
     for r in view[METER]:
         lines.append(("row", f"  {r['meter']}", f"{r['opening']} → {r['closing']}", f"net {r['net']}"))
+    lines.append(("head", "METER vs SALES"))
+    for label, m, s_, diff, ok in check.get("match", []):
+        lines.append(("ok" if ok else "bad", f"  {label}  {'✓' if ok else '✗'}", f"meter {inr(m) if 'amount' in label else m}", (f"sheet {inr(s_)}" if 'amount' in label else f"sheet {s_}") + ("" if ok else f" ({diff:+})")))
     lines.append(("head", "DAILY CHECK"))
     for k in ("HSD amount", "MS amount", "CNG amount", "Lube amount", "Cash sales", "Cash receipt", "Cash payment"):
         lines.append(("row", f"  {k}", "", inr(check[k])))
@@ -103,10 +106,32 @@ def counted_cash(cur, d):
 CMD_START = r"^(excel|tally excel|xml|daily check|cash|tally import|tally ledger)\b"
 
 
-def normalize(cur, low):
+def remember_day(cur, phone, d):
+    cur.execute("INSERT INTO settings (key, value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+                (f"tally_day:{phone}", d.isoformat()))
+
+
+def last_day(cur, phone):
+    cur.execute("SELECT value FROM settings WHERE key=%s", (f"tally_day:{phone}",))
+    r = cur.fetchone()
+    try:
+        return date.fromisoformat(str(r["value"]).strip('"')) if r else None
+    except ValueError:
+        return None
+
+
+SHEET_RX = r"(hsd|diesel|ms|petrol|cng|lube|payment|expense|receipt|received)"
+
+
+def normalize(cur, low, phone=None):
     """'See what's in the Excel for 2 Nov\nexcel 2/11' → 'excel 2/11'; 'add daily closing for tally excel 2/11' →
     'excel add 2/11'. None when it is not about the workbook (e.g. 'svt excel yesterday' = a transporter's bill)."""
     lines = [l.strip() for l in low.splitlines() if l.strip()]
+    if phone and re.match(r"^(please\s+)?(upload|import|send)\b.*\btally\b", low) and not _when(low):
+        d = last_day(cur, phone)
+        return f"tally import {d:%d/%m}" if d else "tally import"
+    if re.match(rf"^(please\s+)?(change|edit|replace|make)\b.*\b{SHEET_RX}\b.*\bto\b", low):
+        return "excel change " + re.sub(r"^(please\s+)?(change|edit|replace|make)\s+", "", low)
     for l in reversed(lines):                                   # a command written on its own line wins
         if re.match(CMD_START, l):
             return l
@@ -171,67 +196,125 @@ def _names_menu(cur, st, phone):
                  f"*{sheet}* — choose {what}:")
 
 
-def adjust(cur, phone, st, low, text):
-    """One step of the guided adjustment. → reply."""
+def _rows_menu(cur, st, phone):
     from .wa import save_state
-    from .tally_site import search_names
+    from .tally_site import day_view
+    sheet, d = st["sheet"], date.fromisoformat(st["d"])
+    rows = day_view(_book(cur), d)[sheet]
+    def label(r):
+        if sheet == LUBE:
+            return f"{r['item']} {r['qty']}×{r['rate']}", f"row {r['row']} · {r['party']} · ₹{inr(r['amount'])}"
+        if sheet in (PAYMENT, RECEIPT):
+            return f"{r['to']} {inr(r['amount'])}", f"row {r['row']} · {r['from']} → {r['to']}"
+        return f"{r['party']} {inr(r['amount'])}", f"row {r['row']} · {r['qty']} L"
+    st["rows"] = [r["row"] for r in rows][:9]
+    st["step"] = "row"
+    save_state(cur, phone, st, touch=True)
+    items = [(f"adj:r:{i}", *label(r)) for i, r in enumerate(rows[:9])] + [("adj:new", "➕ Add a new row", "")]
+    return _menu(f"*{sheet}* {d:%d/%m} — tap the row to change:", "Choose row", items, f"*{sheet}* {d:%d/%m} — choose the row:")
+
+
+FIELDS = {"sales": [("name", "Change party", "e.g. Cash → DTPLUS HPCL"), ("amount", "Change amount", "₹"), ("qty", "Change litres", "amount = litres × rate")],
+          LUBE: [("item", "Change item", ""), ("qty", "Change qty", ""), ("rate", "Change rate", "")],
+          PAYMENT: [("from", "Change paid from", "e.g. Cash"), ("to", "Change paid to", ""), ("amount", "Change amount", "")],
+          RECEIPT: [("from", "Change received in", "e.g. Cash → DTPLUS HPCL"), ("to", "Change received from", ""), ("amount", "Change amount", "")]}
+
+
+def _fields(sheet):
+    return FIELDS.get(sheet, FIELDS["sales"])
+
+
+def adjust(cur, phone, st, low, text):
+    """Guided change: sheet → row → what to change → new value → YES (or ➕ add a new row)."""
+    from .wa import save_state
+    from .tally_site import search_names, sheet_names
     step = st.get("step")
-    pick = None
-    m = re.fullmatch(r"adj:(?:s|p):(\d+)", low) or (re.fullmatch(r"(\d{1,2})", low) if step in ("sheet", "name", "name_in") else None)
-    if m:
-        pick = int(m.group(1)) - (0 if low.startswith("adj:") else 1)
+    m = re.fullmatch(r"adj:\w:(\d+)", low) or (re.fullmatch(r"(\d{1,2})", low) if step in ("sheet", "row", "field", "name", "name_in", "newname") else None)
+    pick = (int(m.group(1)) - (0 if low.startswith("adj:") else 1)) if m else None
     if low in ("adj:back", "back"):
-        st.update(step="sheet"); st.pop("sheet", None)
+        st = {"mode": "adj", "d": st["d"], "step": "sheet"}
         save_state(cur, phone, st, touch=True)
         return _menu(f"Adjust {st['d'][8:]}/{st['d'][5:7]} — choose the sheet:", "Choose sheet", [(f"adj:s:{i}", s_, "") for i, s_ in enumerate(ADJ_SHEETS)], "Choose the sheet:")
     if step == "sheet":
         if pick is None or not 0 <= pick < len(ADJ_SHEETS):
             return "Tap a sheet, or reply 1–6."
         st["sheet"] = ADJ_SHEETS[pick]
-        st["step"] = "name_in" if st["sheet"] == RECEIPT else "name"
-        return _names_menu(cur, st, phone)
-    if step in ("name", "name_in"):
+        return _rows_menu(cur, st, phone)
+    if step == "row":
+        if low == "adj:new" or (pick is not None and pick == len(st.get("rows", []))):
+            st.update(step="name_in" if st["sheet"] == RECEIPT else "newname")
+            return _names_menu(cur, dict(st, step="name_in" if st["sheet"] == RECEIPT else "name"), phone) if st["sheet"] == RECEIPT else _pick_name(cur, st, phone, "newname")
+        if pick is None or not 0 <= pick < len(st.get("rows", [])):
+            return "Tap a row, or reply with its number."
+        st.update(row=st["rows"][pick], step="field")
+        save_state(cur, phone, st, touch=True)
+        f = _fields(st["sheet"])
+        return _menu(f"Row {st['row']} — what to change?", "Choose", [(f"adj:f:{i}", t, dsc) for i, (_k, t, dsc) in enumerate(f)] + [("adj:back", "↩ Back", "")], "What to change?")
+    if step == "field":
+        f = _fields(st["sheet"])
+        if pick is None or not 0 <= pick < len(f):
+            return "Tap what to change."
+        key = f[pick][0]
+        st["field"] = key
+        if key in ("name", "item", "from", "to"):
+            return _pick_name(cur, st, phone, "newvalue")
+        st["step"] = "number"; save_state(cur, phone, st, touch=True)
+        return {"amount": "Type the new *amount* (e.g. *62084*).", "qty": "Type the new *litres / qty* (e.g. *608.79*).", "rate": "Type the new *rate*."}[key]
+    if step in ("newvalue", "newname", "name", "name_in"):
         if low == "adj:find":
-            st["searching"] = True; save_state(cur, phone, st, touch=True)
-            return "🔎 Type the first letters of the name (e.g. *svt*, *phone*, *racer*)."
+            return "🔎 Type the first letters of the name (e.g. *dtplus*, *svt*, *racer*)."
         if pick is not None and 0 <= pick < len(st.get("opts") or []):
             chosen = st["opts"][pick]
-        else:                                            # letters → search the masters
+        else:
             a = __import__("sfm.tally_book", fromlist=["Adder"]).Adder(_book(cur))
             hits = search_names(a, st["sheet"], text)
             if not hits:
                 return f"No name matching “{text}”. Try other letters, or tap ↩ Back."
-            if len(hits) == 1:
-                chosen = hits[0]
-            else:
+            if len(hits) > 1:
                 st["opts"] = hits; save_state(cur, phone, st, touch=True)
-                return _menu(f"Names matching “{text}”:", "Choose name", [(f"adj:p:{i}", n, n) for i, n in enumerate(hits)] + [("adj:back", "↩ Back", "")],
-                             f"Names matching “{text}”:")
-        if step == "name_in":
-            st["from_ledger"] = chosen; st["step"] = "name"
-            return _names_menu(cur, st, phone)
-        st["name"] = chosen; st["step"] = "amount"; st.pop("opts", None)
+                return _menu(f"Names matching “{text}”:", "Choose name", [(f"adj:p:{i}", n, n) for i, n in enumerate(hits)] + [("adj:back", "↩ Back", "")], f"Names matching “{text}”:")
+            chosen = hits[0]
+        if step == "newvalue":                                  # change the chosen row
+            key = {"name": "party", "from": "party", "item": "item", "to": "to"}[st["field"]]
+            conf = {"mode": "confirm", "action": "tally_edit", "sheet": st["sheet"], "d": st["d"], "row": st["row"], key: chosen}
+            save_state(cur, phone, conf, touch=True)
+            return f"✏️ *{st['sheet']}* row {st['row']}: {st['field']} → *{chosen}*\nReply *YES*."
+        if step == "name_in":                                   # new receipt: received in, then from
+            st.update(from_ledger=chosen, step="newname")
+            return _pick_name(cur, st, phone, "newname", col=4)
+        st.update(name=chosen, step="amount"); st.pop("opts", None)
         save_state(cur, phone, st, touch=True)
-        ask = "the *quantity* (and rate: *12 @ 14*)" if st["sheet"] == LUBE else "the *amount* (e.g. *62084*; *0* to clear)"
-        return f"*{st['sheet']}* · *{chosen}*\nNow on {st['d'][8:]}/{st['d'][5:7]}:\n{_sheet_now(cur, st['sheet'], date.fromisoformat(st['d']))}\n\nType {ask}."
-    if step == "amount":
-        mm = re.fullmatch(r"(\d+(?:\.\d+)?)(?:\s*(?:@|x|×|at)\s*(\d+(?:\.\d+)?))?", text.strip().replace(",", ""))
-        if not mm:
-            return "Type a number, e.g. *62084*" + (" or *12 @ 14*" if st["sheet"] == LUBE else "")
-        amount, rate = mm.group(1), mm.group(2)
-        if st["sheet"] == LUBE and not rate:
-            from .tally_site import day_view
-            from .tally_book import Adder
-            v = Adder(_book(cur)).v[LUBE]
-            last = next((v.cell(r, 6).value for r in range(v.max_row, 1, -1) if v.cell(r, 4).value == st["name"] and v.cell(r, 6).value), None)
-            rate = str(last) if last else None
-        conf = {"mode": "confirm", "action": "tally_set", "sheet": st["sheet"], "d": st["d"], "name": st["name"], "amount": amount,
-                "rate": rate, "from_ledger": st.get("from_ledger")}
+        return f"New row in *{st['sheet']}*: *{chosen}* — type the {'qty (e.g. *12 @ 14*)' if st['sheet'] == LUBE else 'amount, or litres with L (e.g. *608.79 L*)'}."
+    if step == "number":
+        v = re.fullmatch(r"\d+(?:\.\d+)?", text.strip().replace(",", ""))
+        if not v:
+            return "Type a number."
+        conf = {"mode": "confirm", "action": "tally_edit", "sheet": st["sheet"], "d": st["d"], "row": st["row"], st["field"]: v.group(0)}
         save_state(cur, phone, conf, touch=True)
-        line = (f"{st['name']}: {amount} × {rate or '?'}" if st["sheet"] == LUBE else
-                (f"{st.get('from_ledger') or 'Cash'} → {st['name']}: ₹{inr(amount)}" if st["sheet"] in (PAYMENT, RECEIPT) else f"{st['name']}: ₹{inr(amount)}"))
-        return f"✏️ *{st['sheet']}* {st['d'][8:]}/{st['d'][5:7]}\n{line}\n(changes that row, or adds it)\nReply *YES*."
-    return "Send *excel adjust 1/11* to start again."
+        return f"✏️ *{st['sheet']}* row {st['row']}: {st['field']} → *{v.group(0)}*\nReply *YES*."
+    if step == "amount":
+        mm = re.fullmatch(r"(\d+(?:\.\d+)?)(?:\s*(?:@|x|×|at)\s*(\d+(?:\.\d+)?))?\s*(l|ltr|ltrs|litre|litres|liter|liters|kg)?", text.strip().lower().replace(",", ""))
+        if not mm:
+            return "Type a number, e.g. *62084*"
+        litres = bool(mm.group(3)) and st["sheet"] in SALES.values()
+        conf = {"mode": "confirm", "action": "tally_set", "sheet": st["sheet"], "d": st["d"], "name": st["name"], "amount": mm.group(1),
+                "rate": mm.group(2), "from_ledger": st.get("from_ledger"), "litres": litres}
+        save_state(cur, phone, conf, touch=True)
+        return f"➕ *{st['sheet']}* {st['d'][8:]}/{st['d'][5:7]}: {st.get('from_ledger') + ' → ' if st.get('from_ledger') else ''}*{st['name']}* = {mm.group(1)}{' L' if litres else ''}\nReply *YES*."
+    return "Send *excel adjust 2/11* to start again."
+
+
+def _pick_name(cur, st, phone, step, col=None):
+    from .wa import save_state
+    from .tally_site import sheet_names
+    sheet = st["sheet"]
+    if col is None:
+        col = {"from": 3, "to": 4, "item": 4, "name": 3}.get(st.get("field"), 4 if sheet in (PAYMENT, LUBE) else 3)
+    opts, _a = sheet_names(_book(cur), sheet, col)
+    st.update(step=step, opts=opts)
+    save_state(cur, phone, st, touch=True)
+    rows = [(f"adj:p:{i}", n, n) for i, n in enumerate(opts)] + [("adj:find", "🔎 Search a name", "Type a few letters"), ("adj:back", "↩ Back", "")]
+    return _menu(f"*{sheet}* — choose the name (most used in your Excel):", "Choose name", rows, f"*{sheet}* — choose the name:")
 
 
 # ------------------------------------------------------------------ commands
@@ -249,6 +332,8 @@ def handle(cur, phone, low, text):
         view = day_view(_book(cur), d); chk = daily_check(view); cnt = counted_cash(cur, d)
         if low.startswith("cash"):
             msg = f"💵 *Cash {d:%d/%m/%Y}*\nWorkbook final cash: *₹{inr(chk['Final cash balance'])}*"
+            bad = [m for m in chk.get("match", []) if not m[4]]
+            msg += ("\n" + "\n".join(f"❌ {lb}: meter {m} vs sheet {s_} (diff {df:+})" for lb, m, s_, df, ok in bad)) if bad else "\n✅ Meter = sales (HSD, MS, CNG litres and amounts)"
             if cnt is not None:
                 diff = cnt - chk["Final cash balance"]
                 msg += f"\nCounted in Daily Closing: ₹{inr(cnt)}\n" + ("✅ Matches — adjustment is correct." if abs(diff) <= 10 else f"❌ Difference ₹{inr(diff)} — check the adjustment.")
@@ -265,12 +350,14 @@ def handle(cur, phone, low, text):
             return "❌ *XML blocked* (your converter's checks):\n" + "\n".join("• " + e for e in res["errors"][:12]) if res["errors"] else "No vouchers in those dates."
         from .security import audit
         audit(cur, "create", "tally_xml", None, f"Tally XML {a:%d/%m/%Y}–{b:%d/%m/%Y}: {res['vouchers']} vouchers (WhatsApp)")
-        summary = f"✅ *XML {a:%d/%m/%Y} – {b:%d/%m/%Y}*: {res['vouchers']} vouchers\n" + "\n".join(f"• {k}: {v}" for k, v in res["counts"].items() if "item rows" not in k)
+        order = ["HSD SALES", "MS SALES", "CNG SALES", "LUBE SALES", "METER READING", "PAYMENT", "RECEIPT"]
+        summary = (f"✅ *XML {a:%d/%m/%Y} – {b:%d/%m/%Y}*: {res['vouchers']} vouchers — all 7 sheets, like your converter\n"
+                   + "\n".join(f"• {sh}: {res['counts'].get(sh, 0)}" for sh in order))
         return {"docs": [(res["name"], res["xml"].encode("utf8"), "text/plain")], "caption": res["name"], "reply": summary, "summary": True}
     if not m:
         return None
     rest = m.group(2).strip()
-    mj = re.match(r"^(adjust|adj|change)\s+(.+)$", rest)
+    mj = re.match(r"^(adjust|adj)\s+(.+)$", rest)
     if mj:
         d = _when(mj.group(2))
         if not d:
@@ -285,8 +372,39 @@ def handle(cur, phone, low, text):
         d = _when(ma.group(1))
         if not d:
             return "Write: *excel add 2/11*"
+        remember_day(cur, phone, d)
         save_state(cur, phone, {"mode": "confirm", "action": "tally_add", "d": d.isoformat()}, touch=True)
         return f"➕ Add *{d:%d/%m/%Y}* from Daily Closing to the workbook (meters, credit, lube, expenses, receipts)?\nReply *YES*."
+    mc = re.match(rf"^change\s+{SHEET_RX}(?:\s+sales?|\s+sheet)?\s+(?:ledger\s+)?(?:from\s+)?(.+?)\s+(?:to|into)\s+(.+?)(?:\s+(?:on|for|of)\s+(\S+))?$", rest)
+    if mc:
+        sheet = SHEET_WORDS[mc.group(1)]
+        d = _when(mc.group(4)) if mc.group(4) else last_day(cur, phone)
+        if not d:
+            return "Which date? e.g. *change hsd sales from dtplus to cash on 2/11*"
+        from .tally_site import day_view, norm, search_names
+        from .tally_book import Adder
+        a = Adder(_book(cur))
+        rows = day_view(a, d)[sheet]
+        key = "from" if sheet in (PAYMENT, RECEIPT) else ("item" if sheet == LUBE else "party")
+        old = norm(mc.group(2))
+        hit = [r for r in rows if norm(r[key]).startswith(old) or old in norm(r[key])]
+        if not hit:
+            return f"No “{mc.group(2)}” in {sheet} on {d:%d/%m}. Rows: " + ", ".join(f"{r[key]} {inr(r['amount'])}" for r in rows)
+        want = mc.group(3).strip()
+        if norm(want) == "cash":
+            new = "Cash"
+        else:
+            hits = search_names(a, sheet, want)
+            exact = [h for h in hits if norm(h) == norm(want)]
+            new = exact[0] if exact else (hits[0] if hits else None)
+        if not new:
+            return f"“{want}” is not in your LEDGER MASTER — write it as in Tally."
+        field = "party"
+        save_state(cur, phone, {"mode": "confirm", "action": "tally_change_all", "sheet": sheet, "d": d.isoformat(),
+                                "rows": [r["row"] for r in hit], "field": field, "value": new}, touch=True)
+        remember_day(cur, phone, d)
+        lines_ = "\n".join(f"• row {r['row']}: {r[key]} {inr(r['amount'])} → *{new}*" for r in hit)
+        return f"✏️ *{sheet}* {d:%d/%m}:\n{lines_}\nReply *YES*."
     mr = re.match(r"^(?:rename|change name)\s+(hsd|diesel|ms|petrol|cng|lube|payment|expense|receipt|received)\s+(\S+)\s+(.+?)\s+to\s+(.+)$", rest)
     if mr:
         sheet, d = SHEET_WORDS[mr.group(1)], _when(mr.group(2))
@@ -317,7 +435,7 @@ def handle(cur, phone, low, text):
             return "Write: *excel meter 2/11 petrol du1 691091.33*\nMeters: " + ", ".join(meters or ["(none on that date)"])
         save_state(cur, phone, {"mode": "confirm", "action": "tally_edit", "sheet": METER, "d": d.isoformat(), "meter": hit[0], "closing": mm_.group(3)}, touch=True)
         return f"⛽ METER {d:%d/%m}: *{hit[0]}* closing → *{mm_.group(3)}* (the next day's opening follows)\nReply *YES*."
-    ms_ = re.match(r"^(hsd|diesel|ms|petrol|cng|lube|payment|expense|receipt|received)\s+(\S+)\s+(.+?)\s+(-?\d+(?:\.\d+)?)$", rest)
+    ms_ = re.match(r"^(hsd|diesel|ms|petrol|cng|lube|payment|expense|receipt|received)\s+(\S+)\s+(.+?)\s+(-?\d+(?:\.\d+)?)\s*(l|ltr|ltrs|litre|litres|liter|liters|kg)?$", rest)
     if ms_:
         sheet = SHEET_WORDS[ms_.group(1)]
         d = _when(ms_.group(2))
@@ -326,11 +444,14 @@ def handle(cur, phone, low, text):
         name = ms_.group(3).strip().title() if ms_.group(3).strip().lower() not in ("phone pe", "phonepe") else "Phone Pe"
         if ms_.group(3).strip().lower() in ("paytm", "cash", "dtplus hpcl"):
             name = {"paytm": "Paytm", "cash": "Cash", "dtplus hpcl": "DTPLUS HPCL"}[ms_.group(3).strip().lower()]
+        litres = bool(ms_.group(5)) and sheet in SALES.values()
         save_state(cur, phone, {"mode": "confirm", "action": "tally_set", "sheet": sheet, "d": d.isoformat(), "name": name,
-                                "amount": ms_.group(4)}, touch=True)
-        return f"✏️ *{sheet}* {d:%d/%m/%Y}: *{name}* = *₹{inr(ms_.group(4))}*\n(changes that row, or adds it if it is not there)\nReply *YES*."
+                                "amount": ms_.group(4), "litres": litres}, touch=True)
+        what = f"*{ms_.group(4)} L* (amount = litres × rate)" if litres else f"*₹{inr(ms_.group(4))}*"
+        return f"✏️ *{sheet}* {d:%d/%m/%Y}: *{name}* = {what}\n(changes that row, or adds it if it is not there)\nReply *YES*."
     d = _when(rest)
     if d:
+        remember_day(cur, phone, d)
         view = day_view(_book(cur), d); chk = daily_check(view)
         return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                 "caption": f"Workbook {d:%d/%m/%Y} — change: excel hsd {d:%d/%m} phone pe 62084 · check: daily check {d:%d/%m}"}
@@ -343,7 +464,7 @@ def run(cur, st):
     from .security import audit, current_user
     from .tally_site import add_day, save_version, set_amount
     a = st.get("action")
-    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit"):
+    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all"):
         return None
     who = current_user()["username"]
     try:
@@ -352,22 +473,40 @@ def run(cur, st):
             new, added = add_day(cur, _book(cur), d)
             save_version(cur, new, f"Added {d:%d/%m/%Y} from Daily Closing ({len(added)} rows)", who)
             audit(cur, "update", "tally_book", None, f"Tally workbook: {d:%d/%m/%Y} added — {len(added)} rows", business_date=d)
-            return f"✅ {d:%d/%m/%Y} added: {len(added)} rows. Now adjust: *excel ms {d:%d/%m} phone pe …* · check: *cash {d:%d/%m}*"
+            from .tally_site import daily_check, day_view
+            view = day_view(new, d); chk = daily_check(view)
+            return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+                    "caption": f"✅ {d:%d/%m/%Y} added and adjusted ({len(added)} rows) — final cash ₹{inr(chk['Final cash balance'])}. "
+                               "Check the ledgers. To correct: change hsd sales from dtplus to cash · all correct: upload to tally"}
+        if a == "tally_change_all":
+            from .tally_book import Adder
+            from .tally_site import daily_check, day_view
+            d = date.fromisoformat(st["d"])
+            ad = Adder(_book(cur))
+            for r_ in st["rows"]:
+                ad.change(st["sheet"], int(r_), party=st["value"])
+            new = ad.save()
+            what = f"{st['sheet']} {d:%d/%m/%Y}: rows {', '.join(map(str, st['rows']))} → {st['value']}"
+            save_version(cur, new, what, who)
+            audit(cur, "update", "tally_book", None, what + " (WhatsApp)", business_date=d)
+            view = day_view(new, d); chk = daily_check(view)
+            return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+                    "caption": f"✅ {what}. Check the ledgers again — all correct? write: upload to tally"}
         if a == "tally_edit":
             from .tally_site import edit_row
             d = date.fromisoformat(st["d"])
             new = edit_row(_book(cur), st["sheet"], st.get("row") or 0, dict(st, d=d))
-            what = f"{st['sheet']} {d:%d/%m/%Y}: " + (f"{st['meter']} closing {st['closing']}" if st.get("meter") else ", ".join(f"{k} {st[k]}" for k in ("party", "item", "to") if st.get(k)))
+            what = f"{st['sheet']} {d:%d/%m/%Y}: " + (f"{st['meter']} closing {st['closing']}" if st.get("meter") else f"row {st.get('row')} " + ", ".join(f"{k} {st[k]}" for k in ("party", "item", "to", "amount", "qty", "rate") if st.get(k)))
             save_version(cur, new, what, who)
             audit(cur, "update", "tally_book", None, what + " (WhatsApp)", business_date=d)
             return f"✅ {what}. See it: *excel {d:%d/%m}*"
         if a == "tally_set":
             d = date.fromisoformat(st["d"])
             new, what = set_amount(_book(cur), st["sheet"], d, st["name"], Decimal(st["amount"]),
-                                   Decimal(st["rate"]) if st.get("rate") else None, st.get("from_ledger"))
+                                   Decimal(st["rate"]) if st.get("rate") else None, st.get("from_ledger"), st.get("litres", False))
             save_version(cur, new, f"{st['sheet']} {d:%d/%m/%Y}: {st['name']} = {st['amount']} ({what})", who)
             audit(cur, "update", "tally_book", None, f"{st['sheet']} {d:%d/%m/%Y}: {st['name']} = {st['amount']} ({what})", business_date=d)
-            return (f"✅ {st['sheet']}: {st['name']} = {st['amount'] if st['sheet'] == LUBE else '₹' + inr(st['amount'])} ({what}).\n"
+            return (f"✅ {st['sheet']}: {st['name']} = {st['amount'] + (' L' if st.get('litres') else '') if st['sheet'] == LUBE or st.get('litres') else '₹' + inr(st['amount'])} ({what}).\n"
                     f"Next: *excel adjust {d:%d/%m}* · check: *cash {d:%d/%m}*")
         cur.execute("SELECT id, note FROM tally_books ORDER BY id DESC LIMIT 2")
         vs = cur.fetchall()

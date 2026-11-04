@@ -46,6 +46,8 @@ mr = book()["METER READING"]; r1 = [r for r in range(1034, 1042) if mr.cell(r, 4
 post("/tally/edit", {"d": D, "sheet": "METER READING", "meter": "01 NOZZLE PETROL DU1", "closing": "690995.33"})
 mr = book()["METER READING"]; check(mr.cell(r1, 7).value == 690995.33 and abs(mr.cell(r1, 9).value - (690995.33 - mr.cell(r1, 6).value - 5)) < 0.01,
                                    f"meter DU1 closing → 690,995.33, net recalculated ({mr.cell(r1, 9).value})")
+post("/tally/edit", {"d": D, "sheet": "HSD SALES", "row": "1161", "party": "DTPLUS HPCL", "amount": "3059", "qty": "300", "orig_qty": "30", "rate": "101.98"})
+hs = book()["HSD SALES"]; check((hs["D1161"].value, hs["F1161"].value) == (300, 30594), f"HSD litres 30 → 300: amount = 300 × 101.98 = {hs['F1161'].value}")
 print("Wrong meter → nothing added")
 c.execute("INSERT INTO pump.tally_names VALUES ('meter','MS-1','02 NOZZLE DIESEL DU 1') ON CONFLICT (kind, site_name) DO UPDATE SET tally_name=EXCLUDED.tally_name")
 c.execute("SELECT id FROM pump.nozzles WHERE name='MS-1'"); nid = c.fetchone()[0]
@@ -79,4 +81,9 @@ say("yes"); check(any(book()["HSD SALES"].cell(r_, 3).value == "VNS Logistics" a
 out = say("excel meter 1/11 petrol du2 1028100"); check(out and "03 NOZZLE PETROL DU2" in out[0], f"meter edit asks YES: {out[0][:70] if out else ''}")
 out = say("yes"); mr = book()["METER READING"]
 check(any(mr.cell(r_, 4).value == "03 NOZZLE PETROL DU2" and mr.cell(r_, 7).value == 1028100 for r_ in range(1034, 1042)), "meter DU2 petrol closing 1,028,100 saved")
+out = say("cash 1/11"); check(out and "Meter = sales" in out[0] or (out and "❌" in out[0]), f"cash shows the meter vs sales check: {out[0][:120] if out else ''}")
+out = say("excel ms 1/11 phone pe 1700 L"); check(out and "1700 L" in out[0], f"litres on WhatsApp asks YES: {out[0][:70] if out else ''}")
+say("yes"); ms = book()["MS SALES"]
+check((ms["D244"].value, ms["F244"].value) == (1700, 187544), f"MS Phone Pe = 1700 L → amount 1,87,544 ({ms['F244'].value})")
+out = say("cash 1/11"); check(out and "❌ MS litres" in out[0], f"meter ≠ sales now shown: {out[0][:160] if out else ''}")
 print(); print("FAILED:" if FAILS else "ALL EDIT CHECKS PASSED", len(FAILS) or ""); [print(" -", f) for f in FAILS]
