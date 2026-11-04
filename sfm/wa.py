@@ -125,13 +125,17 @@ def send_text(phone, text):
     return ok
 
 
-def send_image(phone, png, caption=""):
+def send_image(phone, png, caption="", strict=False):
     if provider() == "twilio":
+        if strict:
+            return False
         return send_text(phone, caption + " (open the website to see the table)")
     h = {"Authorization": f"Bearer {os.environ.get('WA_TOKEN')}"}
     up = requests.post(f"{GRAPH}/{ver()}/{os.environ.get('WA_PHONE_ID')}/media", headers=h, timeout=30,
                        files={"file": ("table.png", png, "image/png")}, data={"messaging_product": "whatsapp", "type": "image/png"})
     if up.status_code >= 300 or not up.json().get("id"):
+        if strict:
+            return False
         return send_text(phone, "❌ Could not send the table picture. " + caption)
     return _send(phone, {"type": "image", "image": {"id": up.json()["id"], "caption": caption[:900]}})
 

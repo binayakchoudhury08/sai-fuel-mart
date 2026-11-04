@@ -1,3 +1,7 @@
+# 3.28.6 — Tally import verification and faster agent setup
+
+Verified import screenshots, IMPORT/STOP approval, immutable XML snapshots, unique job filenames, replay protection, uncertain-import warnings, and tally status. See TALLY_AGENT_GUIDE.md for deployment and test limitations.
+
 # Sai Fuel Mart — changes
 
 ## 3.28.5

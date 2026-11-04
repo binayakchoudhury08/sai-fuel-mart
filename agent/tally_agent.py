@@ -11,16 +11,16 @@ import re
 import os
 import sys
 import time
+import io
+import subprocess
+import tempfile
+import shutil
+import importlib.util
+from pathlib import Path
 from datetime import date
 
 import requests
 from playwright.sync_api import sync_playwright
-
-try:                                   # used to see whether Tally is on the screen
-    from PIL import Image  # noqa: F401
-except ImportError:
-    import subprocess
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pillow==11.0.0"], check=False)
 
 SITE, SECRET, JOB = os.environ["SFM_SITE"].rstrip("/"), os.environ["SFM_SECRET"], int(os.environ["JOB_ID"])
 H = {"x-cron-secret": SECRET}
@@ -29,19 +29,24 @@ IMPORT_ROOT = r"D:\My_Applications\SFM_TALLY_IMPORT"
 MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 
+HTTP = requests.Session()
+
+
 def api(path, **kw):
-    r = requests.request(kw.pop("method", "GET"), f"{SITE}/api/tally/job/{JOB}{path}", headers=H, timeout=60, **kw)
+    r = HTTP.request(kw.pop("method", "GET"), f"{SITE}/api/tally/job/{JOB}{path}", headers=H, timeout=60, **kw)
+    r.raise_for_status()
     return r
 
 
-def step(name, message, page=None, done=False, failed=False):
-    png = None
-    if page is not None:
+def step(name, message, page=None, done=False, failed=False, png=None, evidence=None):
+    if page is not None and png is None:
         try:
             png = base64.b64encode(page.screenshot(type="png")).decode()
         except Exception:
             png = None
-    api("/step", method="POST", json={"step": name, "message": message, "png": png, "done": done, "failed": failed})
+    r = api("/step", method="POST", json={"step": name, "message": message, "png": png, "done": done, "failed": failed, "evidence": evidence}).json()
+    if not r.get("ok"):
+        raise RuntimeError("Step/screenshot delivery was not accepted; import will not continue")
     print(f"[{name}] {message}", flush=True)
 
 
@@ -51,9 +56,9 @@ def wait_answer(field, minutes=10):
         r = api(f"/wait/{field}").json()
         if r.get("state") == "ok":
             return r["answer"]
-        if r.get("state") in ("expired", "missing"):
+        if r.get("state") in ("expired", "missing", "cancelled"):
             break
-        time.sleep(3)
+        time.sleep(2)
     raise RuntimeError(f"no {field} received in {minutes} minutes")
 
 
@@ -69,7 +74,7 @@ def login(ctx):
     pin = None
     page.get_by_role("button", name="Login").click()
     page.wait_for_url("**/dashboard**", timeout=60000)
-    step("login", "Login successful", page)
+    step("login", "Login successful")
     return page
 
 
@@ -113,8 +118,8 @@ def connect(page):
     if not ready:
         raise RuntimeError("the virtual computer did not open within 6 minutes (last address: "
                            + _safe(lambda: desk.url.split("?")[0], "?") + ")")
-    _safe(lambda: desk.wait_for_load_state("networkidle", timeout=30000))
-    time.sleep(10)
+    # Remote desktop streams may never become network-idle. Wait only for its canvas.
+    time.sleep(2)
     dismiss_popups(desk)
     step("connect", "Virtual computer connected", desk)
     return desk
@@ -127,10 +132,13 @@ def dismiss_popups(desk):
         b = ui(desk).get_by_role("button", name=label)
         if _safe(lambda: b.count(), 0):
             _safe(lambda: b.first.click(timeout=2000))
-    for _ in range(2):
-        desk.mouse.click(593, 453); time.sleep(1)       # "Okay" of the alert
-        desk.mouse.click(498, 286); time.sleep(0.5)     # focus the alert's title bar …
-        desk.keyboard.press("Enter"); time.sleep(1)     # … Enter = its default button
+    text, _ = read_screen(desk)
+    if any(label in text.lower() for label in ("auto-shutdown on timeout", "scheduled shutdown")):
+        desk.mouse.click(593, 453)
+        time.sleep(1)
+        text, _ = read_screen(desk)
+        if any(label in text.lower() for label in ("auto-shutdown on timeout", "scheduled shutdown")):
+            raise RuntimeError("Shutdown alert remains open; stopped before typing into Tally")
 
 
 # The side panel (opened with « at the right edge): power, full screen, notifications, File Manager, permissions,
@@ -177,21 +185,15 @@ def upload_xml(desk, name, xml):
         else:
             desk.keyboard.type(month); desk.keyboard.press("Enter")
         _safe(lambda: fm.get_by_text(month, exact=True).first.wait_for(timeout=15000))
-    if not _safe(lambda: fm.get_by_text(month, exact=True).count(), 0):     # could not create it → latest month folder
-        folders = _safe(lambda: [t.strip() for t in fm.get_by_text(re.compile(r"^[A-Z]{3,4} \d{4}$")).all_inner_texts()], []) or []
-        def key(t):
-            mon = t.split()[0][:3]
-            return (int(t.split()[1]), MON.index(mon) if mon in MON else -1)
-        if not folders:
-            raise RuntimeError(f"could not create the folder {month}")
-        month = max(folders, key=key)
-        step("folder", f"Could not create the new month folder — using {month}")
+    if not _safe(lambda: fm.get_by_text(month, exact=True).count(), 0):
+        raise RuntimeError(f"Could not create the intended folder {month}; upload stopped")
     fm.get_by_text(month, exact=True).first.dblclick(); time.sleep(2)
-    path = f"/tmp/{name}"
-    open(path, "w", encoding="utf8").write(xml)
-    fm.locator("input[type=file]").first.set_input_files(path)
+    if Path(name).name != name or not re.fullmatch(r"SFM_Tally_Import_\d{2}-\d{2}-\d{4}_to_\d{2}-\d{2}-\d{4}(?:_job\d+)?\.xml", name):
+        raise RuntimeError("Unexpected import filename")
+    # Browser payload avoids a second disk copy and filename collisions.
+    fm.locator("input[type=file]").first.set_input_files({"name": name, "mimeType": "application/xml", "buffer": xml.encode("utf8")})
     fm.get_by_text("Upload", exact=False).last.click()
-    fm.get_by_text(name).first.wait_for(timeout=120000)
+    fm.get_by_text(name, exact=True).first.wait_for(timeout=120000)
     step("upload", f"Uploaded to {IMPORT_ROOT}\\{month}\\{name}", desk)
     desk.keyboard.press("Escape")
     return month
@@ -222,7 +224,7 @@ TALLY_ICON = (60, 135)            # measured on the remote desktop (1600×900): 
 
 def close_side_panel(desk):
     vw, vh = desk.viewport_size["width"], desk.viewport_size["height"]
-    if _safe(lambda: ui(desk).locator("[title='File Manager'], [aria-label='File Manager']").count(), 0) or True:
+    if _safe(lambda: ui(desk).locator("[title='File Manager'], [aria-label='File Manager']").count(), 0):
         desk.mouse.click(vw - 129, vh // 2); time.sleep(1)        # » closes the side panel when it is open
     desk.keyboard.press("Escape"); time.sleep(0.5)
 
@@ -230,8 +232,10 @@ def close_side_panel(desk):
 def open_tally(desk):
     close_side_panel(desk)
     dismiss_popups(desk)
-    opened = False
+    opened = _tally_on_screen(desk)
     for attempt in range(2):
+        if opened:
+            break
         desk.mouse.dblclick(*TALLY_ICON)
         for _ in range(30):                                      # up to 90 s for TallyPrime to start
             time.sleep(3)
@@ -245,23 +249,101 @@ def open_tally(desk):
     time.sleep(5)
     step("tally", "TallyPrime opened — which company?", desk)
     company = wait_answer("company")
-    desk.keyboard.type(company); time.sleep(2); desk.keyboard.press("Enter"); time.sleep(8)
+    text, _ = read_screen(desk)
+    if "gateway of tally" in text.lower():
+        if compact(company) not in compact(text):
+            raise RuntimeError("A different company is already open. Select the requested company in Tally and restart the job.")
+    else:
+        desk.keyboard.type(company, delay=35)
+        desk.keyboard.press("Enter")
     if not _tally_on_screen(desk):
         raise RuntimeError("Tally closed while opening the company — nothing was imported")
-    step("company", f"Company chosen: {company} — check the screenshot shows it", desk)
+    wait_screen(desk, lambda text: compact(company) in compact(text) and "gateway of tally" in text.lower(), 30)
+    step("company", f"Company visible: {company}", desk)
+    return company
 
 
-def import_xml(desk, month, name):
+def compact(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def read_screen(desk):
+    """Read the remote canvas, never infer import success from a window colour."""
+    from PIL import Image, ImageOps
+    png = desk.screenshot(type="png")
+    image = Image.open(io.BytesIO(png)).convert("RGB")
+    image = ImageOps.grayscale(image).resize((image.width * 2, image.height * 2))
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "screen.png"
+        image.save(path)
+        result = subprocess.run(["tesseract", str(path), "stdout", "--psm", "11"],
+                                capture_output=True, text=True, timeout=15, check=True)
+    return result.stdout, base64.b64encode(png).decode()
+
+
+def wait_screen(desk, predicate, seconds=30):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        text, png = read_screen(desk)
+        if predicate(text):
+            return text, png
+        time.sleep(1)
+    raise RuntimeError("Expected Tally screen was not verified; inspect the screenshot")
+
+
+def result_counts(text):
+    low = text.lower()
+    if any(label in low for label in ("file to import", "list of file formats", "file path")):
+        return None
+    counts = {}
+    for key in ("created", "altered", "errors", "ignored"):
+        found = re.findall(r"\b" + key + r"\s*[:=]?\s*(\d+)\b", low)
+        if len(found) != 1:
+            return None
+        counts[key] = int(found[0])
+    return counts
+
+
+def import_xml(desk, month, name, company, expected):
     if not _tally_on_screen(desk):
         raise RuntimeError("Tally is not on the screen — nothing was imported")
-    desk.keyboard.press("Alt+O"); time.sleep(2)                 # O: Import
-    desk.keyboard.press("t"); time.sleep(3)                     # Transactions
-    for value in ("XML (Data Interchange)", f"{IMPORT_ROOT}\\{month}", name, "Yes"):
-        desk.keyboard.type(value); desk.keyboard.press("Enter"); time.sleep(1.5)
-    desk.keyboard.press("Control+a"); time.sleep(20)            # A: Accept
-    if not _tally_on_screen(desk):
-        raise RuntimeError("Tally is not on the screen after the import — check Tally yourself; not confirmed")
-    step("import", f"Import of {name} sent to Tally — the screenshot shows Tally's result (created / altered / errors)", desk, done=True)
+    desk.keyboard.press("Alt+O"); time.sleep(1)
+    desk.keyboard.press("t")
+    wait_screen(desk, lambda t: "file format" in t.lower())
+    # Do not type the long display label into Tally's format selector.
+    desk.keyboard.type("XML", delay=40)
+    desk.keyboard.press("Enter"); time.sleep(1)
+    for value in (f"{IMPORT_ROOT}\\{month}", name):
+        desk.keyboard.press("Home")
+        desk.keyboard.press("Shift+End")
+        desk.keyboard.type(value, delay=25)
+        desk.keyboard.press("Enter"); time.sleep(1)
+    def filled(text):
+        value = compact(text)
+        return (compact(name) in value and compact(f"{IMPORT_ROOT}\\{month}") in value
+                and compact(company) in value and "xml" in value
+                and "list of file formats" not in text.lower())
+    _, png = wait_screen(desk, filled, 15)
+    step("awaiting_import", f"Review company {company}, file {name}, {expected} vouchers. "
+         "Reply IMPORT to submit this file, or STOP to cancel. No import submitted yet.", png=png)
+    if wait_answer("import") != "IMPORT":
+        raise RuntimeError("Import cancelled — no import submitted")
+    # Recheck after the owner replies: remote sessions can be changed by another user.
+    text, _ = read_screen(desk)
+    if not filled(text):
+        raise RuntimeError("Import form changed after approval — no import submitted")
+    # Persist an uncertainty marker BEFORE the irreversible keystroke. Never retry Accept.
+    step("submitting", f"Submitting {name}; do not start another import until its result is checked.")
+    desk.keyboard.press("Control+a")
+    text, png = wait_screen(desk, lambda t: result_counts(t) is not None, 90)
+    counts = result_counts(text)
+    if counts["errors"] or counts["ignored"] or counts["created"] + counts["altered"] != expected:
+        step("review_required", f"Tally result for {name}: {counts}. Expected {expected} vouchers. "
+             "Check Day Book before retrying; a partial import may have occurred.", png=png)
+        return
+    step("import_verified", f"Tally result for {name}: created {counts['created']}, "
+         f"altered {counts['altered']}, errors 0, ignored 0. Expected {expected} vouchers.",
+         png=png, done=True, evidence={"counts": counts, "filename": name})
 
 
 def ledger_pdf(desk, ledger, d1, d2):
@@ -286,10 +368,28 @@ def ledger_pdf(desk, ledger, d1, d2):
     step("pdf", f"Ledger PDF sent: {pdf_name}", None, done=True)
 
 
+def ensure_runtime():
+    """Support the existing Actions workflow without requiring workflow-write permission."""
+    if importlib.util.find_spec("PIL") is None:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pillow==11.0.0"], check=True)
+    if not shutil.which("tesseract"):
+        if os.environ.get("GITHUB_ACTIONS") != "true" or not shutil.which("sudo"):
+            raise RuntimeError("Tesseract OCR is required. Install tesseract-ocr before running the agent.")
+        subprocess.run(["sudo", "apt-get", "update", "-qq"], check=True, timeout=180)
+        subprocess.run(["sudo", "apt-get", "install", "-y", "tesseract-ocr"], check=True, timeout=180)
+    if not shutil.which("tesseract"):
+        raise RuntimeError("Tesseract OCR installation did not complete")
+
+
 def main():
+    ensure_runtime()
     job = api("").json().get("job")
+    if job and job["state"] != "starting":
+        sys.exit("job already started or finished; refusing to replay it")
     if not job:
         sys.exit("job not found")
+    if not api("/claim", method="POST").json().get("ok"):
+        sys.exit("job could not be claimed")
     p = job["params"]
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
@@ -303,8 +403,8 @@ def main():
                 if r.status_code != 200:
                     step("xml", "XML blocked: " + "; ".join(r.json().get("errors", [])[:5]), failed=True); return
                 month = upload_xml(desk, p["name"], r.text)
-                open_tally(desk)
-                import_xml(desk, month, p["name"])
+                company = open_tally(desk)
+                import_xml(desk, month, p["name"], company, p["vouchers"])
             else:
                 open_tally(desk)
                 ledger_pdf(desk, p["ledger"], date.fromisoformat(p["from"]), date.fromisoformat(p["to"]))

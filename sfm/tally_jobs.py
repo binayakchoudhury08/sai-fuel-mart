@@ -4,6 +4,7 @@ XML to D:\\My_Applications\\SFM_TALLY_IMPORT\\<MON YYYY>, opens TallyPrime, asks
 screenshot after every step. tally ledger svt this month → ledger PDF.
 The PIN is never stored: it waits in the database only until the agent reads it (then deleted; expires in 10 min)."""
 import json
+import hashlib
 import os
 import re
 from datetime import date
@@ -33,9 +34,32 @@ def start_github(job_id):
 def handle(cur, phone, low, text):
     """WhatsApp: start a job, or answer the job that is waiting (PIN / company)."""
     from .wa import _when
-    cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND state NOT IN ('done','failed') AND waiting IS NOT NULL
+    if low.strip() == "tally status":
+        cur.execute("SELECT id, state, waiting, params, log FROM tally_jobs WHERE phone=%s ORDER BY id DESC LIMIT 1", (phone,))
+        latest = cur.fetchone()
+        if not latest:
+            return "No Tally job found."
+        lines = [f"Tally job #{latest['id']}: {latest['state']}"]
+        if latest['params'].get('name'):
+            lines.append(latest['params']['name'])
+        if latest.get('log'):
+            lines.append(latest['log'][-1].get('message', ''))
+        if latest.get('waiting'):
+            lines.append("Waiting for: " + latest['waiting'])
+        if latest['state'] in ('submitting', 'review_required'):
+            lines.append("Check Day Book before retrying; the import may have been partial.")
+        return "\n".join(lines)
+    cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND state NOT IN ('done','failed','review_required') AND waiting IS NOT NULL
                    AND created_at > NOW() - interval '30 minutes' ORDER BY id DESC LIMIT 1""", (phone,))
     job = cur.fetchone()
+    if job and low.strip() in ("stop", "cancel"):
+        cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL, answer=NULL WHERE id=%s", (job["id"],))
+        return f"Stopped job #{job['id']} before import submission."
+    if job and job["waiting"] == "import":
+        if text.strip().upper() != "IMPORT":
+            return "Review the import screenshot, then reply *IMPORT* or *STOP*."
+        cur.execute("UPDATE tally_jobs SET answer='IMPORT', answered_at=NOW(), waiting=NULL WHERE id=%s", (job["id"],))
+        return "Approval received — checking the form again before submission."
     if job and job["waiting"] == "pin" and re.fullmatch(r"\d{4,8}", text.strip()):
         cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL WHERE id=%s", (text.strip(), job["id"]))
         return "🔐 PIN received — logging in to Tally Cloud…"
@@ -48,26 +72,35 @@ def handle(cur, phone, low, text):
     ml = re.match(r"^tally\s+ledger\s+(.+?)\s+(this month|last month|month|[a-z]+(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$", low)
     if not (m or ml):
         return None
+    # Serialize job creation across owners: one shared Tally desktop, no queued PIN expiry.
+    cur.execute("SELECT pg_advisory_xact_lock(734109)")
+    cur.execute("SELECT id FROM tally_jobs WHERE state NOT IN ('done','failed','review_required') AND created_at > NOW() - interval '45 minutes' ORDER BY id DESC LIMIT 1")
+    active = cur.fetchone()
+    if active:
+        return f"Tally job #{active['id']} is still active. Finish it before starting another."
     if m:
         w1, w2 = _when(m.group(1)), (_when(m.group(2)) if m.group(2) else None)
         a = w1[1] if w1 else None
         b = (w2[1] if w2 else a)
         if not a:
             return "Which date? e.g. *tally import 2/11*"
+        if b < a:
+            return "End date must be on or after the start date."
         from .tally_convert import convert
         from .tally_site import current
         data, _ = current(cur)
         res = convert(data, a, b) if data else {"ok": False, "errors": ["no workbook in the website"]}
         if not res["ok"]:
             return "❌ Not starting — the XML is blocked:\n" + "\n".join("• " + e for e in res["errors"][:8])
-        cur.execute("""SELECT id, params FROM tally_jobs WHERE kind='import' AND state='done'
+        cur.execute("""SELECT id, params FROM tally_jobs WHERE kind='import' AND (state IN ('done','submitting','review_required') OR log @> '[{"step":"submitting"}]'::jsonb)
                        AND (params->>'from')::date <= %s AND (params->>'to')::date >= %s ORDER BY id DESC LIMIT 1""", (b, a))
         before = cur.fetchone()
         if before and not again:
-            return (f"⚠️ {before['params']['from']} – {before['params']['to']} was already imported (job #{before['id']}). "
-                    "Importing again makes duplicate vouchers in Tally.\nIf you really want it: *tally import again "
+            return (f"⚠️ {before['params']['from']} – {before['params']['to']} was imported or may have been partially imported (job #{before['id']}). "
+                    "Check Day Book first. Importing again can duplicate vouchers in Tally.\nIf you really want it: *tally import again "
                     f"{a:%d/%m} to {b:%d/%m}*")
-        params = {"from": a.isoformat(), "to": b.isoformat(), "name": res["name"], "vouchers": res["vouchers"]}
+        params = {"from": a.isoformat(), "to": b.isoformat(), "name": res["name"], "vouchers": res["vouchers"],
+                  "xml": res["xml"], "sha256": hashlib.sha256(res["xml"].encode("utf8")).hexdigest()}
         kind, what = "import", f"import {res['vouchers']} vouchers ({a:%d/%m} – {b:%d/%m})"
     else:
         w = _when(ml.group(2))
@@ -92,6 +125,10 @@ def handle(cur, phone, low, text):
         kind, what = "ledger", f"ledger {ledger} {first:%d/%m} – {last:%d/%m} as PDF"
     cur.execute("INSERT INTO tally_jobs (phone, kind, params, waiting) VALUES (%s,%s,%s,'pin') RETURNING id", (phone, kind, json.dumps(params)))
     jid = cur.fetchone()["id"]
+    if kind == "import":
+        # A unique filename avoids accepting an old file-manager row as a new upload.
+        params["name"] = params["name"].removesuffix(".xml") + f"_job{jid}.xml"
+        cur.execute("UPDATE tally_jobs SET params=%s::jsonb WHERE id=%s", (json.dumps(params), jid))
     try:
         start_github(jid)
     except UserError as e:
@@ -101,56 +138,102 @@ def handle(cur, phone, low, text):
 
 
 # ------------------------------------------------------------------ the agent's private doors (CRON_SECRET)
+def claim_job(jid):
+    """Only one workflow execution may operate a job, including GitHub reruns."""
+    from . import db
+    with db.tx() as cur:
+        cur.execute("UPDATE tally_jobs SET state='running' WHERE id=%s AND state='starting' RETURNING id", (jid,))
+        return bool(cur.fetchone())
+
+
 def agent_wait(jid, field):
-    """The agent asks for the owner's answer; the PIN is deleted as soon as it is handed over (10-minute limit)."""
+    """Consume answers only at their matching stage; never return an old PIN as a company."""
     from . import db
     with db.tx() as cur:
         cur.execute("SELECT * FROM tally_jobs WHERE id=%s FOR UPDATE", (jid,))
         j = cur.fetchone()
         if not j:
             return {"state": "missing"}
+        if j["state"] in ("done", "failed", "review_required", "submitting"):
+            return {"state": "cancelled"}
+        expected = {"pin": "running", "company": "tally", "import": "awaiting_import"}
+        if field not in expected or j["state"] != expected[field]:
+            return {"state": "cancelled"}
+        now = __import__("datetime").datetime.now(j["created_at"].tzinfo)
+        stamp = j.get("answered_at") or j["created_at"]
+        if (now - stamp).total_seconds() > 600 and (field == "pin" or j["answer"] is not None):
+            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL, answer=NULL WHERE id=%s", (jid,))
+            return {"state": "expired"}
         if j["answer"] is not None and j["waiting"] is None:
             ans = j["answer"]
-            cur.execute("UPDATE tally_jobs SET answer=NULL WHERE id=%s", (jid,))
+            cur.execute("UPDATE tally_jobs SET answer=NULL, answered_at=NULL WHERE id=%s", (jid,))
             return {"state": "ok", "answer": ans}
         if field == "company" and j["waiting"] != "company":
-            cur.execute("UPDATE tally_jobs SET waiting='company' WHERE id=%s", (jid,))
+            cur.execute("UPDATE tally_jobs SET waiting='company', answer=NULL WHERE id=%s", (jid,))
             _wa().notify(cur, j["phone"], f"🏢 Tally job #{jid}: which company should I open? (e.g. *SAI FUEL MART 26-27*)")
-        if j["created_at"] and (__import__("datetime").datetime.now(j["created_at"].tzinfo) - j["created_at"]).total_seconds() > 600 and field == "pin":
-            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL WHERE id=%s", (jid,))
-            return {"state": "expired"}
         return {"state": "waiting"}
 
 
-def agent_step(jid, step, message, png=None, done=False, failed=False):
+def valid_import_evidence(params, evidence):
+    if not isinstance(evidence, dict) or evidence.get("filename") != params.get("name"):
+        return False
+    counts = evidence.get("counts", {})
+    if not isinstance(counts, dict) or any(type(counts.get(k)) is not int or counts[k] < 0
+                                        for k in ("created", "altered", "errors", "ignored")):
+        return False
+    return (counts["errors"] == counts["ignored"] == 0
+            and counts["created"] + counts["altered"] == params.get("vouchers")
+            and params.get("vouchers", 0) > 0)
+
+
+def agent_step(jid, step, message, png=None, done=False, failed=False, evidence=None):
     from . import db
     with db.tx() as cur:
-        cur.execute("SELECT phone FROM tally_jobs WHERE id=%s", (jid,))
+        cur.execute("SELECT * FROM tally_jobs WHERE id=%s FOR UPDATE", (jid,))
         j = cur.fetchone()
-        if not j:
+        if not j or j["state"] in ("done", "failed", "review_required"):
             return False
-        state = "failed" if failed else ("done" if done else step)
+        if done and j["kind"] == "import":
+            if (step != "import_verified" or j["state"] != "submitting" or not png
+                    or not valid_import_evidence(j["params"], evidence)):
+                return False
+        if step == "awaiting_import" and (not png or j["state"] != "company"):
+            return False
+        if step == "submitting" and (j["state"] != "awaiting_import" or j["waiting"] is not None or j["answer"] is not None):
+            return False
+        uncertain = j["state"] == "submitting" and failed
+        state = "review_required" if uncertain else ("failed" if failed else ("done" if done else step))
+        if uncertain:
+            message = "Import outcome UNCONFIRMED. Check Day Book before retrying. " + message
+        # Mark waiting before delivering the screenshot so a quick reply is not lost.
+        if step == "awaiting_import":
+            cur.execute("UPDATE tally_jobs SET waiting='import', answer=NULL, answered_at=NULL WHERE id=%s", (jid,))
         cur.execute("UPDATE tally_jobs SET state=%s, log = log || %s::jsonb WHERE id=%s",
-                    (state, json.dumps([{"step": step, "message": message[:300]}]), jid))
-        if failed:
+                    (state, json.dumps([{"step": step, "message": message[:900], "evidence": evidence}]), jid))
+        if failed or done or state == "review_required":
             cur.execute("UPDATE tally_jobs SET waiting=NULL, answer=NULL WHERE id=%s", (jid,))
         phone = j["phone"]
-    icon = "❌" if failed else ("✅" if done else "▶️")
+    icon = "⚠️" if state == "review_required" else ("❌" if failed else ("✅" if done else "▶️"))
     if png:
-        _wa().send_image(phone, png, f"{icon} #{jid} {message}"[:900])
+        delivered = _wa().send_image(phone, png, f"{icon} #{jid} {message}"[:900], strict=True)
     else:
-        _wa().send_text(phone, f"{icon} Tally job #{jid}: {message}")
-    return True
+        delivered = _wa().send_text(phone, f"{icon} Tally job #{jid}: {message}")
+    if not delivered:
+        _wa().send_text(phone, f"⚠️ Job #{jid}: screenshot/status delivery failed. Send tally status for the saved status. "
+                        + ("Result recorded; check Tally before retrying." if done or state == "submitting" else "Agent stopped; no further import actions will be taken."))
+    return bool(delivered)
 
 
 def agent_xml(jid):
+    """Use the validated snapshot, not a different workbook edited during login."""
     from . import db
-    from .tally_convert import convert
-    from .tally_site import current
     with db.tx() as cur:
         cur.execute("SELECT * FROM tally_jobs WHERE id=%s", (jid,))
         j = cur.fetchone()
-        data, _ = current(cur)
+    if not j or j["kind"] != "import" or j["state"] in ("done", "failed", "review_required", "submitting"):
+        return {"ok": False, "errors": ["Import job is missing or no longer active"]}
     p = j["params"]
-    res = convert(data, date.fromisoformat(p["from"]), date.fromisoformat(p["to"]))
-    return res
+    xml = p.get("xml")
+    if not xml or hashlib.sha256(xml.encode("utf8")).hexdigest() != p.get("sha256"):
+        return {"ok": False, "errors": ["Validated XML snapshot unavailable. Start a new job after checking Day Book."]}
+    return {"ok": True, "xml": xml, "name": p["name"], "vouchers": p["vouchers"]}

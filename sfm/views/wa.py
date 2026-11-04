@@ -231,9 +231,18 @@ def tally_job(jid):
     return jsonify({"ok": bool(j), "job": j})
 
 
+@bp.route("/api/tally/job/<int:jid>/claim", methods=["POST"])
+def tally_claim(jid):
+    if not _internal_ok():
+        return jsonify({"ok": False}), 401
+    from ..tally_jobs import claim_job
+    ok = claim_job(jid)
+    return jsonify({"ok": ok}), 200 if ok else 409
+
+
 @bp.route("/api/tally/job/<int:jid>/wait/<field>", methods=["GET"])
 def tally_wait(jid, field):
-    if not _internal_ok() or field not in ("pin", "company"):
+    if not _internal_ok() or field not in ("pin", "company", "import"):
         return jsonify({"ok": False}), 401
     from ..tally_jobs import agent_wait
     return jsonify(agent_wait(jid, field))
@@ -258,7 +267,7 @@ def tally_step(jid):
     from ..tally_jobs import agent_step
     j = request.get_json(force=True, silent=True) or {}
     png = base64.b64decode(j["png"]) if j.get("png") else None
-    return jsonify({"ok": agent_step(jid, j.get("step", "step"), j.get("message", ""), png, j.get("done"), j.get("failed"))})
+    return jsonify({"ok": agent_step(jid, j.get("step", "step"), j.get("message", ""), png, j.get("done"), j.get("failed"), j.get("evidence"))})
 
 
 @bp.route("/api/tally/job/<int:jid>/file", methods=["POST"])
