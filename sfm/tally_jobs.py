@@ -139,6 +139,13 @@ def handle(cur, phone, low, text):
         # A unique filename avoids accepting an old file-manager row as a new upload.
         params["name"] = params["name"].removesuffix(".xml") + f"_job{jid}.xml"
         cur.execute("UPDATE tally_jobs SET params=%s::jsonb WHERE id=%s", (json.dumps(params), jid))
+    if kind == "ledger":
+        cur.execute("SELECT id FROM tally_jobs WHERE phone=%s AND params->>'session_seen' IS NOT NULL AND (params->>'session_seen')::timestamptz > NOW() - interval '15 seconds' ORDER BY id DESC LIMIT 1 FOR UPDATE", (phone,))
+        warm = cur.fetchone()
+        if warm:
+            cur.execute("UPDATE tally_jobs SET waiting=NULL, params=params || %s::jsonb WHERE id=%s", (json.dumps({"session_parent": warm["id"]}), jid))
+            start_github(jid)  # queued fallback; exits without replay if warm worker claims it
+            return f"Tally job #{jid}: {what}. Using your open Tally session — no new PIN needed."
     try:
         start_github(jid)
     except UserError as e:
@@ -152,8 +159,11 @@ def claim_job(jid):
     """Only one workflow execution may operate a job, including GitHub reruns."""
     from . import db
     with db.tx() as cur:
-        cur.execute("UPDATE tally_jobs SET state='running' WHERE id=%s AND state='starting' RETURNING id", (jid,))
-        return bool(cur.fetchone())
+        cur.execute("UPDATE tally_jobs SET state='running', waiting='pin' WHERE id=%s AND state='starting' RETURNING id, phone, params", (jid,))
+        claimed = cur.fetchone()
+    if claimed and claimed['params'].get('session_parent'):
+        _wa().send_text(claimed['phone'], "The previous Tally session ended. Send your secure PIN to reconnect for this queued report.")
+    return bool(claimed)
 
 
 def agent_wait(jid, field):
@@ -249,3 +259,27 @@ def agent_xml(jid):
     if not xml or hashlib.sha256(xml.encode("utf8")).hexdigest() != p.get("sha256"):
         return {"ok": False, "errors": ["Validated XML snapshot unavailable. Start a new job after checking Day Book."]}
     return {"ok": True, "xml": xml, "name": p["name"], "vouchers": p["vouchers"]}
+
+
+def session_next(jid, closing=False):
+    """Short-lived lease for the existing browser; never persist login credentials."""
+    from . import db
+    with db.tx() as cur:
+        cur.execute("SELECT * FROM tally_jobs WHERE id=%s FOR UPDATE", (jid,))
+        parent = cur.fetchone()
+        if not parent or parent['state'] not in ('done', 'failed', 'review_required'):
+            return {"ok": False}
+        if closing:
+            cur.execute("UPDATE tally_jobs SET params=params - 'session_seen' WHERE id=%s", (jid,))
+            # Recover a command queued just as the browser closed: require a fresh login.
+            cur.execute("UPDATE tally_jobs SET waiting='pin' WHERE state='starting' AND params->>'session_parent'=%s RETURNING id", (str(jid),))
+            queued = cur.fetchall()
+        else:
+            cur.execute("UPDATE tally_jobs SET params=params || jsonb_build_object('session_seen', NOW()::text) WHERE id=%s", (jid,))
+            cur.execute("SELECT * FROM tally_jobs WHERE phone=%s AND state='starting' AND params->>'session_parent'=%s ORDER BY id LIMIT 1 FOR UPDATE", (parent['phone'], str(jid)))
+            job = cur.fetchone()
+            if job:
+                cur.execute("UPDATE tally_jobs SET state='running', waiting=NULL WHERE id=%s", (job['id'],))
+                cur.execute("UPDATE tally_jobs SET params=params - 'session_seen' WHERE id=%s", (jid,))
+            return {"ok": True, "job": job}
+    return {"ok": True}

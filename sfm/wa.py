@@ -778,6 +778,9 @@ def handle(cur, phone, user, msg):
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
 
+    low = re.sub(r"^check\s+tally\b", "tally check", low)
+    if re.fullmatch(r"svt\s+ledger(?:\s+pdf)?", low):
+        low = "tally ledger svt this month pdf"
     # Explicit remote-Tally commands must precede workbook normalization,
     # transporter-document shortcuts, and stale local confirmation sessions.
     if mtype == "text" and (user.get("role") or "") == "owner" and re.match(

@@ -327,7 +327,7 @@ def test_period_uses_alt_f2():
 
 def test_daybook_command_creates_read_only_report_job():
     import json
-    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 11}]
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 11}, None]
     with patch.object(jobs, 'start_github'):
         out = jobs.handle(cursor, 'test', 'tally check 2/11/2026', 'tally check 2/11/2026')
     insert = next(c for c in cursor.execute.call_args_list if 'INSERT INTO tally_jobs' in c.args[0])
@@ -340,7 +340,7 @@ def test_daybook_command_creates_read_only_report_job():
 def test_svt_nov_pdf_uses_full_november():
     import json
     from sfm import tally_site
-    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 12}]
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 12}, None]
     with patch.object(jobs, 'start_github'), \
          patch.object(tally_site, 'name_map', return_value={'party': {'svt': 'SVT LOGISTICS'}}), \
          patch.object(tally_site, 'current', return_value=(None, None)):
@@ -412,7 +412,7 @@ def test_pdf_verification_rejects_old_month():
 
 def test_full_whatsapp_router_does_not_normalize_remote_check_to_workbook():
     from sfm import wa_tally
-    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 19}]
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 19}, None]
     with patch.object(wa, 'session', return_value={'state': {}}), \
          patch.object(wa_tally, 'normalize', side_effect=AssertionError('Must not normalize remote commands')), \
          patch.object(wa, 'documents_reply', side_effect=AssertionError('Must not return transporter bills')), \
@@ -457,3 +457,35 @@ def test_workbook_daily_check_route_remains_available():
          patch.object(wa_tally, 'handle', return_value='Workbook check'):
         out = wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':'daily check 2/11/2026'}})
         assert out == 'Workbook check'
+
+
+def test_warm_report_is_queued_without_pin():
+    cur = Mock(); cur.fetchone.side_effect = [None, None, {'id': 20}, {'id': 19}]
+    with patch.object(jobs, 'start_github') as dispatch:
+        out = jobs.handle(cur, 'test', 'tally check 3/11/2026', 'tally check 3/11/2026')
+    assert 'no new PIN' in out
+    assert any('waiting=NULL' in c.args[0] for c in cur.execute.call_args_list)
+    dispatch.assert_called_once_with(20)
+
+
+def test_check_tally_and_svt_ledger_aliases():
+    for text, expected in [('check tally 3/11', 'tally check 3/11'), ('svt ledger','tally ledger svt this month pdf')]:
+        with patch.object(wa, 'session', return_value={'state':{}}), patch.object(jobs, 'handle', return_value='job') as handler:
+            assert wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':text}}) == 'job'
+            assert handler.call_args.args[2] == expected
+
+
+def test_session_poll_claims_only_same_owner_queued_report():
+    parent = job('done')
+    child = job('starting'); child['id'] = 2
+    with backend(parent) as (cur, sender):
+        cur.fetchone.side_effect = [parent, child]
+        result = jobs.session_next(1)
+    assert result['job']['id'] == 2
+    query = next(c for c in cur.execute.call_args_list if 'session_parent' in c.args[0] and c.args[0].startswith('SELECT'))
+    assert query.args[1] == ('test', '1')
+
+
+def test_active_job_cannot_advertise_idle_session():
+    with backend(job('submitting')):
+        assert jobs.session_next(1) == {'ok': False}

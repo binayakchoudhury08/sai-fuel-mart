@@ -293,3 +293,12 @@ def tick():
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     from ..scheduler import tick as run
     return jsonify({"ok": True, "done": [d[0] for d in run()]})
+
+
+@bp.route("/api/tally/job/<int:jid>/session", methods=["POST"])
+def tally_session(jid):
+    if not _internal_ok():
+        return jsonify({"ok": False}), 401
+    from ..tally_jobs import session_next
+    body = request.get_json(silent=True) or {}
+    return jsonify(session_next(jid, closing=bool(body.get('close'))))

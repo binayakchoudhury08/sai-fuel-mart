@@ -591,6 +591,8 @@ def ensure_runtime():
 
 
 def main():
+    global JOB
+    started = time.monotonic()
     ensure_runtime()
     job = api("").json().get("job")
     if job and job["state"] != "starting":
@@ -616,6 +618,32 @@ def main():
                 import_xml(desk, month, p["name"], company, p["vouchers"])
             else:
                 company = open_tally(desk)
+                d1, d2 = date.fromisoformat(p["from"]), date.fromisoformat(p["to"])
+                if p.get("report") == "daybook":
+                    daybook_check(desk, company, d1, d2)
+                else:
+                    ledger_pdf(desk, p["ledger"], d1, d2, company)
+            # Reuse the authenticated desktop for read-only follow-up reports.
+            # Leave room inside the existing 25-minute Actions timeout.
+            while time.monotonic() - started < 19 * 60:
+                anchor = JOB
+                idle_until = min(time.monotonic() + 5 * 60, started + 19 * 60)
+                follow = None
+                while time.monotonic() < idle_until:
+                    response = api("/session", method="POST", json={}).json()
+                    if not response.get("ok"):
+                        break
+                    follow = response.get("job")
+                    if follow:
+                        break
+                    time.sleep(3)
+                if not follow:
+                    api("/session", method="POST", json={"close": True})
+                    break
+                JOB = follow["id"]
+                p = follow["params"]
+                close_side_panel(desk)
+                step("reuse", f"Using the existing session for {company}; no login repeated.")
                 d1, d2 = date.fromisoformat(p["from"]), date.fromisoformat(p["to"])
                 if p.get("report") == "daybook":
                     daybook_check(desk, company, d1, d2)
