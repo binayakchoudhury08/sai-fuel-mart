@@ -329,13 +329,34 @@ def import_month(name):
     return f"{MON[start.month - 1]} {start.year}"
 
 
+def remote_type(desk, value):
+    # Canvas RDP clients consume physical key events, not browser text insertion.
+    shifted = {"_": "Minus", ":": "Semicolon"}
+    for char in value:
+        if char in shifted or char.isascii() and char.isupper():
+            key = shifted.get(char, "Key" + char)
+            desk.keyboard.down("Shift")
+            try:
+                desk.keyboard.press(key, delay=35)
+            finally:
+                desk.keyboard.up("Shift")
+        else:
+            key = {"\\": "Backslash", " ": "Space", ".": "Period", "-": "Minus"}.get(char, char)
+            desk.keyboard.press(key, delay=35)
+
+
+def exact_path_visible(text, path):
+    # Preserve punctuation: underscores and hyphens are different directory names.
+    return path.casefold() in " ".join(text.split()).casefold()
+
+
 def replace_field(desk, value):
     # Tally fields do not reliably implement Windows Shift+End selection.
     # Home + Delete clears the focused field without Ctrl+A (which would submit).
     desk.keyboard.press("Home")
     for _ in range(260):
         desk.keyboard.press("Delete")
-    desk.keyboard.type(value, delay=30)
+    remote_type(desk, value)
 
 
 def path_dialog(text):
@@ -349,8 +370,9 @@ def path_error(text):
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
     if not path_dialog(text):
-        # File Path is a selector, not a free-text filename field.
-        desk.keyboard.type("Specify Path", delay=40)
+        click_setting(desk, ["File Path"])
+        # Explicitly focus the folder selector, regardless of where XML selection landed.
+        remote_type(desk, "Specify Path")
         desk.keyboard.press("Enter")
         wait_screen(desk, path_dialog, 15)
     replace_field(desk, folder)
@@ -359,7 +381,7 @@ def select_import_path(desk, folder):
     def accepted(text):
         if path_error(text):
             raise RuntimeError(f"Tally rejected folder {folder}; filename was NOT entered")
-        return not path_dialog(text) and compact(folder) in compact(text)
+        return not path_dialog(text) and exact_path_visible(text, folder)
     wait_screen(desk, accepted, 20)
 
 
@@ -375,11 +397,12 @@ def import_xml(desk, month, name, company, expected):
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
+    click_setting(desk, ["File to Import"])
     replace_field(desk, name)
     desk.keyboard.press("Enter")
     def filled(text):
         value = compact(text)
-        return (compact(name) in value and compact(f"{IMPORT_ROOT}\\{month}") in value
+        return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
                 and compact(company) in value and "xml" in value
                 and "list of file formats" not in text.lower()
                 and not path_dialog(text) and not path_error(text))

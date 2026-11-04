@@ -29,7 +29,7 @@ def run_import(answer='IMPORT', result=RESULT, changed=False):
     with patch.object(robot, '_tally_on_screen', return_value=True), patch.object(robot, 'wait_screen', side_effect=wait), \
          patch.object(robot, 'read_screen', return_value=('wrong file' if changed else FORM, 'image')), \
          patch.object(robot, 'wait_answer', return_value=answer), patch.object(robot.time, 'sleep'), \
-         patch.object(robot, 'select_import_path'), patch.object(robot, 'daybook_check', return_value=True), \
+         patch.object(robot, 'select_import_path'), patch.object(robot, 'click_setting'), patch.object(robot, 'daybook_check', return_value=True), \
          patch.object(robot, 'step') as step:
         error = None
         try:
@@ -285,7 +285,8 @@ def test_path_error_never_advances_to_filename():
          patch.object(robot, 'wait_screen', side_effect=lambda d, predicate, seconds: predicate('Incorrect File/Folder Path')):
         with pytest.raises(RuntimeError, match='filename was NOT entered'):
             robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
-    assert [c.args[0] for c in desk.keyboard.type.call_args_list] == [robot.IMPORT_ROOT + '\\NOV 2026']
+    desk.keyboard.type.assert_not_called()
+    assert 'Backslash' in [c.args[0] for c in desk.keyboard.press.call_args_list]
 
 
 def test_folder_acceptance_rejects_open_modal_and_old_month():
@@ -318,10 +319,10 @@ def test_date_verification_requires_month_and_year():
 def test_period_uses_alt_f2():
     from datetime import date
     desk = Mock()
-    with patch.object(robot, 'wait_screen'):
+    with patch.object(robot, 'wait_screen'), patch.object(robot, 'remote_type') as typed:
         robot.set_period(desk, date(2026,11,1), date(2026,11,30))
     assert desk.keyboard.press.call_args_list[0].args[0] == 'Alt+F2'
-    assert [c.args[0] for c in desk.keyboard.type.call_args_list] == ['01-11-2026', '30-11-2026']
+    assert [c.args[1] for c in typed.call_args_list] == ['01-11-2026', '30-11-2026']
 
 
 def test_daybook_command_creates_read_only_report_job():
