@@ -607,3 +607,27 @@ def test_retry_endpoint_requires_internal_secret():
     with patch.dict(os.environ, {'CRON_SECRET': 'private'}), patch.object(jobs, 'retry_login_job') as retry:
         assert app.test_client().post('/api/tally/job/14/retry-login').status_code == 401
         retry.assert_not_called()
+
+
+def test_empty_dated_daybook_returns_immediately_without_filter_or_search():
+    from datetime import date
+    desk = Mock()
+    text = f'Day Book {COMPANY} 2-Nov-26 Date Particulars Vch Type Vch No Debit Amount Credit Amount'
+    with patch.object(robot, 'open_report', return_value=(text, 'photo')), patch.object(robot, 'read_screen') as read, patch.object(robot, 'step') as step:
+        assert robot.daybook_check(desk, COMPANY, date(2026,11,2), date(2026,11,2)) is False
+        desk.keyboard.press.assert_not_called()
+        desk.keyboard.type.assert_not_called()
+        read.assert_not_called()
+        assert step.call_args.kwargs['png'] == 'photo'
+        assert 'NO DATA FOUND' in step.call_args.args[1]
+
+
+def test_filter_dialog_or_wrong_date_cannot_be_called_empty():
+    from datetime import date
+    import pytest
+    for text in (f'Day Book {COMPANY} 2-Nov-26 Name of Voucher Type All Items',
+                 f'Day Book {COMPANY} 3-Nov-26', ''):
+        with patch.object(robot, 'open_report', return_value=(text, 'photo')), patch.object(robot, 'step') as step:
+            with pytest.raises(RuntimeError):
+                robot.daybook_check(Mock(), COMPANY, date(2026,11,2), date(2026,11,2))
+            step.assert_not_called()

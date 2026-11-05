@@ -491,36 +491,18 @@ def open_report(desk, report, company, d1, d2, ledger=None):
 
 def daybook_check(desk, company, d1, d2, done=True):
     text, png = open_report(desk, "Day Book", company, d1, d2)
-    # Restore hidden rows, and select all voucher types. These only change the view.
-    desk.keyboard.press("Alt+U")
-    desk.keyboard.press("F4"); time.sleep(1)
-    desk.keyboard.type("All Vouchers", delay=40); desk.keyboard.press("Enter")
-    text, png = wait_screen(desk, lambda t: "day book" in t.lower() and compact(company) in compact(t)
-                            and date_visible(t, d1) and date_visible(t, d2)
-                            and "list of voucher types" not in t.lower())
-    # Search the visible report pages; never infer absence from a failed OCR read.
-    seen = set()
-    found = False
-    complete = False
-    for _ in range(30):
-        if not ("day book" in text.lower() and date_visible(text, d1) and compact(company) in compact(text)):
-            raise RuntimeError("Day Book date/company became unreadable; data presence is unconfirmed")
-        found = bool(re.search(r"\b(?:HSD|MS)\b", text, re.I))
-        if found:
-            break
-        fingerprint = " ".join(text.split())
-        if fingerprint in seen or any(v in text.lower() for v in ("no vouchers", "no entries", "no transactions")):
-            complete = True
-            break
-        seen.add(fingerprint)
-        desk.keyboard.press("PageDown"); time.sleep(0.8)
-        text, png = read_screen(desk)
+    # Owner-requested quick check: inspect the dated report once, without opening
+    # a voucher filter or paging through unrelated entries. Absence is view-scoped.
+    if (not png or "day book" not in text.lower() or compact(company) not in compact(text)
+            or not date_visible(text, d1) or not date_visible(text, d2)
+            or any(label in text.lower() for label in
+                   ("change voucher type", "name of voucher type", "voucher types", "change period", "change date"))):
+        raise RuntimeError("Day Book is obscured or its date/company is unreadable; check the screenshot")
+    found = bool(re.search(r"\b(?:HSD|MS)\b", text, re.I))
     if found:
-        observation = "YES — HSD/MS data found in Day Book. This confirms data presence, not a full XML reconciliation."
-    elif complete:
-        observation = "NO DATA FOUND — no HSD/MS vouchers found in the checked Day Book view."
+        observation = "YES — HSD/MS data found in Day Book."
     else:
-        raise RuntimeError("Day Book scan limit reached; data presence is unconfirmed")
+        observation = "NO DATA FOUND — no HSD/MS entries visible in this Day Book view."
     step("daybook_checked" if done else "daybook_evidence", f"{company}: {d1:%d/%m/%Y}–{d2:%d/%m/%Y}. " + observation,
          png=png, done=done)
     return found

@@ -62,3 +62,6 @@ For a first live check, use a backed-up/test company and a previously unimported
 A PIN supplied before the worker starts is preserved and consumed once. Expired answers now produce a saved status and WhatsApp notification. Browser/startup failures are reported without login screenshots.
 
 For an explicitly requested recovery of a failed job that never reached login, an operator can dispatch the existing workflow with job_id `14:retry-login` (replace 14). The authenticated endpoint creates a new job with the frozen XML snapshot, new filename and fresh PIN request. It refuses any job with login/import activity, active concurrent work, or an existing retry. Ordinary workflow reruns still cannot replay jobs. Import requires the existing screenshot and IMPORT confirmation.
+
+## Quick Day Book check (3.28.13)
+Uses Gateway → K → F2 → requested date, then inspects that visible report once. No F4 voucher-type popup and no PageDown search. YES means HSD/MS is visible; NO DATA FOUND means no HSD/MS is visible in that view. Both include its screenshot. This is not a full multi-page reconciliation or proof an import never happened. Obscured reports and incorrect dates remain errors.
