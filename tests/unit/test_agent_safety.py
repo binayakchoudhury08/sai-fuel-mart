@@ -631,3 +631,36 @@ def test_filter_dialog_or_wrong_date_cannot_be_called_empty():
             with pytest.raises(RuntimeError):
                 robot.daybook_check(Mock(), COMPANY, date(2026,11,2), date(2026,11,2))
             step.assert_not_called()
+
+
+def test_startup_returns_from_daybook_then_stops_at_gateway():
+    desk = Mock()
+    with patch.object(robot, 'read_screen', side_effect=[('Day Book', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'):
+        robot.recover_tally_screen(desk)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
+
+
+def test_cleanup_never_escapes_an_already_visible_gateway():
+    desk = Mock()
+    with patch.object(robot, 'close_side_panel'), patch.object(robot, 'read_screen', return_value=(f'Gateway of Tally {COMPANY}', 'photo')):
+        robot.return_to_gateway(desk, COMPANY)
+    desk.keyboard.press.assert_not_called()
+
+
+def test_task_result_precedes_gateway_cleanup_and_browser_close():
+    from datetime import date
+    events = []
+    job_record = {'state': 'starting', 'kind': 'ledger', 'params': {'report': 'daybook', 'from': '2026-11-02', 'to': '2026-11-02'}}
+    response = Mock()
+    response.json.side_effect = [{'job': job_record}, {'ok': True}]
+    pw = Mock()
+    pw.chromium.launch.return_value.close.side_effect = lambda: events.append('close')
+    with patch.object(robot, 'api', return_value=response), patch.object(robot, 'ensure_runtime'), \
+         patch.object(robot, 'sync_playwright') as playwright, patch.object(robot, 'login'), \
+         patch.object(robot, 'connect'), patch.object(robot, 'open_tally', return_value=COMPANY), \
+         patch.object(robot, 'daybook_check', side_effect=lambda *a: events.append('result_photo')), \
+         patch.object(robot, 'return_to_gateway', side_effect=lambda *a: events.append('gateway')), \
+         patch.object(robot.time, 'monotonic', side_effect=[0, 2000]):
+        playwright.return_value.__enter__.return_value = pw
+        robot.main()
+    assert events == ['result_photo', 'gateway', 'gateway', 'close']

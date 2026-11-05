@@ -65,3 +65,6 @@ For an explicitly requested recovery of a failed job that never reached login, a
 
 ## Quick Day Book check (3.28.13)
 Uses Gateway → K → F2 → requested date, then inspects that visible report once. No F4 voucher-type popup and no PageDown search. YES means HSD/MS is visible; NO DATA FOUND means no HSD/MS is visible in that view. Both include its screenshot. This is not a full multi-page reconciliation or proof an import never happened. Obscured reports and incorrect dates remain errors.
+
+## Gateway cleanup (3.28.14)
+After each result screenshot/PDF, the worker presses Esc until the selected company Gateway is verified, before waiting for another command. Failure screenshots are captured before best-effort cleanup. Startup now recovers from a leftover Day Book or ledger report. An already visible Gateway receives no Esc, preventing an accidental quit prompt.

@@ -227,21 +227,25 @@ def close_side_panel(desk):
     vw, vh = desk.viewport_size["width"], desk.viewport_size["height"]
     if _safe(lambda: ui(desk).locator("[title='File Manager'], [aria-label='File Manager']").count(), 0):
         desk.mouse.click(vw - 129, vh // 2); time.sleep(1)        # » closes the side panel when it is open
-    desk.keyboard.press("Escape"); time.sleep(0.5)
+    # Never send an unconditional Esc here: Gateway would open the quit prompt.
+    if _fm_open(desk):
+        desk.keyboard.press("Escape"); time.sleep(0.5)
 
 
 def recover_tally_screen(desk):
-    """Dismiss only recognised abandoned import dialogs, never Accept them."""
-    for _ in range(6):
+    """Return from known reports/dialogs without accepting or modifying vouchers."""
+    for _ in range(10):
         text, _ = read_screen(desk)
         low = text.lower()
-        if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats")):
+        if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats",
+                                               "day book", "ledger vouchers", "account books", "display more reports",
+                                               "name of ledger", "list of ledgers", "export configuration", "change voucher type")):
             desk.keyboard.press("Escape"); time.sleep(0.5)
             continue
         if "gateway of tally" in low or "select company" in low or "list of companies" in low:
             return
         raise RuntimeError("Tally is on an unrecognised screen; return to Gateway of Tally and try again")
-    raise RuntimeError("Previous import dialog could not be closed safely")
+    raise RuntimeError("Could not return to Gateway from the previous task")
 
 
 def open_tally(desk):
@@ -465,6 +469,14 @@ def gateway(desk, company):
     raise RuntimeError("Could not verify company Gateway before report shortcuts")
 
 
+def return_to_gateway(desk, company=None):
+    close_side_panel(desk)
+    if company:
+        gateway(desk, company)
+    else:
+        recover_tally_screen(desk)
+
+
 def open_report(desk, report, company, d1, d2, ledger=None):
     gateway(desk, company)
     if ledger:
@@ -632,6 +644,7 @@ def main():
     with sync_playwright() as pw:
         browser = None
         page = desk = None
+        company = None
         try:
             browser = pw.chromium.launch()
             ctx = browser.new_context(accept_downloads=True)
@@ -651,6 +664,7 @@ def main():
                     daybook_check(desk, company, d1, d2)
                 else:
                     ledger_pdf(desk, p["ledger"], d1, d2, company)
+            return_to_gateway(desk, company)
             # Reuse the authenticated desktop for read-only follow-up reports.
             # Leave room inside the existing 25-minute Actions timeout.
             while time.monotonic() - started < 19 * 60:
@@ -677,6 +691,7 @@ def main():
                     daybook_check(desk, company, d1, d2)
                 else:
                     ledger_pdf(desk, p["ledger"], d1, d2, company)
+                return_to_gateway(desk, company)
         except Exception as e:
             try:
                 step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK, failed=True)
@@ -684,6 +699,12 @@ def main():
                 print("Failure status could not be delivered (or job already expired); see tally status.", flush=True)
             raise
         finally:
+            # Capture/deliver any failure screenshot above before leaving that screen.
+            if desk is not None:
+                try:
+                    return_to_gateway(desk, company)
+                except Exception:
+                    print("Could not verify Gateway during cleanup; no further keys sent.", flush=True)
             if browser is not None:
                 browser.close()
 
