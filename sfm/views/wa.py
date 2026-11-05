@@ -231,6 +231,15 @@ def tally_job(jid):
     return jsonify({"ok": bool(j), "job": j})
 
 
+@bp.route("/api/tally/job/<int:jid>/retry-login", methods=["POST"])
+def tally_retry_login(jid):
+    if not _internal_ok():
+        return jsonify({"ok": False}), 401
+    from ..tally_jobs import retry_login_job
+    job = retry_login_job(jid)
+    return jsonify({"ok": bool(job), "job": job}), 200 if job else 409
+
+
 @bp.route("/api/tally/job/<int:jid>/claim", methods=["POST"])
 def tally_claim(jid):
     if not _internal_ok():

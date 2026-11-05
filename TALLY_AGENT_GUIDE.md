@@ -57,3 +57,8 @@ Tests include real Tesseract execution against a generated result image, mocked 
 The older database integration script `tests/test_tally_jobs.py` was updated to the new protocol but was not run: the required test database/workbook fixture was not supplied. Production WhatsApp delivery, the live file manager, actual Tally field navigation, and live result-screen OCR remain unverified. The screenshot is too small to establish those behaviours. OCR can reject a valid but unreadable screen; it intentionally does not turn ambiguous characters into a success claim.
 
 For a first live check, use a backed-up/test company and a previously unimported date. Confirm the exact file and company before approving, then compare the result to Day Book. No credentials, PINs or account data are included in the new tests.
+
+## Login recovery (3.28.12)
+A PIN supplied before the worker starts is preserved and consumed once. Expired answers now produce a saved status and WhatsApp notification. Browser/startup failures are reported without login screenshots.
+
+For an explicitly requested recovery of a failed job that never reached login, an operator can dispatch the existing workflow with job_id `14:retry-login` (replace 14). The authenticated endpoint creates a new job with the frozen XML snapshot, new filename and fresh PIN request. It refuses any job with login/import activity, active concurrent work, or an existing retry. Ordinary workflow reruns still cannot replay jobs. Import requires the existing screenshot and IMPORT confirmation.

@@ -23,7 +23,7 @@ from datetime import date
 import requests
 from playwright.sync_api import sync_playwright
 
-SITE, SECRET, JOB = os.environ["SFM_SITE"].rstrip("/"), os.environ["SFM_SECRET"], int(os.environ["JOB_ID"])
+SITE, SECRET, JOB = os.environ["SFM_SITE"].rstrip("/"), os.environ["SFM_SECRET"], int(os.environ["JOB_ID"].removesuffix(":retry-login"))
 H = {"x-cron-secret": SECRET}
 LOGIN = "https://in.cloudaccess.tallysolutions.com/login"
 IMPORT_ROOT = r"D:\My_Applications\SFM_TALLY_IMPORT"
@@ -631,7 +631,9 @@ def ensure_runtime():
 def main():
     global JOB
     started = time.monotonic()
-    ensure_runtime()
+    if os.environ["JOB_ID"].endswith(":retry-login"):
+        job = api("/retry-login", method="POST").json()["job"]
+        JOB = job["id"]
     job = api("").json().get("job")
     if job and job["state"] != "starting":
         sys.exit("job already started or finished; refusing to replay it")
@@ -640,11 +642,17 @@ def main():
     if not api("/claim", method="POST").json().get("ok"):
         sys.exit("job could not be claimed")
     p = job["params"]
+    try:
+        ensure_runtime()
+    except Exception:
+        step("error", "Robot setup failed before login. No import was attempted.", failed=True)
+        raise
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        ctx = browser.new_context(accept_downloads=True)
+        browser = None
         page = desk = None
         try:
+            browser = pw.chromium.launch()
+            ctx = browser.new_context(accept_downloads=True)
             page = login(ctx)
             desk = connect(page)
             if job["kind"] == "import":
@@ -688,10 +696,14 @@ def main():
                 else:
                     ledger_pdf(desk, p["ledger"], d1, d2, company)
         except Exception as e:
-            step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK or page, failed=True)
+            try:
+                step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK, failed=True)
+            except Exception:
+                print("Failure status could not be delivered (or job already expired); see tally status.", flush=True)
             raise
         finally:
-            browser.close()
+            if browser is not None:
+                browser.close()
 
 
 if __name__ == "__main__":

@@ -159,11 +159,37 @@ def claim_job(jid):
     """Only one workflow execution may operate a job, including GitHub reruns."""
     from . import db
     with db.tx() as cur:
-        cur.execute("UPDATE tally_jobs SET state='running', waiting='pin' WHERE id=%s AND state='starting' RETURNING id, phone, params", (jid,))
+        cur.execute("UPDATE tally_jobs SET state='running', waiting=CASE WHEN answer IS NOT NULL AND waiting IS NULL THEN NULL ELSE 'pin' END WHERE id=%s AND state='starting' RETURNING id, phone, params, waiting", (jid,))
         claimed = cur.fetchone()
-    if claimed and claimed['params'].get('session_parent'):
+    if claimed and claimed['params'].get('session_parent') and claimed['waiting'] == 'pin':
         _wa().send_text(claimed['phone'], "The previous Tally session ended. Send your secure PIN to reconnect for this queued report.")
     return bool(claimed)
+
+
+def retry_login_job(jid):
+    """Explicit operator dispatch only: clone a failed pre-login job, never a submitted import."""
+    from . import db
+    with db.tx() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(734109)")
+        cur.execute("SELECT * FROM tally_jobs WHERE id=%s FOR UPDATE", (jid,))
+        old = cur.fetchone()
+        if not old or old["state"] != "failed":
+            return None
+        # Legacy PIN expiry had no log. Every successful login writes a log before Connect.
+        if any(e.get("step") != "answer_expired" or e.get("field") != "pin" for e in (old.get("log") or [])):
+            return None
+        cur.execute("SELECT id FROM tally_jobs WHERE (state NOT IN ('done','failed','review_required') AND created_at > NOW() - interval '45 minutes') OR params->>'retry_source'=%s LIMIT 1", (str(jid),))
+        if cur.fetchone():
+            return None
+        params = {k: v for k, v in old["params"].items() if k not in ("session_parent", "session_seen")}
+        params["retry_source"] = jid
+        cur.execute("INSERT INTO tally_jobs (phone,kind,params,waiting) VALUES (%s,%s,%s,'pin') RETURNING id", (old["phone"], old["kind"], json.dumps(params)))
+        new_id = cur.fetchone()["id"]
+        if old["kind"] == "import":
+            params["name"] = re.sub(r"(?:_job\d+)?\.xml$", f"_job{new_id}.xml", params["name"])
+            cur.execute("UPDATE tally_jobs SET params=%s::jsonb WHERE id=%s", (json.dumps(params), new_id))
+    _wa().send_text(old["phone"], f"Retrying pre-login job #{jid} as #{new_id}. Send a fresh secure PIN now. The previous PIN is not reused; import still requires your IMPORT reply after the form screenshot.")
+    return {"id": new_id, "kind": old["kind"], "params": params, "state": "starting"}
 
 
 def agent_wait(jid, field):
@@ -182,7 +208,10 @@ def agent_wait(jid, field):
         now = __import__("datetime").datetime.now(j["created_at"].tzinfo)
         stamp = j.get("answered_at") or j["created_at"]
         if (now - stamp).total_seconds() > 600 and (field == "pin" or j["answer"] is not None):
-            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL, answer=NULL WHERE id=%s", (jid,))
+            message = f"Tally job #{jid}: {field} expired after 10 minutes. The robot stopped. Send tally status before retrying."
+            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL, answer=NULL, answered_at=NULL, log=log || %s::jsonb WHERE id=%s",
+                        (json.dumps([{"step": "answer_expired", "message": message, "field": field}]), jid))
+            _wa().notify(cur, j["phone"], message)
             return {"state": "expired"}
         if j["answer"] is not None and j["waiting"] is None:
             ans = j["answer"]

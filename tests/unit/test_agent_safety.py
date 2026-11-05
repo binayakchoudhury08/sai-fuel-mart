@@ -529,3 +529,81 @@ def test_both_daybook_outcomes_include_photo():
             assert robot.daybook_check(Mock(),COMPANY,date(2026,11,2),date(2026,11,2)) is expected
             assert step.call_args.kwargs['png']=='photo'
             assert ('YES' if expected else 'NO DATA FOUND') in step.call_args.args[1]
+
+
+def test_pin_received_before_claim_is_consumed_once():
+    # Execute the actual claim SQL so a reset of waiting='pin' reproduces the bug.
+    import sqlite3, json
+    conn = sqlite3.connect(':memory:')
+    conn.row_factory = sqlite3.Row
+    conn.execute('CREATE TABLE tally_jobs (id INTEGER, phone TEXT, params TEXT, state TEXT, waiting TEXT, answer TEXT)')
+    conn.execute('INSERT INTO tally_jobs VALUES (1, ?, ?, ?, NULL, ?)', ('test', '{}', 'starting', '123456'))
+    class Cursor:
+        def execute(self, sql, args):
+            self.result = conn.execute(sql.replace('%s', '?'), args)
+        def fetchone(self):
+            row = self.result.fetchone()
+            if row:
+                row = dict(row)
+                row['params'] = json.loads(row['params'])
+            return row
+    @contextmanager
+    def tx():
+        yield Cursor()
+    with patch.object(db, 'tx', tx):
+        assert jobs.claim_job(1)
+        assert not jobs.claim_job(1)
+    row = dict(conn.execute('SELECT * FROM tally_jobs').fetchone())
+    record = job('running')
+    record.update(waiting=row['waiting'], answer=row['answer'], answered_at=datetime.now(timezone.utc))
+    with backend(record) as (cur, sender):
+        assert jobs.agent_wait(1, 'pin') == {'state': 'ok', 'answer': '123456'}
+        assert any('answer=NULL, answered_at=NULL' in c.args[0] for c in cur.execute.call_args_list)
+    conn.close()
+
+
+def test_expired_pin_notifies_and_clears_secret():
+    from datetime import timedelta
+    record = job('running')
+    record.update(waiting='pin', created_at=datetime.now(timezone.utc)-timedelta(minutes=11))
+    with backend(record) as (cur, sender):
+        assert jobs.agent_wait(1, 'pin') == {'state': 'expired'}
+        sender.notify.assert_called_once()
+        assert 'expired' in sender.notify.call_args.args[2]
+        assert any('answer=NULL, answered_at=NULL' in c.args[0] for c in cur.execute.call_args_list)
+
+
+def test_retry_refuses_any_job_that_reached_login_or_import():
+    for state, log in [('done', []), ('submitting', []), ('review_required', []),
+                       ('failed', [{'step': 'login'}]), ('failed', [{'step': 'submitting'}]),
+                       ('failed', [{'step': 'answer_expired', 'field': 'company'}])]:
+        with backend(job(state, log=log)) as (cur, sender):
+            assert jobs.retry_login_job(1) is None
+            sender.send_text.assert_not_called()
+
+
+def test_retry_clones_snapshot_without_old_pin_and_requests_fresh_pin():
+    old = job('failed', log=[])
+    old['params'].update(xml='<xml/>', sha256='hash')
+    with backend(old) as (cur, sender):
+        cur.fetchone.side_effect = [old, None, {'id': 15}]
+        new = jobs.retry_login_job(1)
+        assert new['id'] == 15 and new['params']['xml'] == '<xml/>'
+        assert new['params']['name'].endswith('_job15.xml')
+        assert 'answer' not in new
+        assert 'fresh secure PIN' in sender.send_text.call_args.args[1]
+
+
+def test_retry_refuses_duplicate_or_active_job():
+    with backend(job('failed', log=[])) as (cur, sender):
+        cur.fetchone.side_effect = [job('failed', log=[]), {'id': 15}]
+        assert jobs.retry_login_job(1) is None
+        sender.send_text.assert_not_called()
+
+
+def test_retry_endpoint_requires_internal_secret():
+    from sfm import create_app
+    app = create_app()
+    with patch.dict(os.environ, {'CRON_SECRET': 'private'}), patch.object(jobs, 'retry_login_job') as retry:
+        assert app.test_client().post('/api/tally/job/14/retry-login').status_code == 401
+        retry.assert_not_called()
