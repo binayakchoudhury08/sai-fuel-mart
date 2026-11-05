@@ -372,6 +372,16 @@ def replace_field(desk, value):
     remote_type(desk, value)
 
 
+def replace_import_field(desk, value):
+    # Home can navigate to File Format in this Tally form. Clear on both sides
+    # of the current caret without any field-navigation or acceptance keys.
+    for _ in range(260):
+        desk.keyboard.press("Backspace")
+    for _ in range(260):
+        desk.keyboard.press("Delete")
+    remote_type(desk, value)
+
+
 def path_dialog(text):
     return "specify file path" in text.lower() or "specify folder path" in text.lower()
 
@@ -390,7 +400,7 @@ def select_import_path(desk, folder):
             remote_type(desk, "Specify Path")
             desk.keyboard.press("Enter")
             wait_screen(desk, path_dialog, 15)
-    replace_field(desk, folder)
+    replace_import_field(desk, folder)
     desk.keyboard.press("Enter")
     # Never type a filename while the path modal or its error is still open.
     def accepted(text):
@@ -407,15 +417,19 @@ def import_xml(desk, month, name, company, expected):
     desk.keyboard.press("t")
     text, _ = wait_screen(desk, lambda t: "file format" in t.lower())
     # Preserve existing format/backup settings. Only the two requested fields change.
-    if "xml" not in text.lower():
-        raise RuntimeError("Import format is not XML; stopped without changing other settings")
     if "list of file formats" in text.lower():
-        desk.keyboard.press("Escape")
+        # The form opens its format selector automatically. Resolve it to the
+        # requested XML option, including repair of a previously corrupted value.
+        replace_import_field(desk, "XML")
+        desk.keyboard.press("Enter")
+        text, _ = wait_screen(desk, lambda t: "xml" in t.lower() and "list of file formats" not in t.lower(), 10)
+    if "xml" not in text.lower():
+        raise RuntimeError("Import format is not XML (Data Interchange); stopped before editing path/file")
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
     click_setting(desk, ["File to Import"], value_field=True)
-    replace_field(desk, name)
+    replace_import_field(desk, name)
     desk.keyboard.press("Enter")
     def filled(text):
         value = compact(text)

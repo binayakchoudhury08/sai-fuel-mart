@@ -687,3 +687,17 @@ def test_gateway_with_unreadable_company_never_gets_extra_escape():
         with pytest.raises(RuntimeError, match='without pressing Esc'):
             robot.gateway(desk, COMPANY)
     desk.keyboard.press.assert_not_called()
+
+
+def test_open_format_selector_is_resolved_to_xml_before_path_edit():
+    desk = Mock()
+    events = []
+    with patch.object(robot, '_tally_on_screen', return_value=True), \
+         patch.object(robot, 'wait_screen', side_effect=[('File Format DAI List of File Formats XML (Data Interchange)', 'photo'), (FORM, 'photo'), (FORM, 'photo'), (RESULT, 'photo')]), \
+         patch.object(robot, 'replace_import_field', side_effect=lambda d,v: events.append(v)), \
+         patch.object(robot, 'select_import_path', side_effect=lambda *a: events.append('path')), \
+         patch.object(robot, 'click_setting'), patch.object(robot, 'read_screen', return_value=(FORM,'photo')), \
+         patch.object(robot, 'wait_answer', return_value='IMPORT'), patch.object(robot, 'daybook_check', return_value=True), \
+         patch.object(robot, 'step'), patch.object(robot.time, 'sleep'):
+        robot.import_xml(desk, 'NOV 2026', NAME, COMPANY, 25)
+    assert events == ['XML', 'path', NAME]

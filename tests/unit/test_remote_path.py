@@ -21,7 +21,7 @@ def test_punctuation_is_not_discarded():
 
 def test_folder_selector_is_explicitly_selected():
     d=Mock()
-    with patch.object(a,'read_screen',return_value=('Import Transactions','')), patch.object(a,'wait_screen'), patch.object(a,'replace_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
+    with patch.object(a,'read_screen',return_value=('Import Transactions','')), patch.object(a,'wait_screen'), patch.object(a,'replace_import_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
         a.select_import_path(d, r'D:\NOV 2026')
     click.assert_called_once_with(d,['File Path'],value_field=True)
 
@@ -49,3 +49,23 @@ def test_import_value_focus_never_presses_enter_or_types_into_backup():
         desk.mouse.click.assert_called_once_with(154,50)
         desk.keyboard.press.assert_not_called()
         desk.keyboard.type.assert_not_called()
+
+
+def test_import_clear_does_not_navigate_to_format_from_path_or_filename():
+    for original, value in [(r'D:\OCT 2026', r'D:\NOV 2026'), ('old.xml', 'new.xml')]:
+        for caret in (0, 4, len(original)):
+            state = {'field': 'requested', 'value': original, 'caret': caret}
+            def press(key, **kwargs):
+                assert key not in ('Home', 'End', 'Tab', 'Enter', 'Control+a')
+                i=state['caret']
+                if key == 'Backspace' and i:
+                    state['value']=state['value'][:i-1]+state['value'][i:];state['caret']-=1
+                elif key == 'Delete':
+                    state['value']=state['value'][:i]+state['value'][i+1:]
+            def type_value(desk, text):
+                assert state['value']==''
+                state['value']=text
+            desk=Mock();desk.keyboard.press.side_effect=press
+            with patch.object(a,'remote_type',side_effect=type_value):
+                a.replace_import_field(desk,value)
+            assert state['value']==value
