@@ -232,11 +232,20 @@ def close_side_panel(desk):
         desk.keyboard.press("Escape"); time.sleep(0.5)
 
 
+def quit_dialog(text):
+    return bool(re.search(r"\bquit\s*\?", text, re.I) or
+                (re.search(r"\bquit\b", text, re.I) and re.search(r"\byes\s+or\s+no\b", text, re.I)))
+
+
 def recover_tally_screen(desk):
     """Return from known reports/dialogs without accepting or modifying vouchers."""
     for _ in range(10):
         text, _ = read_screen(desk)
         low = text.lower()
+        if quit_dialog(text):
+            desk.keyboard.press("Escape"); time.sleep(0.5)
+            text, _ = wait_screen(desk, lambda t: not quit_dialog(t), 10)
+            low = text.lower()
         if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats",
                                                "day book", "ledger vouchers", "account books", "display more reports",
                                                "name of ledger", "list of ledgers", "export configuration", "change voucher type")):
@@ -462,11 +471,23 @@ def set_period(desk, d1, d2):
 
 
 def gateway(desk, company):
+    previous = None
     for _ in range(8):
         text, _ = read_screen(desk)
-        if "gateway of tally" in text.lower() and compact(company) in compact(text) and not any(
-                word in text.lower() for word in ("import transactions", "specify file path", "export configuration")):
+        if quit_dialog(text):
+            desk.keyboard.press("Escape")
+            text, _ = wait_screen(desk, lambda t: not quit_dialog(t), 10)
+        low = text.lower()
+        overlay = any(word in low for word in ("import transactions", "specify file path", "export configuration",
+                                               "day book", "ledger vouchers", "account books", "display more reports"))
+        if "gateway of tally" in low and not overlay:
+            if compact(company) not in compact(text):
+                raise RuntimeError("Gateway is visible but company could not be verified; stopped without pressing Esc")
             return
+        fingerprint = compact(text)
+        if fingerprint == previous:
+            raise RuntimeError("Screen did not change after Esc; stopped before sending another Esc")
+        previous = fingerprint
         desk.keyboard.press("Escape"); time.sleep(0.5)
     raise RuntimeError("Could not verify company Gateway before report shortcuts")
 

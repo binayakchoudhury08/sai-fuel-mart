@@ -664,3 +664,26 @@ def test_task_result_precedes_gateway_cleanup_and_browser_close():
         playwright.return_value.__enter__.return_value = pw
         robot.main()
     assert events == ['result_photo', 'gateway', 'gateway', 'close']
+
+
+def test_quit_prompt_is_cancelled_once_before_accepting_gateway():
+    desk = Mock()
+    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), (f'Gateway of Tally {COMPANY}', 'photo')]), patch.object(robot.time, 'sleep'):
+        robot.gateway(desk, COMPANY)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
+
+
+def test_startup_cancels_quit_instead_of_treating_title_as_gateway():
+    desk = Mock()
+    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'):
+        robot.recover_tally_screen(desk)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
+
+
+def test_gateway_with_unreadable_company_never_gets_extra_escape():
+    import pytest
+    desk = Mock()
+    with patch.object(robot, 'read_screen', return_value=('Gateway of Tally', 'photo')):
+        with pytest.raises(RuntimeError, match='without pressing Esc'):
+            robot.gateway(desk, COMPANY)
+    desk.keyboard.press.assert_not_called()
