@@ -23,4 +23,29 @@ def test_folder_selector_is_explicitly_selected():
     d=Mock()
     with patch.object(a,'read_screen',return_value=('Import Transactions','')), patch.object(a,'wait_screen'), patch.object(a,'replace_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
         a.select_import_path(d, r'D:\NOV 2026')
-    click.assert_called_once_with(d,['File Path'])
+    click.assert_called_once_with(d,['File Path'],value_field=True)
+
+
+def test_import_value_focus_never_presses_enter_or_types_into_backup():
+    import io
+    import pytest
+    from PIL import Image, ImageDraw
+    # OCR coordinates are at 2x screenshot resolution, as used by click_setting.
+    tsv = 'block_num\tpar_num\tline_num\tleft\ttop\theight\ttext\n'
+    for left, text in [(20,'File'),(60,'Path'),(250,':'),(300,'D:\\OCT')]:
+        tsv += f'1\t1\t1\t{left}\t90\t20\t{text}\n'
+    for correct in (True, False):
+        im = Image.new('RGB', (400,200), 'white')
+        y = 50 if correct else 80  # wrong backup row must fail before any typing
+        ImageDraw.Draw(im).rectangle((150,y-5,300,y+5), fill=(255,240,160))
+        buf=io.BytesIO();im.save(buf,format='PNG')
+        desk=Mock();desk.screenshot.return_value=buf.getvalue()
+        with patch.object(a.subprocess,'run',return_value=Mock(stdout=tsv)),patch.object(a.time,'sleep'):
+            if correct:
+                a.click_setting(desk,['File Path'],value_field=True)
+            else:
+                with pytest.raises(RuntimeError,match='not visibly focused'):
+                    a.click_setting(desk,['File Path'],value_field=True)
+        desk.mouse.click.assert_called_once_with(154,50)
+        desk.keyboard.press.assert_not_called()
+        desk.keyboard.type.assert_not_called()

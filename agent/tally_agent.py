@@ -374,13 +374,13 @@ def path_error(text):
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
     if not path_dialog(text):
-        click_setting(desk, ["File Path"])
+        click_setting(desk, ["File Path"], value_field=True)
         # Explicitly focus the folder selector, regardless of where XML selection landed.
         text, _ = read_screen(desk)
-        if not path_dialog(text):
+        if not path_dialog(text) and "specify path" in text.lower():
             remote_type(desk, "Specify Path")
             desk.keyboard.press("Enter")
-        wait_screen(desk, path_dialog, 15)
+            wait_screen(desk, path_dialog, 15)
     replace_field(desk, folder)
     desk.keyboard.press("Enter")
     # Never type a filename while the path modal or its error is still open.
@@ -396,14 +396,16 @@ def import_xml(desk, month, name, company, expected):
         raise RuntimeError("Tally is not on the screen — nothing was imported")
     desk.keyboard.press("Alt+O"); time.sleep(1)
     desk.keyboard.press("t")
-    wait_screen(desk, lambda t: "file format" in t.lower())
-    # Do not type the long display label into Tally's format selector.
-    desk.keyboard.type("XML", delay=40)
-    desk.keyboard.press("Enter"); time.sleep(1)
+    text, _ = wait_screen(desk, lambda t: "file format" in t.lower())
+    # Preserve existing format/backup settings. Only the two requested fields change.
+    if "xml" not in text.lower():
+        raise RuntimeError("Import format is not XML; stopped without changing other settings")
+    if "list of file formats" in text.lower():
+        desk.keyboard.press("Escape")
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
-    click_setting(desk, ["File to Import"])
+    click_setting(desk, ["File to Import"], value_field=True)
     replace_field(desk, name)
     desk.keyboard.press("Enter")
     def filled(text):
@@ -520,7 +522,7 @@ def daybook_check(desk, company, d1, d2, done=True):
     return found
 
 
-def click_setting(desk, labels):
+def click_setting(desk, labels, value_field=False):
     """Locate the visible setting, rather than typing through guessed export fields."""
     from PIL import Image
     image = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
@@ -542,12 +544,31 @@ def click_setting(desk, labels):
             for i in range(len(words) - len(parts) + 1):
                 group = words[i:i+len(parts)]
                 if [compact(w["text"]) for w in group] == [compact(t) for t in parts]:
-                    matches.append((int(group[0]["left"])/2, (int(group[0]["top"])+int(group[0]["height"])/2)/2))
+                    target = group[0]
+                    if value_field:
+                        values = [w for w in words[i+len(parts):] if w["text"].strip() not in (":", ";", "=")]
+                        if not values:
+                            continue
+                        target = values[0]
+                    matches.append((int(target["left"])/2, (int(group[0]["top"])+int(group[0]["height"])/2)/2))
     if len(set(matches)) != 1:
-        raise RuntimeError("Could not uniquely locate export setting: " + "/".join(labels))
+        raise RuntimeError("Could not uniquely locate setting: " + "/".join(labels))
     x, y = matches[0]
     desk.mouse.click(x+4, y)
-    desk.keyboard.press("Enter"); time.sleep(0.5)
+    if value_field:
+        # Clicking the label then Enter used to advance into the backup field.
+        # Click the value itself, never Enter, and prove focus stays on that row.
+        time.sleep(0.3)
+        focused = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+        yellow = 0
+        for yy in range(max(0, int(y)-3), min(focused.height, int(y)+4)):
+            for xx in range(max(0, int(x)), min(focused.width, int(x)+100)):
+                r, g, b = focused.getpixel((xx, yy))
+                yellow += r > 170 and g > 130 and b < g * 0.88
+        if yellow < 35:
+            raise RuntimeError("Requested import field is not visibly focused; stopped before typing: " + labels[0])
+    else:
+        desk.keyboard.press("Enter"); time.sleep(0.5)
 
 
 def configure_pdf(desk, pdf_name):

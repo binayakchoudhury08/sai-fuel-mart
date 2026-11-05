@@ -72,7 +72,7 @@ def test_verified_result_with_single_accept():
     assert steps[-1].kwargs['evidence']['counts'] == COUNTS
     assert any(c.args[0] == 'awaiting_import' for c in steps)
     assert any(c.args[0] == 'submitting' for c in steps)
-    assert desk.keyboard.type.call_args_list[0].args[0] == 'XML'
+    desk.keyboard.type.assert_not_called()
 
 
 def test_partial_result_needs_review():
