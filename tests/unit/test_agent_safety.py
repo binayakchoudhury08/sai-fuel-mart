@@ -635,7 +635,7 @@ def test_filter_dialog_or_wrong_date_cannot_be_called_empty():
 
 def test_startup_returns_from_daybook_then_stops_at_gateway():
     desk = Mock()
-    with patch.object(robot, 'read_screen', side_effect=[('Day Book', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'):
+    with patch.object(robot, 'read_screen', side_effect=[('Day Book', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'), patch.object(robot, 'click_setting'):
         robot.recover_tally_screen(desk)
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
 
@@ -668,14 +668,14 @@ def test_task_result_precedes_gateway_cleanup_and_browser_close():
 
 def test_quit_prompt_is_cancelled_once_before_accepting_gateway():
     desk = Mock()
-    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), (f'Gateway of Tally {COMPANY}', 'photo')]), patch.object(robot.time, 'sleep'):
+    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), (f'Gateway of Tally {COMPANY}', 'photo')]), patch.object(robot.time, 'sleep'), patch.object(robot, 'click_setting'):
         robot.gateway(desk, COMPANY)
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
 
 
 def test_startup_cancels_quit_instead_of_treating_title_as_gateway():
     desk = Mock()
-    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'):
+    with patch.object(robot, 'read_screen', side_effect=[('Gateway of Tally Quit ? Yes or No', 'photo'), ('Gateway of Tally', 'photo')]), patch.object(robot.time, 'sleep'), patch.object(robot, 'click_setting'):
         robot.recover_tally_screen(desk)
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
 
@@ -701,3 +701,21 @@ def test_open_format_selector_is_resolved_to_xml_before_path_edit():
          patch.object(robot, 'step'), patch.object(robot.time, 'sleep'):
         robot.import_xml(desk, 'NOV 2026', NAME, COMPANY, 25)
     assert events == ['XML', 'path', NAME]
+
+
+def test_quit_recovery_focuses_dialog_and_uses_no_only_if_escape_failed():
+    desk = Mock()
+    with patch.object(robot,'click_setting') as focus, \
+         patch.object(robot,'wait_screen',side_effect=[RuntimeError('still open'),('Gateway of Tally','photo')]), \
+         patch.object(robot,'read_screen',return_value=('Quit ? Yes or No','photo')):
+        assert robot.dismiss_quit(desk)[0] == 'Gateway of Tally'
+    focus.assert_called_once_with(desk,['Quit'],activate=False,ocr_mode=11)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape','n']
+
+
+def test_quit_recovery_never_sends_no_after_dialog_disappears():
+    desk = Mock()
+    with patch.object(robot,'click_setting'), patch.object(robot,'wait_screen',side_effect=RuntimeError('timeout')), \
+         patch.object(robot,'read_screen',return_value=('Gateway of Tally','photo')):
+        robot.dismiss_quit(desk)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']

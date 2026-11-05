@@ -237,14 +237,29 @@ def quit_dialog(text):
                 (re.search(r"\bquit\b", text, re.I) and re.search(r"\byes\s+or\s+no\b", text, re.I)))
 
 
+def dismiss_quit(desk):
+    # File Manager/side-panel clicks can retain keyboard focus outside Tally.
+    # Focus the observed dialog title (not Yes), then cancel it.
+    click_setting(desk, ["Quit"], activate=False, ocr_mode=11)
+    desk.keyboard.press("Escape", delay=100)
+    try:
+        return wait_screen(desk, lambda t: not quit_dialog(t), 5)
+    except RuntimeError:
+        text, png = read_screen(desk)
+        if not quit_dialog(text):
+            return text, png
+        # Only a still-visible Quit confirmation may receive the explicit No key.
+        desk.keyboard.press("n", delay=100)
+        return wait_screen(desk, lambda t: not quit_dialog(t), 10)
+
+
 def recover_tally_screen(desk):
     """Return from known reports/dialogs without accepting or modifying vouchers."""
     for _ in range(10):
         text, _ = read_screen(desk)
         low = text.lower()
         if quit_dialog(text):
-            desk.keyboard.press("Escape"); time.sleep(0.5)
-            text, _ = wait_screen(desk, lambda t: not quit_dialog(t), 10)
+            text, _ = dismiss_quit(desk)
             low = text.lower()
         if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats",
                                                "day book", "ledger vouchers", "account books", "display more reports",
@@ -489,8 +504,7 @@ def gateway(desk, company):
     for _ in range(8):
         text, _ = read_screen(desk)
         if quit_dialog(text):
-            desk.keyboard.press("Escape")
-            text, _ = wait_screen(desk, lambda t: not quit_dialog(t), 10)
+            text, _ = dismiss_quit(desk)
         low = text.lower()
         overlay = any(word in low for word in ("import transactions", "specify file path", "export configuration",
                                                "day book", "ledger vouchers", "account books", "display more reports"))
@@ -557,14 +571,14 @@ def daybook_check(desk, company, d1, d2, done=True):
     return found
 
 
-def click_setting(desk, labels, value_field=False):
+def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
     """Locate the visible setting, rather than typing through guessed export fields."""
     from PIL import Image
     image = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
     image = image.resize((image.width * 2, image.height * 2))
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "settings.png"; image.save(path)
-        result = subprocess.run(["tesseract", str(path), "stdout", "--psm", "6", "tsv"],
+        result = subprocess.run(["tesseract", str(path), "stdout", "--psm", str(ocr_mode), "tsv"],
                                 capture_output=True, text=True, timeout=15, check=True)
     rows = {}
     for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t"):
@@ -602,7 +616,7 @@ def click_setting(desk, labels, value_field=False):
                 yellow += r > 170 and g > 130 and b < g * 0.88
         if yellow < 35:
             raise RuntimeError("Requested import field is not visibly focused; stopped before typing: " + labels[0])
-    else:
+    elif activate:
         desk.keyboard.press("Enter"); time.sleep(0.5)
 
 
