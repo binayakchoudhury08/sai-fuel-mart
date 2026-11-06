@@ -253,6 +253,20 @@ def dismiss_quit(desk):
         return wait_screen(desk, lambda t: not quit_dialog(t), 10)
 
 
+def gateway_menu_visible(text):
+    low = text.lower()
+    # Day Book and Display More Reports are choices on Gateway itself.
+    # Recognise its Masters and Transactions menu before interpreting those labels.
+    if "gateway of tally" not in low or quit_dialog(text):
+        return False
+    if any(label in low for label in ("import transactions", "specify file path", "select company",
+            "list of file formats", "export configuration", "change voucher type", "vch type",
+            "vch no", "debit amount", "credit amount", "list of ledgers", "name of ledger")):
+        return False
+    # The Gateway header is enough to stop navigation if OCR misses a menu item.
+    return True
+
+
 def recover_tally_screen(desk):
     """Return from known reports/dialogs without accepting or modifying vouchers."""
     for _ in range(10):
@@ -261,6 +275,8 @@ def recover_tally_screen(desk):
         if quit_dialog(text):
             text, _ = dismiss_quit(desk)
             low = text.lower()
+        if gateway_menu_visible(text):
+            return
         if any(label in low for label in ("specify file path", "incorrect file", "import transactions", "list of file formats",
                                                "day book", "ledger vouchers", "account books", "display more reports",
                                                "name of ledger", "list of ledgers", "export configuration", "change voucher type")):
@@ -506,7 +522,7 @@ def gateway(desk, company):
         low = text.lower()
         overlay = any(word in low for word in ("import transactions", "specify file path", "export configuration",
                                                "day book", "ledger vouchers", "account books", "display more reports"))
-        if "gateway of tally" in low and not overlay:
+        if gateway_menu_visible(text) or ("gateway of tally" in low and not overlay):
             if compact(company) not in compact(text):
                 raise RuntimeError("Gateway is visible but company could not be verified; stopped without pressing Esc")
             return

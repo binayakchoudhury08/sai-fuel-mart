@@ -714,3 +714,22 @@ def test_quit_recovery_never_sends_no_after_dialog_disappears():
          patch.object(robot,'read_screen',return_value=('Gateway of Tally','photo')):
         robot.dismiss_quit(desk)
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape']
+
+
+def test_gateway_report_menu_choices_never_trigger_escape():
+    menu = f'Gateway of Tally {COMPANY} Masters Create Alter Transactions Vouchers Day Book Display More Reports'
+    desk = Mock()
+    with patch.object(robot, 'read_screen', return_value=(menu, 'photo')):
+        robot.recover_tally_screen(desk)
+        robot.gateway(desk, COMPANY)
+    desk.keyboard.press.assert_not_called()
+    assert not robot.gateway_menu_visible(menu + ' Import Transactions')
+
+
+def test_quit_returns_to_populated_gateway_without_reopening_quit():
+    menu = f'Gateway of Tally {COMPANY} Create Alter Vouchers Day Book Display More Reports'
+    desk = Mock()
+    with patch.object(robot, 'read_screen', return_value=('Gateway of Tally Quit ? Yes or No','photo')), patch.object(robot,'dismiss_quit',return_value=(menu,'photo')) as dismiss:
+        robot.recover_tally_screen(desk)
+    dismiss.assert_called_once()
+    desk.keyboard.press.assert_not_called()
