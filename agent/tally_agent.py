@@ -989,7 +989,7 @@ def print_current_ledger(desk, pdf_name):
             _safe(lambda: page.remove_listener("download", on_download))
 
 
-def verify_pdf(data, ledger, company, d1, d2):
+def verify_pdf(data, ledger, company, d1, d2, screen_text=""):
     """Owner (06 Nov): send the printed PDF. Blocked only when it is not a PDF, or when its text is readable and shows
     a different ledger. A different printed period, or a PDF without readable text, is sent with a note."""
     if not data.startswith(b"%PDF-"):
@@ -1005,7 +1005,11 @@ def verify_pdf(data, ledger, company, d1, d2):
     if not compact(text):
         return ["the PDF has no readable text, so it was sent as Tally printed it"]
     if compact(ledger) not in compact(text):
-        raise RuntimeError(f"The printed PDF does not show the ledger {ledger}; it was not sent")
+        # Web_Printer PDFs often carry scrambled text (embedded fonts) — then the ledger is confirmed on Tally's
+        # screen, read just before Print was pressed.
+        if compact(ledger) in compact(screen_text):
+            return ["the PDF's text is not readable by machine; the ledger was confirmed on Tally's screen before printing"]
+        raise RuntimeError(f"Neither the PDF nor Tally's screen shows the ledger {ledger}; it was not sent")
     if not (date_visible(text, d1) and date_visible(text, d2)):
         notes.append("the printed period differs from the one asked (Tally printed its own period) — see the PDF")
     return notes
@@ -1014,8 +1018,9 @@ def verify_pdf(data, ledger, company, d1, d2):
 def ledger_pdf(desk, ledger, d1, d2, company):
     open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
     pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d-%m-%Y}_to_{d2:%d-%m-%Y}_job{JOB}.pdf"
+    screen_text, _ = read_screen(desk)                          # the ledger as Tally shows it, right before Print
     data = print_current_ledger(desk, pdf_name)
-    notes = verify_pdf(data, ledger, company, d1, d2)
+    notes = verify_pdf(data, ledger, company, d1, d2, screen_text)
     response = api("/file", method="POST", files={"file": (pdf_name, data, "application/pdf")}).json()
     if not response.get("ok"):
         raise RuntimeError("WhatsApp rejected the PDF; delivery is not confirmed")
