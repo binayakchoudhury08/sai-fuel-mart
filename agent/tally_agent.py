@@ -472,10 +472,10 @@ def file_picker_open(text):
 
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
-    if format_list_open(text) or path_dialog(text) or path_error(text):
-        raise RuntimeError("Close the open import dialog before setting File Path")
     if file_picker_open(text) or exact_path_visible(text, folder):
         return
+    if format_list_open(text) or path_dialog(text) or path_error(text):
+        raise RuntimeError("Close the open import dialog before setting File Path")
     click_setting(desk, ["File Path"], value_field=True)
     text, _ = read_screen(desk)
     if file_picker_open(text):
@@ -502,7 +502,7 @@ def select_import_file(desk, folder, name):
     if not path_dialog(text):
         if not file_picker_open(text):
             text, _ = wait_screen(desk, lambda t: file_picker_open(t) or path_dialog(t), 10)
-        if file_picker_open(text) and exact_path_visible(text, folder):
+        if file_picker_open(text):                      # the folder was confirmed at upload; OCR can misread the long path
             remote_type(desk, name)                     # Tally filters the List of Files as you type
             _safe(lambda: wait_screen(desk, lambda t: name.casefold() in t.casefold(), 10))
             desk.keyboard.press("Enter"); time.sleep(1)
