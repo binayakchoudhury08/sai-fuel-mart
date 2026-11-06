@@ -260,7 +260,7 @@ def agent_step(jid, step, message, png=None, done=False, failed=False, evidence=
             if (step != "import_verified" or j["state"] != "submitting" or not png
                     or not valid_import_evidence(j["params"], evidence)):
                 return False
-        if step == "awaiting_import" and (not png or j["state"] != "company"):
+        if step == "awaiting_import" and (not png or j["state"] not in ("company", "awaiting_import")):
             return False
         if step == "submitting" and (j["state"] != "awaiting_import" or j["waiting"] is not None or j["answer"] is not None):
             return False

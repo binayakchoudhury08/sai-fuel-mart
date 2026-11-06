@@ -540,7 +540,19 @@ def import_xml(desk, uploaded, company, expected):
         panel = import_form_geometry(frame)
         if panel:
             x, y, w, h = panel
-            return frame.crop((x, y, x+w, y+round(h*.36))).tobytes()
+            # Compare only the three value rows. A blinking cursor on Backup
+            # and remote desktop colour changes elsewhere are irrelevant.
+            rows = []
+            for top, bottom in ((.19, .245), (.245, .30), (.30, .35)):
+                field = frame.crop((x+round(.46*w), y+round(top*h),
+                                    x+round(.99*w), y+round(bottom*h)))
+                ink = field.convert("L").point(lambda level: 255 if level < 115 else 0)
+                bounds = ink.getbbox()
+                if not bounds:
+                    return None
+                glyphs = ink.crop(bounds)
+                rows.append((glyphs.size, glyphs.tobytes()))
+            return tuple(rows)
 
     def reviewable(t):
         v = compact(t)
@@ -549,17 +561,23 @@ def import_xml(desk, uploaded, company, expected):
                 and not path_dialog(t) and not path_error(t) and "error" not in v))
 
     text, png = wait_screen(desk, reviewable, 15)
-    manual = not filled(text)
-    signature = form_rows(png) if manual else None
-    if manual and not signature:
-        raise RuntimeError("Cannot isolate the filled import form for approval")
-    step("awaiting_import", f"Check the screenshot: {company}, folder {folder}, file {name}, "
-         f"{expected} vouchers. Reply IMPORT only if both rows match, or STOP.", png=png)
-    if wait_answer("import") != "IMPORT":
-        raise RuntimeError("Import cancelled before submission")
-    text, current_png = read_screen(desk)
-    if not (filled(text) or (manual and reviewable(text) and form_rows(current_png) == signature)):
-        raise RuntimeError("Import form changed after approval")
+    for attempt in range(2):
+        manual = not filled(text)
+        signature = form_rows(png) if manual else None
+        if manual and not signature:
+            raise RuntimeError("Cannot read all three import rows for approval")
+        reason = "I could not match the previous screenshot. Check this fresh form: " if attempt else "Check the screenshot: "
+        step("awaiting_import", f"{reason}{company}, folder {folder}, file {name}, "
+             f"{expected} vouchers. Reply IMPORT only if both rows match, or STOP.", png=png)
+        if wait_answer("import") != "IMPORT":
+            raise RuntimeError("Import cancelled before submission")
+        text, png = read_screen(desk)
+        if filled(text) or (manual and reviewable(text) and form_rows(png) == signature):
+            break
+        if not reviewable(text):
+            raise RuntimeError("Cannot verify the company and import form after approval; nothing submitted")
+    else:
+        raise RuntimeError("Could not match the approved folder and file; nothing submitted")
     step("submitting", f"Submitting {name}; check Day Book before any retry.")
     desk.keyboard.press("Enter")
     observed_progress = False
