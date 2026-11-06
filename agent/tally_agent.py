@@ -990,27 +990,36 @@ def print_current_ledger(desk, pdf_name):
 
 
 def verify_pdf(data, ledger, company, d1, d2):
+    """Owner (06 Nov): send the printed PDF. Blocked only when it is not a PDF, or when its text is readable and shows
+    a different ledger. A different printed period, or a PDF without readable text, is sent with a note."""
     if not data.startswith(b"%PDF-"):
         raise RuntimeError("Downloaded file is not a PDF")
-    if importlib.util.find_spec("pypdf") is None:
-        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pypdf==5.1.0"], check=True)
-    from pypdf import PdfReader
-    reader = PdfReader(io.BytesIO(data))
-    text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    if not (compact(ledger) in compact(text) and compact(company) in compact(text)
-            and date_visible(text, d1) and date_visible(text, d2)):
-        raise RuntimeError("PDF ledger/company/period could not be verified; file was not sent")
+    notes = []
+    try:
+        if importlib.util.find_spec("pypdf") is None:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "pypdf==5.1.0"], check=False)
+        from pypdf import PdfReader
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages)
+    except Exception:
+        text = ""
+    if not compact(text):
+        return ["the PDF has no readable text, so it was sent as Tally printed it"]
+    if compact(ledger) not in compact(text):
+        raise RuntimeError(f"The printed PDF does not show the ledger {ledger}; it was not sent")
+    if not (date_visible(text, d1) and date_visible(text, d2)):
+        notes.append("the printed period differs from the one asked (Tally printed its own period) — see the PDF")
+    return notes
 
 
 def ledger_pdf(desk, ledger, d1, d2, company):
     open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
     pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d-%m-%Y}_to_{d2:%d-%m-%Y}_job{JOB}.pdf"
     data = print_current_ledger(desk, pdf_name)
-    verify_pdf(data, ledger, company, d1, d2)
+    notes = verify_pdf(data, ledger, company, d1, d2)
     response = api("/file", method="POST", files={"file": (pdf_name, data, "application/pdf")}).json()
     if not response.get("ok"):
         raise RuntimeError("WhatsApp rejected the PDF; delivery is not confirmed")
-    step("pdf", f"Ledger PDF sent: {pdf_name}", None, done=True)
+    step("pdf", f"Ledger PDF sent: {pdf_name}" + (" — note: " + "; ".join(notes) if notes else ""), None, done=True)
 
 
 def ensure_runtime():
