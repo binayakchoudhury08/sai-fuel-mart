@@ -72,7 +72,7 @@ def handle(cur, phone, low, text):
     again = bool(re.match(r"^tally\s+import\s+again\b", low))
     low = re.sub(r"^tally\s+import\s+again\b", "tally import", low)
     m = re.match(r"^tally\s+import\s+(.+?)(?:\s+(?:to|-)\s+(.+))?$", low)
-    ml = re.match(r"^tally\s+ledger\s+(.+?)\s+(this month|last month|month|[a-z]+(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$", low)
+    ml = re.match(r"^tally\s+ledger\s+(.+?)\s+((?:till|until)\s+.+|this month|last month|month|[a-z]+(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$", low)
     if not (m or ml or mc):
         return None
     # Serialize job creation across owners: one shared Tally desktop, no queued PIN expiry.
@@ -116,8 +116,11 @@ def handle(cur, phone, low, text):
         w = _when(ml.group(2))
         if not w:
             return "Write: *tally ledger svt this month*"
+        cutoff = ml.group(2).startswith(("till ", "until "))
+        if cutoff and w[0] != "day":
+            return "Give an end date, e.g. *OSL ledger till 30th Oct 2026*."
         first = w[1].replace(day=1)
-        last = first.replace(day=calendar.monthrange(first.year, first.month)[1])
+        last = w[1] if cutoff else first.replace(day=calendar.monthrange(first.year, first.month)[1])
         from .tally_site import current, masters, name_map, norm
         said = ml.group(1).strip()
         ledger = name_map(cur).get("party", {}).get(said)

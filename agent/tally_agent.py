@@ -796,7 +796,20 @@ def ledger_pdf(desk, ledger, d1, d2, company):
     desk.keyboard.press("Control+e")
     wait_screen(desk, lambda t: "export" in t.lower())
     desk.keyboard.press("c")
-    wait_screen(desk, lambda t: "file format" in t.lower())
+    text, _ = wait_screen(desk, lambda t: "exportconfiguration" in compact(t)
+                          or "fileformat" in compact(t))
+    if "fileformat" not in compact(text) and "showmore" in compact(text):
+        click_setting(desk, ["Show More"], ocr_mode=11)
+    for _ in range(12):
+        text, _ = read_screen(desk)
+        if "fileformat" in compact(text):
+            break
+        if "exportconfiguration" not in compact(text) and "listofconfigurations" not in compact(text):
+            raise RuntimeError("Lost the ledger export configuration before finding File Format")
+        desk.keyboard.press("PageDown")
+        time.sleep(0.35)
+    else:
+        raise RuntimeError("File Format could not be located in the ledger export configuration")
     pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d%m%y}_{d2:%d%m%y}_job{JOB}.pdf"
     configure_pdf(desk, pdf_name)
     side_button(desk, "File Manager")

@@ -785,9 +785,9 @@ def handle(cur, phone, user, msg):
             return "Which ledger party name? (e.g. OSL, SVT, R.K.)"
         if state.get("mode") == "tally_ledger_party" and not re.match(r"^(tally|check|menu|stop|cancel)\b", low):
             low = "tally ledger " + low + " this month pdf"
-        alias = re.fullmatch(r"(.+?)\s+ledger(?:\s+pdf)?", low)
+        alias = re.fullmatch(r"(.+?)\s+ledger(?:\s+((?:till|until)\s+.+?))?(?:\s+pdf)?", low)
         if alias and not low.startswith("tally "):
-            low = f"tally ledger {alias[1]} this month pdf"
+            low = f"tally ledger {alias[1]} {alias[2] or 'this month'} pdf"
     # Explicit remote-Tally commands must precede workbook normalization,
     # transporter-document shortcuts, and stale local confirmation sessions.
     if mtype == "text" and (user.get("role") or "") == "owner" and re.match(

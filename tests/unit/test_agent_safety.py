@@ -351,6 +351,20 @@ def test_svt_nov_pdf_uses_full_november():
     assert params['ledger'] == 'SVT LOGISTICS'
 
 
+def test_osl_cutoff_ends_on_october_30():
+    import json
+    from sfm import tally_site
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 12}, None]
+    with patch.object(jobs, 'start_github'), \
+         patch.object(tally_site, 'name_map', return_value={'party': {'osl': 'OSL LTD'}}), \
+         patch.object(tally_site, 'current', return_value=(None, None)):
+        jobs.handle(cursor, 'test', 'tally ledger osl till 30th oct 2026 pdf', 'tally ledger osl till 30th oct 2026 pdf')
+    insert = next(c for c in cursor.execute.call_args_list if 'INSERT INTO tally_jobs' in c.args[0])
+    params = json.loads(insert.args[1][2])
+    assert params['from'] == '2026-10-01' and params['to'] == '2026-10-30'
+    assert params['ledger'] == 'OSL LTD'
+
+
 def test_strict_pdf_send_does_not_claim_text_fallback_is_attachment():
     response = Mock(status_code=500, text='upload failed')
     with patch.object(wa, 'provider', return_value='meta'), patch.object(wa.requests, 'post', return_value=response), \
@@ -469,7 +483,7 @@ def test_warm_report_is_queued_without_pin():
 
 
 def test_check_tally_and_svt_ledger_aliases():
-    for text, expected in [('check tally 3/11', 'tally check 3/11'), ('svt ledger','tally ledger svt this month pdf')]:
+    for text, expected in [('check tally 3/11', 'tally check 3/11'), ('svt ledger','tally ledger svt this month pdf'), ('OSL ledger till 30th Oct 2026','tally ledger osl till 30th oct 2026 pdf')]:
         with patch.object(wa, 'session', return_value={'state':{}}), patch.object(jobs, 'handle', return_value='job') as handler:
             assert wa.handle(Mock(), 'test', {'role':'owner'}, {'type':'text','text':{'body':text}}) == 'job'
             assert handler.call_args.args[2] == expected
