@@ -410,18 +410,11 @@ def format_list_open(text):
             all(re.search(r"\b" + word + r"\b", text, re.I) for word in ("excel", "json", "xml")))
 
 
-def xml_format_selected(text):
-    # A filename ending in .xml or an XML option inside the popup proves nothing.
-    low = compact(text)
-    return ("fileformatxmldatainterchange" in low and not format_list_open(text)
-            and "spellingerror" not in low and "nothingselected" not in low)
-
-
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
     if not path_dialog(text):
-        if not xml_format_selected(text):
-            raise RuntimeError("Tally has not confirmed XML (Data Interchange); no folder entered")
+        if format_list_open(text):
+            raise RuntimeError("File Path is covered by a dropdown; stopped before typing")
         if exact_path_visible(text, folder):
             return
         click_setting(desk, ["File Path"], value_field=True)
@@ -446,13 +439,7 @@ def import_xml(desk, month, name, company, expected):
         raise RuntimeError("Tally is not on the screen — nothing was imported")
     desk.keyboard.press("Alt+O"); time.sleep(1)
     desk.keyboard.press("t")
-    text, _ = wait_screen(desk, lambda t: "file format" in t.lower())
-    # Preserve existing format/backup settings. Only the two requested fields change.
-    if not xml_format_selected(text):
-        if not format_list_open(text):
-            raise RuntimeError("Cannot verify File Format is XML (Data Interchange); no folder entered")
-        click_setting(desk, ["XML"], activate=True, ocr_mode=11)
-        wait_screen(desk, xml_format_selected, 10)
+    wait_screen(desk, lambda t: "importtransactions" in compact(t))
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
@@ -461,8 +448,7 @@ def import_xml(desk, month, name, company, expected):
     def filled(text):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
-                and compact(company) in value and xml_format_selected(text)
-                and "list of file formats" not in text.lower()
+                and compact(company) in value and not format_list_open(text)
                 and not path_dialog(text) and not path_error(text))
     _, png = wait_screen(desk, filled, 15)
     step("awaiting_import", f"Review company {company}, file {name}, {expected} vouchers. "
