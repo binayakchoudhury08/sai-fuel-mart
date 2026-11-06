@@ -428,23 +428,14 @@ def format_list_open(text):
 
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
-    if not path_dialog(text):
-        if format_list_open(text):
-            raise RuntimeError("File Path is covered by a dropdown; stopped before typing")
-        if exact_path_visible(text, folder):
-            return
-        click_setting(desk, ["File Path"], value_field=True)
-        text, _ = read_screen(desk)
-        if not path_dialog(text):
-            if "specifypath" not in compact(text):
-                if format_list_open(text) or path_error(text):
-                    raise RuntimeError("File Path search is blocked; stopped before typing")
-                remote_type(desk, "Specify Path")
-                text, _ = wait_screen(desk, lambda t: path_dialog(t) or
-                                      ("specifypath" in compact(t) and not format_list_open(t)), 10)
-            if not path_dialog(text):
-                click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
-            wait_screen(desk, path_dialog, 10)
+    if format_list_open(text) or path_dialog(text) or path_error(text):
+        raise RuntimeError("Close the open import dialog before setting File Path")
+    if exact_path_visible(text, folder):
+        return
+    click_setting(desk, ["File Path"], value_field=True)
+    text, _ = read_screen(desk)
+    if format_list_open(text) or path_dialog(text) or path_error(text):
+        raise RuntimeError("File Path is covered by a dialog; stopped before typing")
     replace_import_field(desk, folder)
     desk.keyboard.press("Enter")
     # Never type a filename while the path modal or its error is still open.
@@ -453,6 +444,23 @@ def select_import_path(desk, folder):
             raise RuntimeError(f"Tally rejected folder {folder}; filename was NOT entered")
         return not path_dialog(text) and exact_path_visible(text, folder)
     wait_screen(desk, accepted, 20)
+
+
+def select_import_file(desk, folder, name):
+    click_setting(desk, ["File to Import"], value_field=True)
+    text, _ = read_screen(desk)
+    if format_list_open(text) or path_error(text):
+        raise RuntimeError("File to Import is covered by a dialog")
+    if not path_dialog(text):
+        if "specifypath" not in compact(text):
+            remote_type(desk, "Specify Path")
+            text, _ = wait_screen(desk, lambda t: path_dialog(t) or
+                                  ("specifypath" in compact(t) and not format_list_open(t)), 10)
+        if not path_dialog(text):
+            click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
+            wait_screen(desk, path_dialog, 10)
+    replace_import_field(desk, folder + "\\" + name)
+    desk.keyboard.press("Enter")
 
 
 def import_xml(desk, month, name, company, expected):
@@ -464,8 +472,7 @@ def import_xml(desk, month, name, company, expected):
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
-    click_setting(desk, ["File to Import"], value_field=True)
-    click_setting(desk, [name], activate=True, ocr_mode=11)
+    select_import_file(desk, f"{IMPORT_ROOT}\\{month}", name)
     def filled(text):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
@@ -610,6 +617,8 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
         for label in labels:
             parts = label.lower().split()
             for i in range(len(words) - len(parts) + 1):
+                if value_field and i != 0:
+                    continue
                 group = words[i:i+len(parts)]
                 if [compact(w["text"]) for w in group] == [compact(t) for t in parts]:
                     target = group[0]
@@ -628,12 +637,14 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
         # Click the value itself, never Enter, and prove focus stays on that row.
         time.sleep(0.3)
         focused = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
-        yellow = 0
-        for yy in range(max(0, int(y)-3), min(focused.height, int(y)+4)):
-            for xx in range(max(0, int(x)), min(focused.width, int(x)+100)):
+        yellow_rows = []
+        for yy in range(max(0, int(y)-1), min(focused.height, int(y)+2)):
+            yellow = 0
+            for xx in range(max(0, int(x)), min(focused.width, int(x)+90)):
                 r, g, b = focused.getpixel((xx, yy))
                 yellow += r > 170 and g > 130 and b < g * 0.88
-        if yellow < 35:
+            yellow_rows.append(yellow)
+        if len(yellow_rows) != 3 or min(yellow_rows) < 40:
             raise RuntimeError("Requested import field is not visibly focused; stopped before typing: " + labels[0])
     elif activate:
         desk.keyboard.press("Enter"); time.sleep(0.5)

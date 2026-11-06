@@ -19,11 +19,17 @@ def test_punctuation_is_not_discarded():
     assert not a.exact_path_visible(path.replace('_','-'),path)
     assert not a.exact_path_visible(path.replace('NOV','OCT'),path)
 
-def test_folder_selector_is_explicitly_selected():
-    d=Mock()
-    with patch.object(a,'read_screen',side_effect=[('File Format XML (Data Interchange)', ''), ('Specify File Path', '')]), patch.object(a,'wait_screen'), patch.object(a,'replace_import_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
-        a.select_import_path(d, r'D:\NOV 2026')
-    click.assert_called_once_with(d,['File Path'],value_field=True)
+def test_folder_then_full_filename_use_separate_rows():
+    desk = Mock()
+    folder = r'D:\NOV 2026'
+    with patch.object(a, 'read_screen', return_value=('Import Transactions', '')), patch.object(a, 'wait_screen', return_value=('Specify Path', '')), patch.object(a, 'replace_import_field') as edit, patch.object(a, 'remote_type') as search, patch.object(a, 'click_setting') as click:
+        a.select_import_path(desk, folder)
+        edit.assert_called_once_with(desk, folder)
+        search.assert_not_called()
+        a.select_import_file(desk, folder, 'job26.xml')
+        assert [c.args[1] for c in click.call_args_list] == [['File Path'], ['File to Import'], ['Specify Path']]
+        search.assert_called_once_with(desk, 'Specify Path')
+        edit.assert_called_with(desk, folder + r'\job26.xml')
 
 
 def test_import_value_focus_never_presses_enter_or_types_into_backup():

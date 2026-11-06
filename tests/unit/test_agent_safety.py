@@ -29,7 +29,7 @@ def run_import(answer='IMPORT', result=RESULT, changed=False):
     with patch.object(robot, '_tally_on_screen', return_value=True), patch.object(robot, 'wait_screen', side_effect=wait), \
          patch.object(robot, 'read_screen', return_value=('wrong file' if changed else FORM, 'image')), \
          patch.object(robot, 'wait_answer', return_value=answer), patch.object(robot.time, 'sleep'), \
-         patch.object(robot, 'select_import_path'), patch.object(robot, 'click_setting'), patch.object(robot, 'daybook_check', return_value=True), \
+         patch.object(robot, 'select_import_path'), patch.object(robot, 'select_import_file'), patch.object(robot, 'click_setting'), patch.object(robot, 'daybook_check', return_value=True), \
          patch.object(robot, 'step') as step:
         error = None
         try:
@@ -281,8 +281,8 @@ def test_month_comes_from_import_date_not_previous_folder():
 def test_path_error_never_advances_to_filename():
     import pytest
     desk = Mock()
-    with patch.object(robot, 'read_screen', return_value=('Specify File Path', 'image')), \
-         patch.object(robot, 'wait_screen', side_effect=lambda d, predicate, seconds: predicate('Incorrect File/Folder Path')):
+    with patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
+         patch.object(robot, 'click_setting'), patch.object(robot, 'wait_screen', side_effect=lambda d, predicate, seconds: predicate('Incorrect File/Folder Path')):
         with pytest.raises(RuntimeError, match='filename was NOT entered'):
             robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
     desk.keyboard.type.assert_not_called()
@@ -295,8 +295,8 @@ def test_folder_acceptance_rejects_open_modal_and_old_month():
         assert not predicate('Specify File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
         assert not predicate('File Path ' + robot.IMPORT_ROOT + '\\OCT 2026')
         assert predicate('File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
-    with patch.object(robot, 'read_screen', return_value=('Specify File Path', 'image')), \
-         patch.object(robot, 'wait_screen', side_effect=wait):
+    with patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
+         patch.object(robot, 'click_setting'), patch.object(robot, 'wait_screen', side_effect=wait):
         robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
 
 
