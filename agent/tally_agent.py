@@ -559,6 +559,33 @@ def select_import_file(desk, folder, name):
     desk.keyboard.press("Enter")
 
 
+def fill_import_form(desk, folder, name):
+    """The same short key sequence every day (owner, 06 Nov): Enter on File Format (XML stays) → File Path: keep it when
+    Tally already shows this month's folder, otherwise type the folder (also into "Specify File Path" if it opens) →
+    File to Import: type the exact file name in the list → Enter. The owner checks the photo before anything is
+    imported, so no step stops half-way on an unreadable screen."""
+    month = PureWindowsPath(folder).name                          # e.g. "NOV 2026"
+    desk.keyboard.press("Enter"); time.sleep(1.5)                 # File Format → File Path
+    text, _ = read_screen(desk)
+    if format_list_open(text):                                    # the format list opened instead: choose XML
+        remote_type(desk, "XML"); time.sleep(0.5); desk.keyboard.press("Enter"); time.sleep(1.5)
+        text, _ = read_screen(desk)
+    if compact(month) not in compact(text) or path_error(text):   # remembered folder is another month → set it
+        if not (path_dialog(text) or "specifyfilepath" in compact(text)):
+            remote_type(desk, folder); time.sleep(1)
+            text, _ = read_screen(desk)
+        if path_dialog(text) or "specifyfilepath" in compact(text):
+            for _ in range(140):
+                desk.keyboard.press("Backspace")
+            remote_type(desk, folder); time.sleep(1)
+    desk.keyboard.press("Enter"); time.sleep(2)                   # File Path → File to Import (its list opens)
+    text, _ = read_screen(desk)
+    if path_dialog(text) or "specifyfilepath" in compact(text):   # the path box is still open: confirm it
+        desk.keyboard.press("Enter"); time.sleep(2)
+    remote_type(desk, name); time.sleep(1.5)                      # Tally narrows the list to this file
+    desk.keyboard.press("Enter"); time.sleep(1.5)                 # → Backup Company Data (stop here)
+
+
 def import_xml(desk, uploaded, company, expected):
     folder, name = str(uploaded.parent), uploaded.name
     if uploaded.parent != PureWindowsPath(IMPORT_ROOT, import_month(name)):
@@ -568,8 +595,7 @@ def import_xml(desk, uploaded, company, expected):
     desk.keyboard.press("Alt+O"); time.sleep(1)
     desk.keyboard.press("t")
     wait_screen(desk, lambda t: "importtransactions" in compact(t))
-    select_import_path(desk, folder)
-    select_import_file(desk, folder, name)
+    fill_import_form(desk, folder, name)
     def filled(text):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, folder)
@@ -604,7 +630,7 @@ def import_xml(desk, uploaded, company, expected):
                 and compact(company) in v and not format_list_open(t) and "listof" not in v
                 and not path_dialog(t) and not path_error(t) and "error" not in v))
 
-    text, png = wait_screen(desk, reviewable, 15)
+    text, png = _safe(lambda: wait_screen(desk, reviewable, 15), None) or read_screen(desk)
     step("awaiting_import", f"Check the screenshot: {company}, folder {folder}, file {name}, {expected} vouchers. "
          "Reply IMPORT to import, or STOP.", png=png)
     if wait_answer("import") != "IMPORT":
