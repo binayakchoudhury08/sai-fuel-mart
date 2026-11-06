@@ -28,7 +28,7 @@ def test_folder_then_full_filename_use_separate_rows():
         search.assert_not_called()
         a.select_import_file(desk, folder, 'job26.xml')
         assert [c.args[1] for c in click.call_args_list] == [['File Path'], ['File to Import'], ['Specify Path', 'Specty Path']]
-        search.assert_called_once_with(desk, 'Specify Path')
+        search.assert_not_called()
         edit.assert_called_with(desk, folder + r'\job26.xml', file_dialog=True)
 
 

@@ -3,7 +3,7 @@ WhatsApp with a screenshot. The secure PIN and the company name come from the ow
 
 Steps (import):  login (email, password, PIN) → Connect → File Manager → D:\\My_Applications\\SFM_TALLY_IMPORT\\<MON YYYY>
 → upload the XML → open TallyPrime → company (asked on WhatsApp) → O: Import → Transactions → path + file → Accept.
-Steps (ledger):  login → Connect → TallyPrime → company → Go To Ledger Vouchers → ledger + period → export PDF to D:
+Steps (ledger):  login → Connect → TallyPrime → company → Go To Ledger Vouchers → ledger + period → print PDF to D:
 → download it from File Manager → send to WhatsApp.
 """
 import base64
@@ -17,7 +17,7 @@ import tempfile
 import shutil
 import importlib.util
 import csv
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from datetime import date
 
 import requests
@@ -197,7 +197,7 @@ def upload_xml(desk, name, xml):
     fm.get_by_text(name, exact=True).first.wait_for(timeout=120000)
     step("upload", f"Uploaded to {IMPORT_ROOT}\\{month}\\{name}", desk)
     desk.keyboard.press("Escape")
-    return month
+    return PureWindowsPath(IMPORT_ROOT, month, name)
 
 
 def _tally_on_screen(desk):
@@ -487,10 +487,11 @@ def select_import_file(desk, folder, name):
     if format_list_open(text) or path_error(text):
         raise RuntimeError("File to Import is covered by a dialog")
     if not path_dialog(text):
-        if not file_picker_open(text) and "specifypath" not in compact(text):
-            remote_type(desk, "Specify Path")
-            text, _ = wait_screen(desk, lambda t: path_dialog(t) or
-                                  ("specifypath" in compact(t) and not format_list_open(t)), 10)
+        if not file_picker_open(text):
+            text, _ = wait_screen(desk, lambda t: file_picker_open(t) or path_dialog(t), 10)
+        if file_picker_open(text) and exact_path_visible(text, folder) and name.casefold() in text.casefold():
+            click_setting(desk, [name], ocr_mode=11)
+            return
         if not path_dialog(text):
             click_setting(desk, ["Specify Path", "Specty Path"], activate=False, ocr_mode=11)
             text, _ = read_screen(desk)
@@ -501,19 +502,20 @@ def select_import_file(desk, folder, name):
     desk.keyboard.press("Enter")
 
 
-def import_xml(desk, month, name, company, expected):
+def import_xml(desk, uploaded, company, expected):
+    folder, name = str(uploaded.parent), uploaded.name
+    if uploaded.parent != PureWindowsPath(IMPORT_ROOT, import_month(name)):
+        raise RuntimeError("Upload folder does not match requested file date")
     if not _tally_on_screen(desk):
         raise RuntimeError("Tally is not on the screen — nothing was imported")
     desk.keyboard.press("Alt+O"); time.sleep(1)
     desk.keyboard.press("t")
     wait_screen(desk, lambda t: "importtransactions" in compact(t))
-    if month != import_month(name):
-        raise RuntimeError("Upload month does not match requested file date")
-    select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
-    select_import_file(desk, f"{IMPORT_ROOT}\\{month}", name)
+    select_import_path(desk, folder)
+    select_import_file(desk, folder, name)
     def filled(text):
         value = compact(text)
-        return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
+        return (name.casefold() in text.casefold() and exact_path_visible(text, folder)
                 and compact(company) in value and not format_list_open(text)
                 and not file_picker_open(text) and "listoffiles" not in value
                 and not path_dialog(text) and not path_error(text))
@@ -770,20 +772,33 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
         desk.keyboard.press("Enter"); time.sleep(0.5)
 
 
-def configure_pdf(desk, pdf_name):
-    click_setting(desk, ["File Format"])
-    desk.keyboard.type("PDF", delay=40); desk.keyboard.press("Enter")
-    click_setting(desk, ["Folder Path", "File Path"])
-    replace_field(desk, r"D:\My_Files"); desk.keyboard.press("Enter")
-    text, _ = read_screen(desk)
-    if path_error(text) or path_dialog(text):
-        raise RuntimeError("PDF destination was not accepted")
-    click_setting(desk, ["File Name", "Filename"])
-    replace_field(desk, pdf_name); desk.keyboard.press("Enter")
-    desk.keyboard.press("Control+a")  # accepts export configuration, not vouchers
-    wait_screen(desk, lambda t: "export" in t.lower() and "pdf" in t.lower()
-                and compact(pdf_name) in compact(t) and compact(r"D:\My_Files") in compact(t))
-    desk.keyboard.press("e")
+def print_current_ledger(desk, pdf_name):
+    def print_dialog(text):
+        value = compact(text)
+        return "preview" in value and "print" in value and "configure" in value
+
+    desk.keyboard.press("Control+p")
+    text, _ = wait_screen(desk, print_dialog)
+    if "microsoftprinttopdf" not in compact(text):
+        desk.keyboard.press("c")
+        wait_screen(desk, lambda t: "printconfiguration" in compact(t))
+        remote_type(desk, "Printer")
+        click_setting(desk, ["Printer"], ocr_mode=11)
+        wait_screen(desk, lambda t: "printer" in compact(t))
+        click_setting(desk, ["Microsoft Print to PDF"], ocr_mode=11)
+        text, _ = read_screen(desk)
+        if "printerproperties" in compact(text):
+            click_setting(desk, ["OK"], ocr_mode=11)
+        text, _ = read_screen(desk)
+        if "printconfiguration" in compact(text):
+            desk.keyboard.press("Control+a")
+    wait_screen(desk, lambda t: print_dialog(t) and "microsoftprinttopdf" in compact(t))
+    desk.keyboard.press("p")
+    wait_screen(desk, lambda t: "saveprintoutputas" in compact(t) and "filename" in compact(t))
+    desk.keyboard.press("Alt+n")
+    desk.keyboard.press("Control+a")
+    remote_type(desk, "D:\\My_Files\\" + pdf_name)
+    desk.keyboard.press("Enter")
 
 
 def verify_pdf(data, ledger, company, d1, d2):
@@ -800,27 +815,9 @@ def verify_pdf(data, ledger, company, d1, d2):
 
 
 def ledger_pdf(desk, ledger, d1, d2, company):
-    text, png = open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
-    step("ledger", f"Verified ledger view: {ledger}, {company}, {d1:%d/%m/%Y}–{d2:%d/%m/%Y}", png=png)
-    desk.keyboard.press("Control+e")
-    wait_screen(desk, lambda t: "export" in t.lower())
-    desk.keyboard.press("c")
-    text, _ = wait_screen(desk, lambda t: "exportconfiguration" in compact(t)
-                          or "fileformat" in compact(t))
-    if "fileformat" not in compact(text) and "showmore" in compact(text):
-        click_setting(desk, ["Show More"], ocr_mode=11)
-    for _ in range(12):
-        text, _ = read_screen(desk)
-        if "fileformat" in compact(text):
-            break
-        if "exportconfiguration" not in compact(text) and "listofconfigurations" not in compact(text):
-            raise RuntimeError("Lost the ledger export configuration before finding File Format")
-        desk.keyboard.press("PageDown")
-        time.sleep(0.35)
-    else:
-        raise RuntimeError("File Format could not be located in the ledger export configuration")
-    pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d%m%y}_{d2:%d%m%y}_job{JOB}.pdf"
-    configure_pdf(desk, pdf_name)
+    open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
+    pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d-%m-%Y}_to_{d2:%d-%m-%Y}_job{JOB}.pdf"
+    print_current_ledger(desk, pdf_name)
     side_button(desk, "File Manager")
     fm = next((f for f in desk.frames if _safe(lambda: f.get_by_text("Drop files here").count() > 0, False)), ui(desk))
     fm.get_by_text("My_Files", exact=True).first.dblclick(); time.sleep(2)
@@ -887,9 +884,9 @@ def main():
                 r = api("/xml")
                 if r.status_code != 200:
                     step("xml", "XML blocked: " + "; ".join(r.json().get("errors", [])[:5]), failed=True); return
-                month = upload_xml(desk, p["name"], r.text)
+                uploaded = upload_xml(desk, p["name"], r.text)
                 company = open_tally(desk)
-                import_xml(desk, month, p["name"], company, p["vouchers"])
+                import_xml(desk, uploaded, company, p["vouchers"])
             else:
                 company = open_tally(desk)
                 d1, d2 = date.fromisoformat(p["from"]), date.fromisoformat(p["to"])

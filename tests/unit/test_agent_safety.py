@@ -33,7 +33,7 @@ def run_import(answer='IMPORT', result=RESULT, changed=False):
          patch.object(robot, 'step') as step:
         error = None
         try:
-            robot.import_xml(desk, 'NOV 2026', NAME, COMPANY, 25)
+            robot.import_xml(desk, robot.PureWindowsPath(robot.IMPORT_ROOT, 'NOV 2026', NAME), COMPANY, 25)
         except RuntimeError as exc:
             error = exc
         return desk, step.call_args_list, error
@@ -770,3 +770,17 @@ def test_account_books_breadcrumb_is_not_the_gateway():
     with patch.object(robot, 'read_screen', side_effect=[(t, '') for t in (submenu, display, root)]), patch.object(robot.time, 'sleep'):
         robot.gateway(desk, COMPANY)
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape', 'Escape']
+
+
+def test_print_current_ledger_saves_the_named_pdf_only_with_verified_pdf_printer():
+    desk = Mock()
+    dialog = 'Print Configure Preview Printer: Microsoft Print to PDF'
+    screens = iter([dialog, dialog, 'Save Print Output As File name'])
+    def wait(desk, predicate):
+        text = next(screens)
+        assert predicate(text)
+        return text, ''
+    with patch.object(robot, 'wait_screen', side_effect=wait), patch.object(robot, 'remote_type') as write:
+        robot.print_current_ledger(desk, 'OSL_October.pdf')
+    write.assert_called_once_with(desk, r'D:\My_Files\OSL_October.pdf')
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Control+p', 'p', 'Alt+n', 'Control+a', 'Enter']
