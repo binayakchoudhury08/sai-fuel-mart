@@ -365,6 +365,20 @@ def test_osl_cutoff_ends_on_october_30():
     assert params['ledger'] == 'OSL LTD'
 
 
+def test_osl_full_october_pdf():
+    import json
+    from sfm import tally_site
+    cursor = Mock(); cursor.fetchone.side_effect = [None, None, {'id': 12}, None]
+    with patch.object(jobs, 'start_github'), \
+         patch.object(tally_site, 'name_map', return_value={'party': {'osl': 'OSL LTD'}}), \
+         patch.object(tally_site, 'current', return_value=(None, None)):
+        jobs.handle(cursor, 'test', 'tally ledger osl oct 2026 pdf', 'tally ledger osl oct 2026 pdf')
+    insert = next(c for c in cursor.execute.call_args_list if 'INSERT INTO tally_jobs' in c.args[0])
+    params = json.loads(insert.args[1][2])
+    assert params['from'] == '2026-10-01' and params['to'] == '2026-10-31'
+    assert params['ledger'] == 'OSL LTD'
+
+
 def test_strict_pdf_send_does_not_claim_text_fallback_is_attachment():
     response = Mock(status_code=500, text='upload failed')
     with patch.object(wa, 'provider', return_value='meta'), patch.object(wa.requests, 'post', return_value=response), \
@@ -747,3 +761,12 @@ def test_quit_returns_to_populated_gateway_without_reopening_quit():
         robot.recover_tally_screen(desk)
     dismiss.assert_called_once()
     desk.keyboard.press.assert_not_called()
+
+def test_account_books_breadcrumb_is_not_the_gateway():
+    submenu = f"Gateway of Tally {COMPANY} Account Books Ledger Group Summary Group Vouchers Sales Register"
+    display = f"Gateway of Tally {COMPANY} Display More Reports Account Books"
+    root = f"Gateway of Tally {COMPANY} Masters Create Alter Vouchers Day Book Display More Reports"
+    desk = Mock()
+    with patch.object(robot, 'read_screen', side_effect=[(t, '') for t in (submenu, display, root)]), patch.object(robot.time, 'sleep'):
+        robot.gateway(desk, COMPANY)
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape', 'Escape']
