@@ -559,7 +559,7 @@ def select_import_file(desk, folder, name):
     desk.keyboard.press("Enter")
 
 
-def fill_import_form(desk, folder, name):
+def fill_import_form(desk, folder, name, force_path=False):
     """The same short key sequence every day (owner, 06 Nov): Enter on File Format (XML stays) → File Path: keep it when
     Tally already shows this month's folder, otherwise type the folder (also into "Specify File Path" if it opens) →
     File to Import: type the exact file name in the list → Enter. The owner checks the photo before anything is
@@ -570,7 +570,7 @@ def fill_import_form(desk, folder, name):
     if format_list_open(text):                                    # the format list opened instead: choose XML
         remote_type(desk, "XML"); time.sleep(0.5); desk.keyboard.press("Enter"); time.sleep(1.5)
         text, _ = read_screen(desk)
-    if compact(month) not in compact(text) or path_error(text):   # remembered folder is another month → set it
+    if force_path or compact(month) not in compact(text) or path_error(text):   # another month (or retry) → set it
         if not (path_dialog(text) or "specifyfilepath" in compact(text)):
             remote_type(desk, folder); time.sleep(1)
             text, _ = read_screen(desk)
@@ -596,6 +596,7 @@ def import_xml(desk, uploaded, company, expected):
     desk.keyboard.press("t")
     wait_screen(desk, lambda t: "importtransactions" in compact(t))
     fill_import_form(desk, folder, name)
+    first_try = True
     def filled(text):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, folder)
@@ -630,7 +631,20 @@ def import_xml(desk, uploaded, company, expected):
                 and compact(company) in v and not format_list_open(t) and "listof" not in v
                 and not path_dialog(t) and not path_error(t) and "error" not in v))
 
-    text, png = _safe(lambda: wait_screen(desk, reviewable, 15), None) or read_screen(desk)
+    got = _safe(lambda: wait_screen(desk, reviewable, 15), None)
+    if got is None and first_try:                       # 2nd try: back to the Gateway, fresh form, folder set explicitly
+        _safe(lambda: return_to_gateway(desk, company))
+        desk.keyboard.press("Alt+O"); time.sleep(1)
+        desk.keyboard.press("t"); time.sleep(3)
+        fill_import_form(desk, folder, name, force_path=True)
+        got = _safe(lambda: wait_screen(desk, reviewable, 15), None)
+    if got is None:                                     # still not right: import nothing, hand over the last 4 key presses
+        text, png = read_screen(desk)
+        step("manual", f"I could not fill the import form reliably — nothing was imported. The file is uploaded; to finish "
+             f"in Tally: Alt+O → Transactions → File Path: {folder} → File to Import: {name} → Enter (Backup: Yes) → A: Accept.",
+             png=png, failed=True)
+        return
+    text, png = got
     step("awaiting_import", f"Check the screenshot: {company}, folder {folder}, file {name}, {expected} vouchers. "
          "Reply IMPORT to import, or STOP.", png=png)
     if wait_answer("import") != "IMPORT":
