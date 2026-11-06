@@ -111,13 +111,13 @@ def connect(page):
     global LAST_DESK
     LAST_DESK = desk
     ready = False
-    for _ in range(120):                                    # up to 6 minutes; the page reloads several times
+    for _ in range(200):                                    # up to 10 minutes: a stopped virtual computer boots first
         if _safe(lambda: any(f.locator("canvas").count() > 0 for f in desk.frames), False):
             ready = True                                    # the remote screen is there (often embedded in the session page)
             break
         time.sleep(3)
     if not ready:
-        raise RuntimeError("the virtual computer did not open within 6 minutes (last address: "
+        raise RuntimeError("the virtual computer did not open within 10 minutes (last address: "
                            + _safe(lambda: desk.url.split("?")[0], "?") + ")")
     # Remote desktop streams may never become network-idle. Wait only for its canvas.
     time.sleep(2)
@@ -317,12 +317,15 @@ def open_tally(desk):
     step("tally", "TallyPrime opened — which company?", desk)
     company = wait_answer("company")
     text, _ = read_screen(desk)
-    if "gateway of tally" in text.lower():
-        if compact(company) not in compact(text):
-            raise RuntimeError("A different company is already open. Select the requested company in Tally and restart the job.")
-    else:
+    picker = any(w in compact(text) for w in ("createcompany", "selectremotecompany", "specifypath", "datapath",
+                                               "listofcompanies", "selectcompany"))
+    if picker:                                   # the company list is open → choose the company
         desk.keyboard.type(company, delay=35)
         desk.keyboard.press("Enter")
+    elif compact(company) not in compact(text) and "gateway of tally" in text.lower():
+        raise RuntimeError("A different company is already open. Select the requested company in Tally and restart the job.")
+    # Otherwise the company is already open: type nothing — on the Gateway every letter is a menu shortcut
+    # (typing "SAI FUEL MART…" opened BaNking → Deposit Slip on 06 Nov).
     if not _tally_on_screen(desk):
         raise RuntimeError("Tally closed while opening the company — nothing was imported")
     wait_screen(desk, lambda text: compact(company) in compact(text) and "gateway of tally" in text.lower(), 30)
