@@ -437,8 +437,13 @@ def select_import_path(desk, folder):
         text, _ = read_screen(desk)
         if not path_dialog(text):
             if "specifypath" not in compact(text):
-                raise RuntimeError("Tally did not show Specify Path; stopped before typing the folder")
-            click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
+                if format_list_open(text) or path_error(text):
+                    raise RuntimeError("File Path search is blocked; stopped before typing")
+                remote_type(desk, "Specify Path")
+                text, _ = wait_screen(desk, lambda t: path_dialog(t) or
+                                      ("specifypath" in compact(t) and not format_list_open(t)), 10)
+            if not path_dialog(text):
+                click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
             wait_screen(desk, path_dialog, 10)
     replace_import_field(desk, folder)
     desk.keyboard.press("Enter")
