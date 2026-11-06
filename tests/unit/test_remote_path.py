@@ -21,7 +21,7 @@ def test_punctuation_is_not_discarded():
 
 def test_folder_selector_is_explicitly_selected():
     d=Mock()
-    with patch.object(a,'read_screen',return_value=('Import Transactions','')), patch.object(a,'wait_screen'), patch.object(a,'replace_import_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
+    with patch.object(a,'read_screen',side_effect=[('File Format XML (Data Interchange)', ''), ('Specify File Path', '')]), patch.object(a,'wait_screen'), patch.object(a,'replace_import_field'), patch.object(a,'remote_type'), patch.object(a,'click_setting') as click:
         a.select_import_path(d, r'D:\NOV 2026')
     click.assert_called_once_with(d,['File Path'],value_field=True)
 
@@ -69,3 +69,15 @@ def test_import_clear_does_not_navigate_to_format_from_path_or_filename():
             with patch.object(a,'remote_type',side_effect=type_value):
                 a.replace_import_field(desk,value)
             assert state['value']==value
+
+
+def test_job22_format_popup_cannot_receive_folder_even_when_xml_visible():
+    import pytest
+    desk = Mock()
+    popup = 'File Format D File to Import old.xml List of File Formats XML (Data Interchange) Spelling Error'
+    for screens in [[(popup,'')], [('File Format XML (Data Interchange)',''), (popup,'')]]:
+        with patch.object(a,'read_screen',side_effect=screens), patch.object(a,'click_setting'), patch.object(a,'replace_import_field') as edit:
+            with pytest.raises(RuntimeError):
+                a.select_import_path(desk, r'D:\NOV 2026')
+            edit.assert_not_called()
+            desk.keyboard.press.assert_not_called()

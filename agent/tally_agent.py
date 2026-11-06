@@ -405,16 +405,32 @@ def path_error(text):
     return any(x in text.lower() for x in ("incorrect file", "invalid path", "path does not exist", "file not found"))
 
 
+def format_list_open(text):
+    return ("listoffileformats" in compact(text) or
+            all(re.search(r"\b" + word + r"\b", text, re.I) for word in ("excel", "json", "xml")))
+
+
+def xml_format_selected(text):
+    # A filename ending in .xml or an XML option inside the popup proves nothing.
+    low = compact(text)
+    return ("fileformatxmldatainterchange" in low and not format_list_open(text)
+            and "spellingerror" not in low and "nothingselected" not in low)
+
+
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
     if not path_dialog(text):
+        if not xml_format_selected(text):
+            raise RuntimeError("Tally has not confirmed XML (Data Interchange); no folder entered")
+        if exact_path_visible(text, folder):
+            return
         click_setting(desk, ["File Path"], value_field=True)
-        # Explicitly focus the folder selector, regardless of where XML selection landed.
         text, _ = read_screen(desk)
-        if not path_dialog(text) and "specify path" in text.lower():
-            remote_type(desk, "Specify Path")
-            desk.keyboard.press("Enter")
-            wait_screen(desk, path_dialog, 15)
+        if not path_dialog(text):
+            if "specifypath" not in compact(text):
+                raise RuntimeError("Tally did not show Specify Path; stopped before typing the folder")
+            click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
+            wait_screen(desk, path_dialog, 10)
     replace_import_field(desk, folder)
     desk.keyboard.press("Enter")
     # Never type a filename while the path modal or its error is still open.
@@ -432,24 +448,20 @@ def import_xml(desk, month, name, company, expected):
     desk.keyboard.press("t")
     text, _ = wait_screen(desk, lambda t: "file format" in t.lower())
     # Preserve existing format/backup settings. Only the two requested fields change.
-    if "list of file formats" in text.lower():
-        # The form opens its format selector automatically. Resolve it to the
-        # requested XML option, including repair of a previously corrupted value.
-        replace_import_field(desk, "XML")
-        desk.keyboard.press("Enter")
-        text, _ = wait_screen(desk, lambda t: "xml" in t.lower() and "list of file formats" not in t.lower(), 10)
-    if "xml" not in text.lower():
-        raise RuntimeError("Import format is not XML (Data Interchange); stopped before editing path/file")
+    if not xml_format_selected(text):
+        if not format_list_open(text):
+            raise RuntimeError("Cannot verify File Format is XML (Data Interchange); no folder entered")
+        click_setting(desk, ["XML"], activate=True, ocr_mode=11)
+        wait_screen(desk, xml_format_selected, 10)
     if month != import_month(name):
         raise RuntimeError("Upload month does not match requested file date")
     select_import_path(desk, f"{IMPORT_ROOT}\\{month}")
     click_setting(desk, ["File to Import"], value_field=True)
-    replace_import_field(desk, name)
-    desk.keyboard.press("Enter")
+    click_setting(desk, [name], activate=True, ocr_mode=11)
     def filled(text):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
-                and compact(company) in value and "xml" in value
+                and compact(company) in value and xml_format_selected(text)
                 and "list of file formats" not in text.lower()
                 and not path_dialog(text) and not path_error(text))
     _, png = wait_screen(desk, filled, 15)

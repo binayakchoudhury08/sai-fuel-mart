@@ -12,7 +12,7 @@ from sfm import tally_jobs as jobs, db, wa
 
 NAME = 'SFM_Tally_Import_02-11-2026_to_02-11-2026.xml'
 COMPANY = 'SAI FUEL MART 26-27'
-FORM = f'Import Transactions File Format XML File Path {robot.IMPORT_ROOT}\\NOV 2026 File to Import {NAME} {COMPANY}'
+FORM = f'Import Transactions File Format XML (Data Interchange) File Path {robot.IMPORT_ROOT}\\NOV 2026 File to Import {NAME} {COMPANY}'
 RESULT = 'Import Statistics Created: 25 Altered: 0 Errors: 0 Ignored: 0'
 COUNTS = {'created': 25, 'altered': 0, 'errors': 0, 'ignored': 0}
 
@@ -700,7 +700,7 @@ def test_open_format_selector_is_resolved_to_xml_before_path_edit():
          patch.object(robot, 'wait_answer', return_value='IMPORT'), patch.object(robot, 'daybook_check', return_value=True), \
          patch.object(robot, 'step'), patch.object(robot.time, 'sleep'):
         robot.import_xml(desk, 'NOV 2026', NAME, COMPANY, 25)
-    assert events == ['XML', 'path', NAME]
+    assert events == ['path']
 
 
 def test_quit_recovery_focuses_dialog_and_uses_no_only_if_escape_failed():
