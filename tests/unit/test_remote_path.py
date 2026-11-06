@@ -27,7 +27,7 @@ def test_folder_then_full_filename_use_separate_rows():
         edit.assert_called_once_with(desk, folder)
         search.assert_not_called()
         a.select_import_file(desk, folder, 'job26.xml')
-        assert [c.args[1] for c in click.call_args_list] == [['File Path'], ['File to Import'], ['Specify Path']]
+        assert [c.args[1] for c in click.call_args_list] == [['File Path'], ['File to Import'], ['Specify Path', 'Specty Path']]
         search.assert_called_once_with(desk, 'Specify Path')
         edit.assert_called_with(desk, folder + r'\job26.xml')
 
@@ -144,3 +144,14 @@ def test_import_form_advances_from_xml_and_checks_actual_destination():
                     a.click_setting(desk, ['File Path'], value_field=True)
         desk.keyboard.press.assert_called_once_with('Enter')
         desk.mouse.click.assert_not_called()
+
+def test_job30_open_october_picker_uses_complete_november_xml():
+    picker = "Import Transactions\nSpecty Path\nSeow More\nOCT 2026"
+    desk = Mock()
+    folder = r'D:\My_Applications\SFM_TALLY_IMPORT\NOV 2026'
+    with patch.object(a, 'read_screen', side_effect=[(picker,''), (picker,''), ('Specify File Path','')]), patch.object(a, 'click_setting') as click, patch.object(a,'wait_screen'), patch.object(a,'replace_import_field') as edit:
+        a.select_import_path(desk, folder)
+        a.select_import_file(desk, folder, 'job30.xml')
+        click.assert_called_once_with(desk, ['Specify Path', 'Specty Path'], activate=False, ocr_mode=11)
+        edit.assert_called_once_with(desk, folder + r'\job30.xml')
+        desk.keyboard.press.assert_called_once_with('Enter')

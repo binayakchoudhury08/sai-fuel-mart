@@ -426,14 +426,26 @@ def format_list_open(text):
             all(re.search(r"\b" + word + r"\b", text, re.I) for word in ("excel", "json", "xml")))
 
 
+def file_picker_open(text):
+    if format_list_open(text) or path_error(text) or path_dialog(text):
+        return False
+    labels = {compact(line) for line in text.splitlines()}
+    option = bool(labels & {"specifypath", "spectypath"}) or "specifypath" in compact(text)
+    menu = ("listoffiles" in compact(text) or bool(labels & {"showmore", "seowmore"})
+            or "selectfromdrive" in compact(text))
+    return option and menu
+
+
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
     if format_list_open(text) or path_dialog(text) or path_error(text):
         raise RuntimeError("Close the open import dialog before setting File Path")
-    if exact_path_visible(text, folder):
+    if file_picker_open(text) or exact_path_visible(text, folder):
         return
     click_setting(desk, ["File Path"], value_field=True)
     text, _ = read_screen(desk)
+    if file_picker_open(text):
+        return
     if format_list_open(text) or path_dialog(text) or path_error(text):
         raise RuntimeError("File Path is covered by a dialog; stopped before typing")
     replace_import_field(desk, folder)
@@ -447,17 +459,22 @@ def select_import_path(desk, folder):
 
 
 def select_import_file(desk, folder, name):
-    click_setting(desk, ["File to Import"], value_field=True)
     text, _ = read_screen(desk)
+    if not file_picker_open(text):
+        click_setting(desk, ["File to Import"], value_field=True)
+        text, _ = read_screen(desk)
     if format_list_open(text) or path_error(text):
         raise RuntimeError("File to Import is covered by a dialog")
     if not path_dialog(text):
-        if "specifypath" not in compact(text):
+        if not file_picker_open(text) and "specifypath" not in compact(text):
             remote_type(desk, "Specify Path")
             text, _ = wait_screen(desk, lambda t: path_dialog(t) or
                                   ("specifypath" in compact(t) and not format_list_open(t)), 10)
         if not path_dialog(text):
-            click_setting(desk, ["Specify Path"], activate=True, ocr_mode=11)
+            click_setting(desk, ["Specify Path", "Specty Path"], activate=False, ocr_mode=11)
+            text, _ = read_screen(desk)
+            if file_picker_open(text):
+                desk.keyboard.press("Enter")
             wait_screen(desk, path_dialog, 10)
     replace_import_field(desk, folder + "\\" + name)
     desk.keyboard.press("Enter")
@@ -477,6 +494,7 @@ def import_xml(desk, month, name, company, expected):
         value = compact(text)
         return (name.casefold() in text.casefold() and exact_path_visible(text, f"{IMPORT_ROOT}\\{month}")
                 and compact(company) in value and not format_list_open(text)
+                and not file_picker_open(text) and "listoffiles" not in value
                 and not path_dialog(text) and not path_error(text))
     _, png = wait_screen(desk, filled, 15)
     step("awaiting_import", f"Review company {company}, file {name}, {expected} vouchers. "
@@ -655,6 +673,9 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
                 frame = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
                 if import_form_geometry(frame) == panel and import_active_row(frame, panel) == target:
                     return
+            text, _ = read_screen(desk)
+            if file_picker_open(text):
+                return
             raise RuntimeError("Tally did not highlight " + labels[0] + " after advancing one field")
     image = image.resize((image.width * 2, image.height * 2))
     with tempfile.TemporaryDirectory() as folder:
@@ -662,7 +683,7 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
         result = subprocess.run(["tesseract", str(path), "stdout", "--psm", str(ocr_mode), "tsv"],
                                 capture_output=True, text=True, timeout=15, check=True)
     rows = {}
-    for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t"):
+    for word in csv.DictReader(io.StringIO(result.stdout), delimiter="\t", quoting=csv.QUOTE_NONE):
         if not word.get("text", "").strip():
             continue
         key = tuple(word[k] for k in ("block_num", "par_num", "line_num"))
