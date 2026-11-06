@@ -50,12 +50,23 @@ def handle(cur, phone, low, text):
         if latest['state'] in ('submitting', 'review_required'):
             lines.append("Check Day Book before retrying; the import may have been partial.")
         return "\n".join(lines)
+    if low in ("stop", "stop tally", "tally stop", "cancel"):
+        cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND
+                       (state NOT IN ('done','failed','review_required') OR params ? 'session_seen')
+                       ORDER BY (state NOT IN ('done','failed','review_required')) DESC, id DESC LIMIT 1 FOR UPDATE""", (phone,))
+        active = cur.fetchone()
+        if not active:
+            return None if low == "cancel" else "No active Tally job to stop."
+        jid = active["id"]
+        uncertain = active["state"] == "submitting"
+        state = "review_required" if uncertain else active["state"] if active["state"] in ("done","failed","review_required") else "failed"
+        cur.execute("""UPDATE tally_jobs SET state=%s, waiting=NULL, answer=NULL, answered_at=NULL,
+                       params=(params - 'session_seen') || '{"stopped":true}'::jsonb,
+                       log=log || '[{"step":"stop","message":"Stopped by owner"}]'::jsonb WHERE id=%s""", (state,jid))
+        return f"Stopped Tally job #{jid}." + (" Submission had started. Check Day Book before retrying." if uncertain else "")
     cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND state NOT IN ('done','failed','review_required') AND waiting IS NOT NULL
                    AND created_at > NOW() - interval '30 minutes' ORDER BY id DESC LIMIT 1""", (phone,))
     job = cur.fetchone()
-    if job and low.strip() in ("stop", "cancel"):
-        cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL, answer=NULL WHERE id=%s", (job["id"],))
-        return f"Stopped job #{job['id']} before import submission."
     if job and job["waiting"] == "import":
         if text.strip().upper() != "IMPORT":
             return "Review the import screenshot, then reply *IMPORT* or *STOP*."
@@ -299,7 +310,7 @@ def session_next(jid, closing=False):
     with db.tx() as cur:
         cur.execute("SELECT * FROM tally_jobs WHERE id=%s FOR UPDATE", (jid,))
         parent = cur.fetchone()
-        if not parent or parent['state'] not in ('done', 'failed', 'review_required'):
+        if not parent or parent['params'].get('stopped') or parent['state'] not in ('done', 'failed', 'review_required'):
             return {"ok": False}
         if closing:
             cur.execute("UPDATE tally_jobs SET params=params - 'session_seen' WHERE id=%s", (jid,))

@@ -780,6 +780,9 @@ def handle(cur, phone, user, msg):
 
     low = re.sub(r"^check\s+tally\b", "tally check", low)
     if mtype == "text" and user.get("role") == "owner":
+        if low in ("stop", "stop tally", "tally stop"):
+            from . import tally_jobs
+            return tally_jobs.handle(cur, phone, "stop", text)
         if low in ("ledger", "ledger pdf", "tally ledger", "tally ledger pdf"):
             save_state(cur, phone, {"mode": "tally_ledger_party"}, touch=True)
             return "Which ledger party name? (e.g. OSL, SVT, R.K.)"

@@ -209,7 +209,7 @@ def test_approve_and_stop_are_handled_before_other_commands():
             if reply == 'IMPORT':
                 assert "answer='IMPORT'" in statements
             elif reply == 'STOP':
-                assert "state='failed'" in statements
+                assert cursor.execute.call_args.args[1] == ("failed", record["id"])
             else:
                 assert 'UPDATE' not in statements
 
@@ -772,15 +772,27 @@ def test_account_books_breadcrumb_is_not_the_gateway():
     assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Escape', 'Escape']
 
 
-def test_print_current_ledger_saves_the_named_pdf_only_with_verified_pdf_printer():
+def test_print_current_ledger_uses_web_printer_directly(tmp_path):
     desk = Mock()
-    dialog = 'Print Configure Preview Printer: Microsoft Print to PDF'
-    screens = iter([dialog, dialog, 'Save Print Output As File name'])
-    def wait(desk, predicate):
-        text = next(screens)
-        assert predicate(text)
-        return text, ''
-    with patch.object(robot, 'wait_screen', side_effect=wait), patch.object(robot, 'remote_type') as write:
-        robot.print_current_ledger(desk, 'OSL_October.pdf')
-    write.assert_called_once_with(desk, r'D:\My_Files\OSL_October.pdf')
-    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Control+p', 'p', 'Alt+n', 'Control+a', 'Enter']
+    desk.context.pages = [desk]
+    output = tmp_path / "report.pdf"
+    output.write_bytes(b"%PDF-test")
+    download = Mock()
+    download.path.return_value = str(output)
+    def press(key):
+        if key == "p":
+            desk.on.call_args.args[1](download)
+    desk.keyboard.press.side_effect = press
+    with patch.object(robot, 'wait_screen', return_value=('Print Configure Preview Web_Printer', '')):
+        assert robot.print_current_ledger(desk, 'OSL.pdf') == b"%PDF-test"
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['Control+p','p']
+
+
+def test_stop_tally_during_running_job_without_pending_prompt():
+    record = job('company')
+    record['waiting'] = None
+    with backend(record) as (cursor, _):
+        with patch.object(wa, 'session', return_value={'state': {'mode':'adj'}}):
+            out = wa.handle(cursor, 'test', {'role':'owner'}, {'type':'text','text':{'body':'Stop Tally'}})
+        assert 'Stopped Tally job' in out
+        assert cursor.execute.call_args.args[1] == ('failed',record['id'])

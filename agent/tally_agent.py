@@ -348,9 +348,22 @@ def read_screen(desk):
     return result.stdout, base64.b64encode(png).decode()
 
 
+MONITOR_STOP = False
+LAST_ACTIVE_CHECK = 0.0
+
+
+def check_active(force=False):
+    global LAST_ACTIVE_CHECK
+    if MONITOR_STOP and (force or time.monotonic() - LAST_ACTIVE_CHECK >= 2):
+        if not api("/active").json().get("active"):
+            raise RuntimeError("Tally job stopped")
+        LAST_ACTIVE_CHECK = time.monotonic()
+
+
 def wait_screen(desk, predicate, seconds=30):
     end = time.monotonic() + seconds
     while time.monotonic() < end:
+        check_active()
         text, png = read_screen(desk)
         if predicate(text):
             return text, png
@@ -773,32 +786,50 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
 
 
 def print_current_ledger(desk, pdf_name):
-    def print_dialog(text):
-        value = compact(text)
-        return "preview" in value and "print" in value and "configure" in value
-
     desk.keyboard.press("Control+p")
-    text, _ = wait_screen(desk, print_dialog)
-    if "microsoftprinttopdf" not in compact(text):
-        desk.keyboard.press("c")
-        wait_screen(desk, lambda t: "printconfiguration" in compact(t))
-        remote_type(desk, "Printer")
-        click_setting(desk, ["Printer"], ocr_mode=11)
-        wait_screen(desk, lambda t: "printer" in compact(t))
-        click_setting(desk, ["Microsoft Print to PDF"], ocr_mode=11)
-        text, _ = read_screen(desk)
-        if "printerproperties" in compact(text):
-            click_setting(desk, ["OK"], ocr_mode=11)
-        text, _ = read_screen(desk)
-        if "printconfiguration" in compact(text):
-            desk.keyboard.press("Control+a")
-    wait_screen(desk, lambda t: print_dialog(t) and "microsoftprinttopdf" in compact(t))
-    desk.keyboard.press("p")
-    wait_screen(desk, lambda t: "saveprintoutputas" in compact(t) and "filename" in compact(t))
-    desk.keyboard.press("Alt+n")
-    desk.keyboard.press("Control+a")
-    remote_type(desk, "D:\\My_Files\\" + pdf_name)
-    desk.keyboard.press("Enter")
+    wait_screen(desk, lambda t: all(word in compact(t) for word in ("preview", "print", "configure")))
+    downloads, responses = [], []
+    context = desk.context
+    on_download = downloads.append
+    def watch(page):
+        page.on("download", on_download)
+    def response_seen(response):
+        if "application/pdf" in response.headers.get("content-type", "").lower():
+            responses.append(response)
+    pages = list(context.pages)
+    for page in pages:
+        watch(page)
+    context.on("page", watch)
+    context.on("response", response_seen)
+    try:
+        check_active(force=True)
+        desk.keyboard.press("p")
+        for _ in range(120):
+            desk.wait_for_timeout(500)
+            check_active()
+            if downloads:
+                return Path(downloads[0].path()).read_bytes()
+            if responses:
+                data = responses.pop(0).body()
+                if data.startswith(b"%PDF-"):
+                    return data
+            for page in context.pages:
+                if page not in pages and page.url.startswith("blob:"):
+                    encoded = page.evaluate("""async () => {
+                        const blob = await (await fetch(location.href)).blob();
+                        return await new Promise(resolve => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result.split(',')[1]);
+                            reader.readAsDataURL(blob);
+                        });
+                    }""")
+                    return base64.b64decode(encoded)
+        raise RuntimeError("Print was requested once. The web session did not return a PDF.")
+    finally:
+        context.remove_listener("response", response_seen)
+        context.remove_listener("page", watch)
+        for page in context.pages:
+            page.remove_listener("download", on_download)
 
 
 def verify_pdf(data, ledger, company, d1, d2):
@@ -817,21 +848,7 @@ def verify_pdf(data, ledger, company, d1, d2):
 def ledger_pdf(desk, ledger, d1, d2, company):
     open_report(desk, "Ledger Vouchers", company, d1, d2, ledger=ledger)
     pdf_name = f"{re.sub(r'[^A-Za-z0-9_-]', '_', ledger)}_{d1:%d-%m-%Y}_to_{d2:%d-%m-%Y}_job{JOB}.pdf"
-    print_current_ledger(desk, pdf_name)
-    side_button(desk, "File Manager")
-    fm = next((f for f in desk.frames if _safe(lambda: f.get_by_text("Drop files here").count() > 0, False)), ui(desk))
-    fm.get_by_text("My_Files", exact=True).first.dblclick(); time.sleep(2)
-    with desk.expect_download(timeout=120000) as dl:
-        row = fm.get_by_text(pdf_name, exact=True).first
-        row.wait_for(timeout=120000)
-        row.hover()
-        container = row.locator("xpath=ancestor::*[.//button[contains(@title,'ownload') or contains(@aria-label,'ownload')]][1]")
-        button = container.locator("button[title*='ownload'], button[aria-label*='ownload']")
-        if button.count() != 1:
-            raise RuntimeError("Could not identify the download button for the requested PDF")
-        button.click()
-    path = dl.value.path()
-    data = Path(path).read_bytes()
+    data = print_current_ledger(desk, pdf_name)
     verify_pdf(data, ledger, company, d1, d2)
     response = api("/file", method="POST", files={"file": (pdf_name, data, "application/pdf")}).json()
     if not response.get("ok"):
@@ -853,6 +870,15 @@ def ensure_runtime():
 
 
 def main():
+    global MONITOR_STOP
+    MONITOR_STOP = True
+    try:
+        run_jobs()
+    finally:
+        MONITOR_STOP = False
+
+
+def run_jobs():
     global JOB
     started = time.monotonic()
     if os.environ["JOB_ID"].endswith(":retry-login"):

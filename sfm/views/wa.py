@@ -240,6 +240,15 @@ def tally_retry_login(jid):
     return jsonify({"ok": bool(job), "job": job}), 200 if job else 409
 
 
+@bp.route("/api/tally/job/<int:jid>/active")
+def tally_active(jid):
+    if not _internal_ok():
+        return jsonify({"ok": False}), 401
+    from .. import db
+    row = db.one("SELECT state FROM tally_jobs WHERE id=%s", (jid,))
+    return jsonify({"active": bool(row and row["state"] not in ("done", "failed", "review_required"))})
+
+
 @bp.route("/api/tally/job/<int:jid>/claim", methods=["POST"])
 def tally_claim(jid):
     if not _internal_ok():
@@ -284,7 +293,7 @@ def tally_file(jid):
     if not _internal_ok():
         return jsonify({"ok": False}), 401
     from .. import db, wa
-    j = db.one("SELECT phone FROM tally_jobs WHERE id=%s", (jid,))
+    j = db.one("SELECT phone FROM tally_jobs WHERE id=%s AND state NOT IN ('failed','done','review_required')", (jid,))
     f = request.files.get("file")
     if not j or not f:
         return jsonify({"ok": False}), 400
