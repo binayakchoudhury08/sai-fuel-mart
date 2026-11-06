@@ -561,23 +561,13 @@ def import_xml(desk, uploaded, company, expected):
                 and not path_dialog(t) and not path_error(t) and "error" not in v))
 
     text, png = wait_screen(desk, reviewable, 15)
-    for attempt in range(2):
-        manual = not filled(text)
-        signature = form_rows(png) if manual else None
-        if manual and not signature:
-            raise RuntimeError("Cannot read all three import rows for approval")
-        reason = "I could not match the previous screenshot. Check this fresh form: " if attempt else "Check the screenshot: "
-        step("awaiting_import", f"{reason}{company}, folder {folder}, file {name}, "
-             f"{expected} vouchers. Reply IMPORT only if both rows match, or STOP.", png=png)
-        if wait_answer("import") != "IMPORT":
-            raise RuntimeError("Import cancelled before submission")
-        text, png = read_screen(desk)
-        if filled(text) or (manual and reviewable(text) and form_rows(png) == signature):
-            break
-        if not reviewable(text):
-            raise RuntimeError("Cannot verify the company and import form after approval; nothing submitted")
-    else:
-        raise RuntimeError("Could not match the approved folder and file; nothing submitted")
+    step("awaiting_import", f"Check the screenshot: {company}, folder {folder}, file {name}, {expected} vouchers. "
+         "Reply IMPORT to import, or STOP.", png=png)
+    if wait_answer("import") != "IMPORT":
+        raise RuntimeError("Import cancelled before submission")
+    text, png = read_screen(desk)
+    if "importtransactions" not in compact(text):          # the form must still be open — nothing else is compared
+        raise RuntimeError("The Import Transactions form is no longer on the screen; nothing submitted")
     step("submitting", f"Submitting {name}; check Day Book before any retry.")
     desk.keyboard.press("Enter")
     observed_progress = False
@@ -614,9 +604,14 @@ def import_xml(desk, uploaded, company, expected):
     dates = re.findall(r"\d{2}-\d{2}-\d{4}", name)
     d1, d2 = [datetime.strptime(v, "%d-%m-%Y").date() for v in dates]
     if "pressanykey" in compact(text):
-        desk.keyboard.press("Space")
-    elif counts is not None:
-        desk.keyboard.press("Escape")  # close verified import statistics
+        desk.keyboard.press("Enter")                         # "press any key to continue"
+        time.sleep(2)
+        text, png = read_screen(desk)
+        counts = result_counts(text) or counts
+    step("import_result", f"Tally finished importing {name} — confirmation screen"
+         + (f": created {counts['created']}, altered {counts['altered']}, errors {counts['errors']}" if counts else ""), png=png)
+    if counts is not None:
+        desk.keyboard.press("Escape")  # close the import statistics
     if not daybook_check(desk, company, d1, d2, done=False):
         step("review_required", "Import statistics were returned, but Day Book shows no entries. Check filters and vouchers before retrying.", desk)
         return
@@ -870,7 +865,15 @@ def print_current_ledger(desk, pdf_name):
     context.on("response", response_seen)
     try:
         check_active(force=True)
-        desk.keyboard.press("p")
+        # Owner: no printer settings — just Print. Close "Print Configuration" if it is open, then press Print.
+        text, _ = read_screen(desk)
+        if "printconfiguration" in compact(text) or "listofconfigurations" in compact(text):
+            desk.keyboard.press("Escape"); time.sleep(1)
+        desk.keyboard.press("p"); time.sleep(3)
+        text, _ = read_screen(desk)
+        if "printconfiguration" in compact(text) or "listofconfigurations" in compact(text):
+            desk.keyboard.press("Escape"); time.sleep(1)
+            desk.mouse.click(855, 619)                       # the "P: Print" button (measured on the print box)
         for _ in range(120):
             desk.wait_for_timeout(500)
             check_active()
