@@ -938,7 +938,8 @@ def print_current_ledger(desk, pdf_name):
     wait_screen(desk, lambda t: all(word in compact(t) for word in ("preview", "print", "configure")))
     downloads, responses = [], []
     context = desk.context
-    on_download = downloads.append
+    def on_download(download):                  # a real function: Playwright cannot unregister a builtin like list.append
+        downloads.append(download)
     def watch(page):
         page.on("download", on_download)
     def response_seen(response):
@@ -981,11 +982,11 @@ def print_current_ledger(desk, pdf_name):
                     }""")
                     return base64.b64decode(encoded)
         raise RuntimeError("Print was requested once. The web session did not return a PDF.")
-    finally:
-        context.remove_listener("response", response_seen)
-        context.remove_listener("page", watch)
-        for page in context.pages:
-            page.remove_listener("download", on_download)
+    finally:                                    # cleanup must never hide the PDF (or the real error)
+        _safe(lambda: context.remove_listener("response", response_seen))
+        _safe(lambda: context.remove_listener("page", watch))
+        for page in list(context.pages):
+            _safe(lambda: page.remove_listener("download", on_download))
 
 
 def verify_pdf(data, ledger, company, d1, d2):
