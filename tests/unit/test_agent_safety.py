@@ -281,7 +281,7 @@ def test_month_comes_from_import_date_not_previous_folder():
 def test_path_error_never_advances_to_filename():
     import pytest
     desk = Mock()
-    with patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
+    with patch.object(robot, 'import_input_focused', return_value=True), patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
          patch.object(robot, 'click_setting'), patch.object(robot, 'wait_screen', side_effect=lambda d, predicate, seconds: predicate('Incorrect File/Folder Path')):
         with pytest.raises(RuntimeError, match='filename was NOT entered'):
             robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
@@ -295,7 +295,7 @@ def test_folder_acceptance_rejects_open_modal_and_old_month():
         assert not predicate('Specify File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
         assert not predicate('File Path ' + robot.IMPORT_ROOT + '\\OCT 2026')
         assert predicate('File Path ' + robot.IMPORT_ROOT + '\\NOV 2026')
-    with patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
+    with patch.object(robot, 'import_input_focused', return_value=True), patch.object(robot, 'read_screen', return_value=('File Path OCT 2026', 'image')), \
          patch.object(robot, 'click_setting'), patch.object(robot, 'wait_screen', side_effect=wait):
         robot.select_import_path(desk, robot.IMPORT_ROOT + '\\NOV 2026')
 

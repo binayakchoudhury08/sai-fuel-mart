@@ -403,13 +403,27 @@ def replace_field(desk, value):
     remote_type(desk, value)
 
 
-def replace_import_field(desk, value):
-    # Home can navigate to File Format in this Tally form. Clear on both sides
-    # of the current caret without any field-navigation or acceptance keys.
-    for _ in range(260):
-        desk.keyboard.press("Backspace")
-    for _ in range(260):
-        desk.keyboard.press("Delete")
+def import_input_focused(desk, file_dialog):
+    from PIL import Image
+    text, png = read_screen(desk)
+    frame = Image.open(io.BytesIO(base64.b64decode(png))).convert("RGB")
+    panel = import_form_geometry(frame)
+    row = import_active_row(frame, panel) if panel else None
+    if row == 1 or format_list_open(text) or path_error(text) or "spellingerror" in compact(text):
+        return False
+    if file_dialog:
+        return path_dialog(text)
+    return row == 2 and not path_dialog(text) and not file_picker_open(text)
+
+
+def replace_import_field(desk, value, *, file_dialog=False):
+    # Recheck after selection. Remote navigation can move focus before text arrives.
+    if not import_input_focused(desk, file_dialog):
+        raise RuntimeError("Path input lost focus before selection")
+    desk.keyboard.press("End")
+    desk.keyboard.press("Shift+Home")
+    if not import_input_focused(desk, file_dialog):
+        raise RuntimeError("Path input lost focus before typing")
     remote_type(desk, value)
 
 
@@ -476,7 +490,7 @@ def select_import_file(desk, folder, name):
             if file_picker_open(text):
                 desk.keyboard.press("Enter")
             wait_screen(desk, path_dialog, 10)
-    replace_import_field(desk, folder + "\\" + name)
+    replace_import_field(desk, folder + "\\" + name, file_dialog=True)
     desk.keyboard.press("Enter")
 
 

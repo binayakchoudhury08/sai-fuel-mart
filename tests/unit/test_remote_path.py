@@ -29,7 +29,7 @@ def test_folder_then_full_filename_use_separate_rows():
         a.select_import_file(desk, folder, 'job26.xml')
         assert [c.args[1] for c in click.call_args_list] == [['File Path'], ['File to Import'], ['Specify Path', 'Specty Path']]
         search.assert_called_once_with(desk, 'Specify Path')
-        edit.assert_called_with(desk, folder + r'\job26.xml')
+        edit.assert_called_with(desk, folder + r'\job26.xml', file_dialog=True)
 
 
 def test_import_value_focus_never_presses_enter_or_types_into_backup():
@@ -57,24 +57,15 @@ def test_import_value_focus_never_presses_enter_or_types_into_backup():
         desk.keyboard.type.assert_not_called()
 
 
-def test_import_clear_does_not_navigate_to_format_from_path_or_filename():
-    for original, value in [(r'D:\OCT 2026', r'D:\NOV 2026'), ('old.xml', 'new.xml')]:
-        for caret in (0, 4, len(original)):
-            state = {'field': 'requested', 'value': original, 'caret': caret}
-            def press(key, **kwargs):
-                assert key not in ('Home', 'End', 'Tab', 'Enter', 'Control+a')
-                i=state['caret']
-                if key == 'Backspace' and i:
-                    state['value']=state['value'][:i-1]+state['value'][i:];state['caret']-=1
-                elif key == 'Delete':
-                    state['value']=state['value'][:i]+state['value'][i+1:]
-            def type_value(desk, text):
-                assert state['value']==''
-                state['value']=text
-            desk=Mock();desk.keyboard.press.side_effect=press
-            with patch.object(a,'remote_type',side_effect=type_value):
-                a.replace_import_field(desk,value)
-            assert state['value']==value
+def test_job31_focus_loss_during_selection_never_types_drive_letter():
+    import pytest
+    for file_dialog in (True, False):
+        desk = Mock()
+        with patch.object(a, 'import_input_focused', side_effect=[True, False]), patch.object(a, 'remote_type') as write:
+            with pytest.raises(RuntimeError, match='before typing'):
+                a.replace_import_field(desk, r'D:\NOV 2026', file_dialog=file_dialog)
+            write.assert_not_called()
+        assert [c.args[0] for c in desk.keyboard.press.call_args_list] == ['End', 'Shift+Home']
 
 
 def test_job22_format_popup_cannot_receive_folder_even_when_xml_visible():
@@ -153,5 +144,5 @@ def test_job30_open_october_picker_uses_complete_november_xml():
         a.select_import_path(desk, folder)
         a.select_import_file(desk, folder, 'job30.xml')
         click.assert_called_once_with(desk, ['Specify Path', 'Specty Path'], activate=False, ocr_mode=11)
-        edit.assert_called_once_with(desk, folder + r'\job30.xml')
+        edit.assert_called_once_with(desk, folder + r'\job30.xml', file_dialog=True)
         desk.keyboard.press.assert_called_once_with('Enter')
