@@ -470,16 +470,53 @@ def file_picker_open(text):
     return (option and menu) or "listoffiles" in compact(text)
 
 
+def list_popup_open(desk):
+    """Tally's "List of Files" (light-blue panel with one orange selected row) open in the lower half of the screen —
+    found by colour, because its white-on-blue title and the form behind it are often unreadable / covered."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+    W, H = im.size
+    def orange(p): r, g, b = p; return r > 225 and 150 < g < 225 and b < 110
+    def light_blue(p): r, g, b = p; return 200 < r < 240 and 220 < g < 250 and b > 235
+    for y in range(int(H * .5), int(H * .97), 2):
+        run = best = 0
+        for x in range(int(W * .2), int(W * .85), 2):
+            run = run + 1 if orange(im.getpixel((x, y))) else 0
+            best = max(best, run)
+        if best * 2 >= 0.12 * W:
+            blue = sum(light_blue(im.getpixel((x, yy))) for x in range(int(W * .2), int(W * .85), 6)
+                       for yy in range(max(0, y - 160), y, 8))
+            if blue > 60:
+                return True
+    return False
+
+
+def on_file_to_import(desk, text=None):
+    text = text if text is not None else read_screen(desk)[0]
+    if format_list_open(text):
+        return False
+    return file_picker_open(text) or active_import_row(desk) == 3 or list_popup_open(desk)
+
+
+def active_import_row(desk):
+    """Which row of the Import Transactions form is highlighted (1 Format, 2 Path, 3 File to Import) — read from the
+    yellow highlight, not from OCR (the white-on-blue "List of Files" header is often unreadable)."""
+    from PIL import Image
+    frame = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+    panel = import_form_geometry(frame)
+    return import_active_row(frame, panel) if panel else None
+
+
 def select_import_path(desk, folder):
     text, _ = read_screen(desk)
-    if file_picker_open(text) or exact_path_visible(text, folder):
+    if exact_path_visible(text, folder) or on_file_to_import(desk, text):
         return
     if format_list_open(text) or path_dialog(text) or path_error(text):
         raise RuntimeError("Close the open import dialog before setting File Path")
     click_setting(desk, ["File Path"], value_field=True)
     text, _ = read_screen(desk)
-    if file_picker_open(text):
-        return
+    if on_file_to_import(desk, text):
+        return                                          # Tally kept the last folder and is on File to Import
     if format_list_open(text) or path_dialog(text) or path_error(text):
         raise RuntimeError("File Path is covered by a dialog; stopped before typing")
     replace_import_field(desk, folder)
@@ -493,6 +530,11 @@ def select_import_path(desk, folder):
 
 
 def select_import_file(desk, folder, name):
+    if on_file_to_import(desk):                         # on File to Import (its file list open) → type the exact name
+        remote_type(desk, name)
+        _safe(lambda: wait_screen(desk, lambda t: name.casefold() in t.casefold(), 10))
+        desk.keyboard.press("Enter"); time.sleep(1)
+        return
     text, _ = read_screen(desk)
     if not file_picker_open(text):
         click_setting(desk, ["File to Import"], value_field=True)
@@ -777,7 +819,8 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
                     return
             text, _ = read_screen(desk)
             frame = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
-            if file_picker_open(text) or (panel and import_active_row(frame, panel) == target + 1):
+            if file_picker_open(text) or (panel and import_active_row(frame, panel) == target + 1) or (
+                    not format_list_open(text) and list_popup_open(desk)):
                 return                                  # Tally kept the last folder and moved on to File to Import
             raise RuntimeError("Tally did not highlight " + labels[0] + " after advancing one field")
     image = image.resize((image.width * 2, image.height * 2))
