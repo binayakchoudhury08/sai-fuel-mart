@@ -115,3 +115,32 @@ def test_job27_click_stays_on_xml_tab_once_and_verify_destination():
                 with pytest.raises(RuntimeError, match='not visibly focused'):
                     a.click_setting(desk, ['File Path'], value_field=True)
         desk.keyboard.press.assert_called_once_with('Tab')
+
+
+def test_import_form_advances_from_xml_and_checks_actual_destination():
+    import io
+    import pytest
+    from PIL import Image, ImageDraw
+
+    def frame(row):
+        image = Image.new('RGB', (800, 450), (180, 180, 180))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((152, 143, 564, 322), fill='white')
+        y = {1:182, 2:192, 3:201}[row]
+        draw.rectangle((345, y-3, 465, y+3), fill=(251,235,170))
+        buf = io.BytesIO()
+        image.save(buf, format='PNG')
+        return buf.getvalue()
+
+    for destination in (1, 2, 3):
+        desk = Mock()
+        start, end = frame(1), frame(destination)
+        desk.screenshot.side_effect = [start] + [end]*12
+        with patch.object(a, 'read_screen', return_value=('Import Transactions','')), patch.object(a.time, 'sleep'):
+            if destination == 2:
+                a.click_setting(desk, ['File Path'], value_field=True)
+            else:
+                with pytest.raises(RuntimeError, match='did not highlight File Path'):
+                    a.click_setting(desk, ['File Path'], value_field=True)
+        desk.keyboard.press.assert_called_once_with('Enter')
+        desk.mouse.click.assert_not_called()

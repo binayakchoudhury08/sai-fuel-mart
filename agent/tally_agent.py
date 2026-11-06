@@ -597,10 +597,65 @@ def daybook_check(desk, company, d1, d2, done=True):
     return found
 
 
+def import_form_geometry(image):
+    """Locate the connected white import panel independently of OCR word grouping."""
+    from PIL import ImageChops, ImageDraw
+    width, height = image.size
+    mask = image.convert("L").point(lambda p: 255 if p >= 244 else 0)
+    seed = (width // 2, int(height * 0.62))
+    if mask.getpixel(seed) != 255:
+        return None
+    before = mask.copy()
+    ImageDraw.floodfill(mask, seed, 80)
+    bounds = ImageChops.difference(mask, before).getbbox()
+    if not bounds:
+        return None
+    left, top, right, bottom = bounds
+    w, h = right - left, bottom - top
+    if not (2.19 < w / h < 2.42 and 0.38 * width < w < 0.66 * width):
+        return None
+    return left, top, w, h
+
+
+def import_active_row(image, panel):
+    from statistics import median
+    left, top, w, h = panel
+    scores = []
+    for fraction in (0.217, 0.272, 0.325):
+        y = round(top + fraction * h)
+        counts = []
+        radius = max(2, round(0.018*h))
+        for yy in range(y-radius, y+radius+1):
+            pixels = [image.getpixel((xx, yy)) for xx in
+                      range(round(left+0.48*w), round(left+0.74*w))]
+            counts.append(sum(r > 170 and g > 135 and r > b+22 and g > b+12
+                              for r,g,b in pixels) / len(pixels))
+        scores.append(max(median(counts[i:i+3]) for i in range(len(counts)-2)))
+    hits = [i+1 for i, score in enumerate(scores) if score > 0.38]
+    return hits[0] if len(hits) == 1 else None
+
+
 def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
     """Locate the visible setting, rather than typing through guessed export fields."""
     from PIL import Image
     image = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+    if value_field and labels in (["File Path"], ["File to Import"]):
+        target = 2 if labels == ["File Path"] else 3
+        panel = import_form_geometry(image)
+        current = import_active_row(image, panel) if panel else None
+        if current == target:
+            return
+        if current == target - 1:
+            text, _ = read_screen(desk)
+            if format_list_open(text) or path_dialog(text) or path_error(text):
+                raise RuntimeError("Close the open import dialog before moving fields")
+            desk.keyboard.press("Enter")
+            for _ in range(12):
+                time.sleep(0.2)
+                frame = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+                if import_form_geometry(frame) == panel and import_active_row(frame, panel) == target:
+                    return
+            raise RuntimeError("Tally did not highlight " + labels[0] + " after advancing one field")
     image = image.resize((image.width * 2, image.height * 2))
     with tempfile.TemporaryDirectory() as folder:
         path = Path(folder) / "settings.png"; image.save(path)
