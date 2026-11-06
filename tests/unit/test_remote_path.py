@@ -87,3 +87,31 @@ def test_job22_format_popup_cannot_receive_folder_even_when_xml_visible():
                 a.select_import_path(desk, r'D:\NOV 2026')
             edit.assert_not_called()
             desk.keyboard.press.assert_not_called()
+
+
+def test_job27_click_stays_on_xml_tab_once_and_verify_destination():
+    import io
+    import pytest
+    from PIL import Image, ImageDraw
+
+    def screenshot(y):
+        frame = Image.new('RGB', (400, 200), 'white')
+        ImageDraw.Draw(frame).rectangle((150, y-5, 300, y+5), fill=(255,240,160))
+        buf = io.BytesIO()
+        frame.save(buf, format='PNG')
+        return buf.getvalue()
+
+    tsv = 'block_num\tpar_num\tline_num\tleft\ttop\theight\ttext\n'
+    for line, top, words in [(1, 50, ['File','Format','XML']), (2, 90, ['File','Path','D:'])]:
+        for left, word in zip([20,60,300], words):
+            tsv += f'1\t1\t{line}\t{left}\t{top}\t20\t{word}\n'
+    for destination in (30, 50):
+        desk = Mock()
+        desk.screenshot.side_effect = [screenshot(y) for y in (30, 30, destination)]
+        with patch.object(a.subprocess,'run',return_value=Mock(stdout=tsv)), patch.object(a,'read_screen',return_value=('Import Transactions File Format XML','')), patch.object(a.time,'sleep'):
+            if destination == 50:
+                a.click_setting(desk, ['File Path'], value_field=True)
+            else:
+                with pytest.raises(RuntimeError, match='not visibly focused'):
+                    a.click_setting(desk, ['File Path'], value_field=True)
+        desk.keyboard.press.assert_called_once_with('Tab')

@@ -613,7 +613,11 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
         key = tuple(word[k] for k in ("block_num", "par_num", "line_num"))
         rows.setdefault(key, []).append(word)
     matches = []
+    format_centres = []
     for words in rows.values():
+        row_text = " ".join(w["text"] for w in words)
+        if re.match(r"^file format\b", row_text, re.I) and re.search(r"\bxml\b", row_text, re.I):
+            format_centres.append((int(words[0]["top"]) + int(words[0]["height"]) / 2) / 2)
         for label in labels:
             parts = label.lower().split()
             for i in range(len(words) - len(parts) + 1):
@@ -633,18 +637,35 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
     x, y = matches[0]
     desk.mouse.click(x+4, y)
     if value_field:
-        # Clicking the label then Enter used to advance into the backup field.
-        # Click the value itself, never Enter, and prove focus stays on that row.
-        time.sleep(0.3)
-        focused = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
-        yellow_rows = []
-        for yy in range(max(0, int(y)-1), min(focused.height, int(y)+2)):
-            yellow = 0
-            for xx in range(max(0, int(x)), min(focused.width, int(x)+90)):
-                r, g, b = focused.getpixel((xx, yy))
-                yellow += r > 170 and g > 130 and b < g * 0.88
-            yellow_rows.append(yellow)
-        if len(yellow_rows) != 3 or min(yellow_rows) < 40:
+        def row_highlighted(frame, centre):
+            for yy in range(int(centre)-1, int(centre)+2):
+                if not 0 <= yy < frame.height:
+                    return False
+                yellow = 0
+                for xx in range(max(0, int(x)), min(frame.width, int(x)+90)):
+                    r, g, b = frame.getpixel((xx, yy))
+                    yellow += r > 170 and g > 130 and b < g * 0.88
+                if yellow < 40:
+                    return False
+            return True
+
+        def capture_focus():
+            time.sleep(0.3)
+            return Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+
+        focused = capture_focus()
+        if row_highlighted(focused, y):
+            return
+        # A remote click can leave the caret in the default XML selector.
+        # Tab once only from that verified row, then inspect the new highlight.
+        if (labels == ["File Path"] and len(format_centres) == 1
+                and format_centres[0] + 3 < y
+                and row_highlighted(focused, format_centres[0])):
+            text, _ = read_screen(desk)
+            if not format_list_open(text) and not path_dialog(text) and not path_error(text):
+                desk.keyboard.press("Tab")
+                focused = capture_focus()
+        if not row_highlighted(focused, y):
             raise RuntimeError("Requested import field is not visibly focused; stopped before typing: " + labels[0])
     elif activate:
         desk.keyboard.press("Enter"); time.sleep(0.5)
