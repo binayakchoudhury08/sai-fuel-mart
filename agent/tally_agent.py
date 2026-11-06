@@ -467,7 +467,7 @@ def file_picker_open(text):
     option = bool(labels & {"specifypath", "spectypath"}) or "specifypath" in compact(text)
     menu = ("listoffiles" in compact(text) or bool(labels & {"showmore", "seowmore"})
             or "selectfromdrive" in compact(text))
-    return option and menu
+    return (option and menu) or "listoffiles" in compact(text)
 
 
 def select_import_path(desk, folder):
@@ -502,8 +502,10 @@ def select_import_file(desk, folder, name):
     if not path_dialog(text):
         if not file_picker_open(text):
             text, _ = wait_screen(desk, lambda t: file_picker_open(t) or path_dialog(t), 10)
-        if file_picker_open(text) and exact_path_visible(text, folder) and name.casefold() in text.casefold():
-            click_setting(desk, [name], ocr_mode=11)
+        if file_picker_open(text) and exact_path_visible(text, folder):
+            remote_type(desk, name)                     # Tally filters the List of Files as you type
+            _safe(lambda: wait_screen(desk, lambda t: name.casefold() in t.casefold(), 10))
+            desk.keyboard.press("Enter"); time.sleep(1)
             return
         if not path_dialog(text):
             click_setting(desk, ["Specify Path", "Specty Path"], activate=False, ocr_mode=11)
@@ -774,8 +776,9 @@ def click_setting(desk, labels, value_field=False, activate=True, ocr_mode=6):
                 if import_form_geometry(frame) == panel and import_active_row(frame, panel) == target:
                     return
             text, _ = read_screen(desk)
-            if file_picker_open(text):
-                return
+            frame = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+            if file_picker_open(text) or (panel and import_active_row(frame, panel) == target + 1):
+                return                                  # Tally kept the last folder and moved on to File to Import
             raise RuntimeError("Tally did not highlight " + labels[0] + " after advancing one field")
     image = image.resize((image.width * 2, image.height * 2))
     with tempfile.TemporaryDirectory() as folder:
