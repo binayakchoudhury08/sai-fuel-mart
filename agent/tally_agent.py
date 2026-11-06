@@ -532,30 +532,79 @@ def import_xml(desk, uploaded, company, expected):
                 and compact(company) in value and not format_list_open(text)
                 and not file_picker_open(text) and "listoffiles" not in value
                 and not path_dialog(text) and not path_error(text))
-    _, png = wait_screen(desk, filled, 15)
-    step("awaiting_import", f"Review company {company}, file {name}, {expected} vouchers. "
-         "Reply IMPORT to submit this file, or STOP to cancel. No import submitted yet.", png=png)
+    # OCR can split long Windows paths. Let the owner inspect the actual filled
+    # rows, and bind manual approval to their pixels so it cannot approve a later edit.
+    def form_rows(png):
+        from PIL import Image
+        frame = Image.open(io.BytesIO(base64.b64decode(png))).convert("RGB")
+        panel = import_form_geometry(frame)
+        if panel:
+            x, y, w, h = panel
+            return frame.crop((x, y, x+w, y+round(h*.36))).tobytes()
+
+    def reviewable(t):
+        v = compact(t)
+        return (filled(t) or ("importtransactions" in v and "backup" in v
+                and compact(company) in v and not format_list_open(t) and "listof" not in v
+                and not path_dialog(t) and not path_error(t) and "error" not in v))
+
+    text, png = wait_screen(desk, reviewable, 15)
+    manual = not filled(text)
+    signature = form_rows(png) if manual else None
+    if manual and not signature:
+        raise RuntimeError("Cannot isolate the filled import form for approval")
+    step("awaiting_import", f"Check the screenshot: {company}, folder {folder}, file {name}, "
+         f"{expected} vouchers. Reply IMPORT only if both rows match, or STOP.", png=png)
     if wait_answer("import") != "IMPORT":
-        raise RuntimeError("Import cancelled — no import submitted")
-    # Recheck after the owner replies: remote sessions can be changed by another user.
-    text, _ = read_screen(desk)
-    if not filled(text):
-        raise RuntimeError("Import form changed after approval — no import submitted")
-    # Persist an uncertainty marker BEFORE the irreversible keystroke. Never retry Accept.
-    step("submitting", f"Submitting {name}; do not start another import until its result is checked.")
-    desk.keyboard.press("Control+a")
-    text, png = wait_screen(desk, lambda t: result_counts(t) is not None, 90)
+        raise RuntimeError("Import cancelled before submission")
+    text, current_png = read_screen(desk)
+    if not (filled(text) or (manual and reviewable(text) and form_rows(current_png) == signature)):
+        raise RuntimeError("Import form changed after approval")
+    step("submitting", f"Submitting {name}; check Day Book before any retry.")
+    desk.keyboard.press("Enter")
+    observed_progress = False
+    remaining_form_enters = 1
+    accepted = False
+
+    def finished(t):
+        nonlocal observed_progress, remaining_form_enters, accepted
+        v = compact(t)
+        if result_counts(t) is not None:
+            return True
+        if any(word in v for word in ("spellingerror", "incorrectfile", "importfailed")):
+            raise RuntimeError("Tally reported an import error")
+        if "pressanykey" in v:
+            return "import" in v or observed_progress
+        if "import" in v and ("%" in t or "importing" in v):
+            observed_progress = True
+            return False
+        if observed_progress and gateway_menu_visible(t) and compact(company) in v:
+            return True
+        if not observed_progress and not accepted:
+            if re.search(r'\baccept\s*\?', t, re.I) and "yes" in v and "no" in v:
+                accepted = True
+                desk.keyboard.press("Enter")
+            elif remaining_form_enters and reviewable(t):
+                remaining_form_enters -= 1
+                desk.keyboard.press("Enter")
+        return False
+
+    time.sleep(0.6)
+    text, png = wait_screen(desk, finished, 180)
     counts = result_counts(text)
-    if counts["errors"] or counts["ignored"] or counts["created"] + counts["altered"] != expected:
-        step("review_required", f"Tally result for {name}: {counts}. Expected {expected} vouchers. "
-             "Check Day Book before retrying; a partial import may have occurred.", png=png)
-        return
     from datetime import datetime
     dates = re.findall(r"\d{2}-\d{2}-\d{4}", name)
     d1, d2 = [datetime.strptime(v, "%d-%m-%Y").date() for v in dates]
-    desk.keyboard.press("Escape")  # close the verified import statistics
+    if "pressanykey" in compact(text):
+        desk.keyboard.press("Space")
+    elif counts is not None:
+        desk.keyboard.press("Escape")  # close verified import statistics
     if not daybook_check(desk, company, d1, d2, done=False):
         step("review_required", "Import statistics were returned, but Day Book shows no entries. Check filters and vouchers before retrying.", desk)
+        return
+    if not counts or counts["errors"] or counts["ignored"] or counts["created"] + counts["altered"] != expected:
+        step("review_required", f"Day Book shows entries for {d1} to {d2}. Full import of {expected} "
+             f"vouchers is unconfirmed. Tally statistics: {counts or 'unavailable'}.", desk)
         return
     step("import_verified", f"Tally result for {name}: created {counts['created']}, "
          f"altered {counts['altered']}, errors 0, ignored 0. Expected {expected} vouchers.",

@@ -21,7 +21,12 @@ def run_import(answer='IMPORT', result=RESULT, changed=False):
     desk = Mock()
     stages = []
     def wait(_desk, predicate, seconds=30):
-        screen = [FORM, FORM, result][len(stages)]
+        if isinstance(result, list) and len(stages) == 2:
+            for item in result[:-1]:
+                assert not predicate(item)
+            screen = result[-1]
+        else:
+            screen = [FORM, FORM, result][len(stages)]
         stages.append(screen)
         if not predicate(screen):
             raise RuntimeError('unverified screen')
@@ -67,7 +72,7 @@ def test_form_changed_after_approval_does_not_accept():
 def test_verified_result_with_single_accept():
     desk, steps, error = run_import()
     assert error is None
-    assert [c.args[0] for c in desk.keyboard.press.call_args_list].count('Control+a') == 1
+    assert [c.args[0] for c in desk.keyboard.press.call_args_list].count('Enter') == 1
     assert steps[-1].kwargs['done'] is True
     assert steps[-1].kwargs['evidence']['counts'] == COUNTS
     assert any(c.args[0] == 'awaiting_import' for c in steps)
@@ -796,3 +801,10 @@ def test_stop_tally_during_running_job_without_pending_prompt():
             out = wa.handle(cursor, 'test', {'role':'owner'}, {'type':'text','text':{'body':'Stop Tally'}})
         assert 'Stopped Tally job' in out
         assert cursor.execute.call_args.args[1] == ('failed',record['id'])
+
+def test_enter_through_backup_and_wait_for_import_completion():
+    desk, steps, error = run_import(result=[FORM, "Accept ? Yes or No", "Importing 26%", "Importing 90%", "Import complete Press any key"])
+    assert error is None
+    keys = [c.args[0] for c in desk.keyboard.press.call_args_list]
+    assert keys == ['Alt+O','t','Enter','Enter','Enter','Space']
+    assert steps[-1].args[0] == 'review_required'
