@@ -23,7 +23,7 @@
       <div class="body flush tablewrap"><table class="scantable"><thead><tr><th></th><th>Date</th><th>Vehicle No.</th><th>Slip No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">Fuel ₹</th><th class="num">Cash ₹</th><th class="num">Total ₹</th></tr></thead><tbody>
       {% for e in pg.entries %}{% set i = loop.index0 %}<tr class="{{ 'warnrow' if e.notes else '' }}" data-row data-page="{{ sid }}">
         <td><input type="checkbox" name="use_{{ sid }}_{{ i }}" value="1" checked aria-label="Save this row"><br><small class="muted">L{{ e.lines|join('+') }}</small></td>
-        <td data-label="Date"><input type="date" name="date_{{ sid }}_{{ i }}" value="{{ e.date.isoformat() if e.date else '' }}" required></td>
+        <td data-label="Date">{% if b.business_date %}<b>{{ b.business_date.strftime('%d %b') }}</b><input type="hidden" name="date_{{ sid }}_{{ i }}" value="{{ b.business_date.isoformat() }}">{% else %}<input type="date" name="date_{{ sid }}_{{ i }}" value="{{ e.date.isoformat() if e.date else '' }}" required>{% endif %}</td>
         <td data-label="Vehicle No."><input name="vehicle_{{ sid }}_{{ i }}" value="{{ e.vehicle }}" data-veh>{% if e.suggest %}<button type="button" class="linkbtn" data-use="{{ e.suggest }}">use {{ e.suggest }}</button>{% endif %}</td>
         <td data-label="Slip No."><input name="slip_{{ sid }}_{{ i }}" value="{{ e.slip_no }}"></td>
         <td class="num" data-label="HSD Qty"><input name="qty_{{ sid }}_{{ i }}" value="{{ e.qty if e.qty else '' }}" inputmode="decimal" data-qty></td>

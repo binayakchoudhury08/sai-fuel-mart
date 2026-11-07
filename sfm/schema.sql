@@ -687,3 +687,6 @@ CREATE TABLE IF NOT EXISTS pump.tally_jobs (
     answered_at TIMESTAMPTZ,
     log        JSONB NOT NULL DEFAULT '[]'::jsonb
 );
+
+-- v3.29: a bill scan belongs to the date selected on Credit Transport (the dates on the slips are not used)
+ALTER TABLE pump.scan_batches ADD COLUMN IF NOT EXISTS business_date DATE;

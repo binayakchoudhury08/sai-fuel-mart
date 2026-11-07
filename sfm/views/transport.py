@@ -219,6 +219,36 @@ def add_entry(party_id=None):
     return redirect(url_for("transport.index", **{"from": d.isoformat(), "to": d.isoformat()}))
 
 
+@bp.route("/transport/entries/delete", methods=["POST"])
+@login_required("owner")
+def delete_entries():
+    """Owner: delete several entries of one day at once, or all of that day. Entries are cancelled (kept, struck
+    through, with who and when) — the same as a single delete; a locked day is refused."""
+    d = parse_date(request.form.get("d"), "Date")
+    every = request.form.get("all") == "1"
+    ids = [int(x) for x in request.form.getlist("tid") if str(x).isdigit()]
+    reason = clean(request.form.get("reason"), 200) or ("Deleted: all entries of the day" if every else "Deleted (several at once)")
+    if not every and not ids:
+        raise UserError("Tick the entries to delete first.")
+    with db.tx() as cur:
+        claim_form_token(cur)
+        assert_transport_writable(cur, d)
+        if every:
+            cur.execute("""SELECT * FROM party_txns WHERE business_date=%s AND NOT voided AND kind IN ('fuel','cash_advance')
+                           FOR UPDATE""", (d,))
+        else:
+            cur.execute("""SELECT * FROM party_txns WHERE id = ANY(%s) AND business_date=%s AND NOT voided
+                           AND kind IN ('fuel','cash_advance') FOR UPDATE""", (ids, d))
+        rows = cur.fetchall()
+        for old in rows:
+            cur.execute("UPDATE party_txns SET voided=TRUE, void_reason=%s, voided_by=%s, voided_at=NOW() WHERE id=%s",
+                        (reason, current_user()["username"], old["id"]))
+            audit(cur, "void", "transport_entry", old["id"], f"SL {old['sl_no']} ₹{old['debit']} deleted: {reason}",
+                  before=old, business_date=d)
+    flash(f"{len(rows)} entr{'y' if len(rows) == 1 else 'ies'} of {d:%d %b %Y} deleted (kept in history).", "success")
+    return redirect(url_for("transport.index", d=d.isoformat()))
+
+
 @bp.route("/transport/entry/<int:tid>/correct", methods=["POST"])
 @login_required("cancel_entries")
 def correct_entry(tid):
@@ -313,6 +343,7 @@ def _scan_rows(cur, raw, party_id, challan):
 @login_required("transport_enter")
 def scan():
     from ..scan import gemini_ready
+    d = parse_date(request.args.get("d") or today().isoformat())
     with db.tx() as cur:
         cur.execute("SELECT id, name FROM parties WHERE active ORDER BY name")
         parties = cur.fetchall()
@@ -321,7 +352,7 @@ def scan():
                               (SELECT string_agg(NULLIF(s.bill_no,''), ', ' ORDER BY s.id) FROM scans s WHERE s.batch_id=b.id) AS bills
                        FROM scan_batches b LEFT JOIN parties p ON p.id=b.party_id ORDER BY b.id DESC LIMIT 15""")
         recent = cur.fetchall()
-    return render_template("transport/scan.html", ready=gemini_ready(), recent=recent, parties=parties)
+    return render_template("transport/scan.html", ready=gemini_ready(), recent=recent, parties=parties, d=d)
 
 
 @bp.route("/transport/scan/batch", methods=["POST"])
@@ -329,8 +360,11 @@ def scan():
 def scan_batch_new():
     from flask import jsonify
     pid = int(request.form.get("party") or 0) or None
+    bd = parse_date(request.form.get("d") or today().isoformat(), "Date")
     with db.tx() as cur:
-        cur.execute("INSERT INTO scan_batches (created_by, party_id) VALUES (%s,%s) RETURNING id", (current_user()["username"], pid))
+        assert_transport_writable(cur, bd)
+        cur.execute("INSERT INTO scan_batches (created_by, party_id, business_date) VALUES (%s,%s,%s) RETURNING id",
+                    (current_user()["username"], pid, bd))
         bid = cur.fetchone()["id"]
     return jsonify({"ok": True, "id": bid, "review": url_for("transport.scan_batch", bid=bid)})
 
@@ -459,7 +493,7 @@ def scan_batch_save(bid):
                 g = lambda k: (request.form.get(f"{k}_{sid}_{i}") or "").strip()
                 if g("use") != "1":
                     continue
-                d = parse_date(g("date"), "Date")
+                d = b["business_date"] or parse_date(g("date"), "Date")   # the date chosen on Credit Transport
                 assert_transport_writable(cur, d)
                 cur.execute("INSERT INTO days (business_date) VALUES (%s) ON CONFLICT DO NOTHING", (d,))
                 form = {"party": str(pid), "fuel_code": "HSD", "vehicle_no": g("vehicle"), "slip_no": g("slip"),

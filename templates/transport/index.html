@@ -7,7 +7,7 @@
 {% if next_day %}<a class="btn secondary small" href="{{ url_for('transport.index', d=next_day.isoformat()) }}" aria-label="Next day">›</a>{% endif %}</div></div>
 
 {# ---------- 1. entry ---------- #}
-<section class="section" id="entry"><header><h2>New entry</h2><a class="btn" href="{{ url_for('transport.scan') }}">📄 Scan bill pages</a> <a class="btn secondary" href="{{ url_for('messages.index') }}">💬 Bill message</a></header><div class="body">
+<section class="section" id="entry"><header><h2>New entry</h2><a class="btn" href="{{ url_for('transport.scan', d=d.isoformat()) }}">📄 Scan bill pages — {{ d.strftime('%d %b') }}</a> <a class="btn secondary" href="{{ url_for('messages.index') }}">💬 Bill message</a></header><div class="body">
 <form method="post" action="{{ url_for('transport.add_entry') }}" data-transport>{{ hidden(url_for('transport.index', d=d.isoformat()) ~ '#entry') }}
 <input type="hidden" name="fuel_code" value="HSD">
 <div class="fields">
@@ -33,8 +33,26 @@
   <div style="flex:0"><button class="btn secondary">Show</button></div>
   <div style="flex:0">{% if deleted_count %}<a class="btn small secondary" href="?{{ dict(request.args.to_dict(), deleted='0' if show_deleted else '1')|urlencode }}">{{ 'Hide' if show_deleted else 'Show' }} deleted ({{ deleted_count }})</a>{% endif %}</div></form></header>
 <div class="body" style="padding:8px 18px 0"><p class="hint" style="margin:0">Slips can be added, edited or deleted for any date — including old-system days and days whose closing is locked. Deleted entries stay in the history.</p></div>
-<div class="body flush tablewrap"><table><thead><tr><th>SL</th><th>Transporter</th><th>Vehicle No.</th><th>Slip No.</th><th>Challan No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">HSD Amount</th><th class="num">Cash Taken</th><th class="num">Total</th><th></th></tr></thead><tbody>
+{% if user.role == 'owner' and rows|selectattr('voided', 'equalto', False)|list %}
+<form id="bulkdel" method="post" action="{{ url_for('transport.delete_entries') }}" class="body btnrow" style="padding:8px 18px"
+      data-confirm="Delete the ticked entries of {{ d.strftime('%d %b %Y') }}? They stay visible in the history.">{{ hidden() }}
+  <input type="hidden" name="d" value="{{ d.isoformat() }}">
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="selall"> Select all</label>
+  <button class="btn small danger" name="all" value="0">🗑 Delete selected</button>
+  <button class="btn small danger" name="all" value="1" formnovalidate
+          onclick="return confirm('Delete ALL entries of {{ d.strftime('%d %b %Y') }}? They stay visible in the history.')">🗑 Delete all of {{ d.strftime('%d %b') }}</button>
+</form>
+<script>
+(function(){
+  var all = document.getElementById("selall");
+  if (all) all.addEventListener("change", function(){
+    document.querySelectorAll('input[form="bulkdel"][name="tid"]').forEach(function(c){ c.checked = all.checked; });
+  });
+})();
+</script>{% endif %}
+<div class="body flush tablewrap"><table><thead><tr>{% if user.role == 'owner' %}<th></th>{% endif %}<th>SL</th><th>Transporter</th><th>Vehicle No.</th><th>Slip No.</th><th>Challan No.</th><th class="num">HSD Qty</th><th class="num">Rate</th><th class="num">HSD Amount</th><th class="num">Cash Taken</th><th class="num">Total</th><th></th></tr></thead><tbody>
 {% for r in rows if (not r.voided or show_deleted) %}<tr class="{% if r.voided %}void{% endif %}">
+{% if user.role == 'owner' %}<td>{% if not r.voided %}<input type="checkbox" form="bulkdel" name="tid" value="{{ r.id }}" aria-label="Select SL {{ r.sl_no }}">{% endif %}</td>{% endif %}
 <td><b>{{ r.sl_no or '' }}</b></td><td>{{ r.party_name }}{% if r.corrected_from %} <span class="badge">corrected</span>{% endif %}{% if r.voided %}<br><small class="keep">{{ r.void_reason }}</small>{% endif %}</td>
 <td>{{ r.vehicle_no }}</td><td>{{ r.slip_no }}</td><td>{{ r.challan_no }}</td>
 <td class="num">{{ r.qty|qty if r.kind=='fuel' else '' }}</td><td class="num">{{ r.rate if r.kind=='fuel' else '' }}</td>

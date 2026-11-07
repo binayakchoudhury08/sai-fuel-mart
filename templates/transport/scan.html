@@ -11,7 +11,8 @@
 {% else %}
 <section class="section"><header><h2>Scan pages of one transporter</h2></header><div class="body stack" id="scanner"
   data-new="{{ url_for('transport.scan_batch_new') }}" data-page="/transport/scan/batch/__ID__/page">
-  <input type="hidden" id="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" id="csrf" value="{{ csrf_token() }}"><input type="hidden" id="scan_d" value="{{ d.isoformat() }}">
+  <div class="flash info" style="margin:0">All entries from these pages are saved on <b>{{ d.strftime('%d %b %Y') }}</b> — the date selected on Credit Transport (dates on the slips are not used).</div>
   <div class="fields"><div><label>Transporter</label><select id="party"><option value="">Read from the page</option>
     {% for p in parties %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div></div>
   <div class="btnrow">
@@ -71,7 +72,7 @@ All pages are shown together to check; nothing is saved until you press <b>Save 
   }
   go.addEventListener("click", function(){
     go.disabled = true; bar.hidden = false;
-    var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value);
+    var fd = new FormData(); fd.append("_csrf", document.getElementById("csrf").value); fd.append("party", document.getElementById("party").value); fd.append("d", document.getElementById("scan_d").value);
     post(root.dataset.new, fd).then(function(b){
       if (!b.ok) throw new Error(b.error || "Could not start");
       var STATUS = function(r){ return "✓ challan " + r.bill_no + " · " + r.lines + " lines"; };
