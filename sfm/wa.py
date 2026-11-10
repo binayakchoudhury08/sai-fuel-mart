@@ -736,9 +736,13 @@ paid <transporter> <amount> [cash|upi|bank] [UTR <no>] [DD/MM] | expense <amount
 attendance report | attendance yesterday | attendance DD/MM | attendance this month | attendance <month> |
 attendance open 1h | attendance open till 1pm | attendance close | attendance normal |
 excel DD/MM | excel add DD/MM | excel adjust DD/MM | cash DD/MM | daily check DD/MM | xml DD/MM to DD/MM | tally import DD/MM to DD/MM |
+close DD/MM (= finish the day: Tally Excel, photo, then OK sends it to Tally) | ok |
+change <hsd|ms|cng|lube|payment|receipt> sales from <ledger> to <ledger> (e.g. change hsd sales from dtplus to cash) |
+upload to tally | tally ledger <party> <this month|last month|november|DD/MM to DD/MM> | tally check DD/MM | tally status | stop |
 reopen DD/MM[-DD/MM] [for <user>] | bill | menu
 Transporters: {parties}. Today is {today}.
-Return JSON {{"command": "..."}}; use "menu" if it is none of these. Never invent numbers that are not in the message."""
+Return JSON {{"command": "..."}}; use "menu" if it is none of these. Never invent numbers that are not in the message.
+Write the command exactly in the forms above (dates as DD/MM)."""
 
 
 def ai_command(cur, text):
@@ -760,6 +764,53 @@ def ai_command(cur, text):
         return None
 
 
+VOICE_PROMPT = ("Transcribe this WhatsApp voice note from a fuel station owner (English, Hindi, Odia or a mix). "
+                "Write it in English letters, numbers as digits. Return JSON {\"text\": \"...\"}.")
+
+
+def transcribe(media_id):
+    """Voice note → text with Gemini (the same key as the bill reader). None if it cannot be heard."""
+    import base64
+    from . import scan
+    if not scan.gemini_ready("message"):
+        return None
+    data, mime = download_media(media_id)
+    model = next((m for m in scan._models("message") if m in (scan._available("message") or [])), None) or scan._models("message")[0]
+    out = scan._call(model, [{"inline_data": {"mime_type": (mime or "audio/ogg").split(";")[0], "data": base64.b64encode(data).decode()}},
+                             {"text": VOICE_PROMPT}], schema=False, job="message", timeout=25)
+    text = ((out or {}).get("text") or "").strip()
+    return words_to_digits(text) or None
+
+
+_ONES = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+                                     "fifteen sixteen seventeen eighteen nineteen".split())}
+_ORD = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9,
+        "tenth": 10, "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14, "fifteenth": 15, "sixteenth": 16,
+        "seventeenth": 17, "eighteenth": 18, "nineteenth": 19, "twentieth": 20, "thirtieth": 30}
+_TENS = {"twenty": 20, "thirty": 30}
+
+
+_MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+
+def words_to_digits(text):
+    """Voice notes: a DATE said in words becomes digits ("close two november" → "close 2 november",
+    "twenty fifth october" → "25 october"). Only before a month name — amounts ("five hundred") are left alone."""
+    toks, out, i = text.split(), [], 0
+    def month(k):
+        return k < len(toks) and toks[k].lower().strip(",.")[:3] in _MONTHS
+    while i < len(toks):
+        w = toks[i].lower().strip(",.")
+        nxt = toks[i + 1].lower().strip(",.") if i + 1 < len(toks) else ""
+        unit = _ONES.get(nxt) or _ORD.get(nxt) or 0
+        if w in _TENS and 0 < unit < 10 and month(i + 2):
+            out.append(str(_TENS[w] + unit)); i += 2; continue
+        if (w in _TENS or w in _ORD or (w in _ONES and w != "zero")) and month(i + 1):
+            out.append(str(_TENS.get(w) or _ORD.get(w) or _ONES[w])); i += 1; continue
+        out.append(toks[i]); i += 1
+    return " ".join(out)
+
+
 def handle(cur, phone, user, msg):
     """One incoming WhatsApp message → reply text (or None when a background job will answer)."""
     s = session(cur, phone)
@@ -775,6 +826,21 @@ def handle(cur, phone, user, msg):
             return MENU if key == "all" else HELP.get(key, MENU)
         msg = {"type": "text", "text": {"body": rid}}
         mtype = "text"
+    if mtype in ("audio", "voice"):                     # voice note → text, then handled like a typed message
+        media = msg.get("audio") or msg.get("voice") or {}
+        try:
+            heard = transcribe(media.get("id"))
+        except Exception:
+            heard = None
+        if not heard:
+            return "🎙 I could not hear that clearly — please type it, or send the voice note again."
+        r = handle(cur, phone, user, {"type": "text", "text": {"body": heard}})
+        note = f"🎙 I heard: “{heard[:200]}”"
+        if isinstance(r, str):
+            return note + "\n\n" + r
+        if isinstance(r, dict) and "caption" in r:
+            r["caption"] = note + " — " + r["caption"]
+        return r
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
 

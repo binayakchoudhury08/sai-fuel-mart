@@ -89,8 +89,9 @@ def receive_twilio():
     msgs = []
     n = int(params.get("NumMedia") or 0)
     for i in range(n):
-        msgs.append({"from": phone, "id": f"{params.get('MessageSid')}-{i}", "type": "image",
-                     "image": {"id": params.get(f"MediaUrl{i}"), "caption": params.get("Body", "") if i == 0 else ""}})
+        kind = "audio" if (params.get(f"MediaContentType{i}") or "").startswith("audio") else "image"
+        msgs.append({"from": phone, "id": f"{params.get('MessageSid')}-{i}", "type": kind,
+                     kind: {"id": params.get(f"MediaUrl{i}"), "caption": params.get("Body", "") if i == 0 else ""}})
     if not n:
         msgs.append({"from": phone, "id": params.get("MessageSid"), "type": "text", "text": {"body": params.get("Body", "")}})
     _process(msgs)
