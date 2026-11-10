@@ -7,6 +7,7 @@
   <form method="post" action="{{ url_for('tally.upload') }}" enctype="multipart/form-data" class="btnrow">{{ hidden() }}
     <input type="file" name="book" accept=".xlsx" required><button class="btn secondary small">{{ 'Replace with an upload' if meta else 'Upload SFM_Daily_Readings.xlsx' }}</button></form>
   {% if meta %}<a class="btn small" href="{{ url_for('tally.download') }}">⬇ Download current workbook</a>{% endif %}
+  <a class="btn small secondary" href="{{ url_for('tally.jobs') }}">🤖 Tally jobs</a>
 </div></section>
 {% if meta %}
 <section class="section"><header><h2>Date</h2></header><div class="body btnrow">

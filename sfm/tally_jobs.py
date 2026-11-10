@@ -90,8 +90,7 @@ def handle(cur, phone, low, text):
     cur.execute("SELECT pg_advisory_xact_lock(734109)")
     cur.execute("SELECT id FROM tally_jobs WHERE state NOT IN ('done','failed','review_required') AND created_at > NOW() - interval '45 minutes' ORDER BY id DESC LIMIT 1")
     active = cur.fetchone()
-    if active:
-        return f"Tally job #{active['id']} is still active. Finish it before starting another."
+    queue_after = active["id"] if active else None   # queued: runs in the same Tally session after the active job
     if mc:
         w = _when(mc.group(1))
         if not w or w[0] != "day":
@@ -153,6 +152,11 @@ def handle(cur, phone, low, text):
         # A unique filename avoids accepting an old file-manager row as a new upload.
         params["name"] = params["name"].removesuffix(".xml") + f"_job{jid}.xml"
         cur.execute("UPDATE tally_jobs SET params=%s::jsonb WHERE id=%s", (json.dumps(params), jid))
+    if queue_after:
+        cur.execute("UPDATE tally_jobs SET waiting=NULL, params=params || %s::jsonb WHERE id=%s",
+                    (json.dumps({"session_parent": queue_after}), jid))
+        return (f"⏳ Tally job #{jid}: {what}.\nQueued — it runs in the same Tally session right after job #{queue_after} "
+                "(no new login). If that session ends first, I will ask for your PIN.")
     if kind == "ledger":
         cur.execute("SELECT id FROM tally_jobs WHERE phone=%s AND params->>'session_seen' IS NOT NULL AND (params->>'session_seen')::timestamptz > NOW() - interval '15 seconds' ORDER BY id DESC LIMIT 1 FOR UPDATE", (phone,))
         warm = cur.fetchone()
@@ -275,6 +279,8 @@ def agent_step(jid, step, message, png=None, done=False, failed=False, evidence=
             cur.execute("UPDATE tally_jobs SET waiting='import', answer=NULL, answered_at=NULL WHERE id=%s", (jid,))
         cur.execute("UPDATE tally_jobs SET state=%s, log = log || %s::jsonb WHERE id=%s",
                     (state, json.dumps([{"step": step, "message": message[:900], "evidence": evidence}]), jid))
+        if state == "failed":
+            release_queued(cur, jid)                     # queued jobs behind a failed run start on their own
         if failed or done or state == "review_required":
             cur.execute("UPDATE tally_jobs SET waiting=NULL, answer=NULL WHERE id=%s", (jid,))
         phone = j["phone"]
@@ -315,8 +321,8 @@ def session_next(jid, closing=False):
         if closing:
             cur.execute("UPDATE tally_jobs SET params=params - 'session_seen' WHERE id=%s", (jid,))
             # Recover a command queued just as the browser closed: require a fresh login.
-            cur.execute("UPDATE tally_jobs SET waiting='pin' WHERE state='starting' AND params->>'session_parent'=%s RETURNING id", (str(jid),))
-            queued = cur.fetchall()
+            release_queued(cur, jid)
+            queued = []
         else:
             cur.execute("UPDATE tally_jobs SET params=params || jsonb_build_object('session_seen', NOW()::text) WHERE id=%s", (jid,))
             cur.execute("SELECT * FROM tally_jobs WHERE phone=%s AND state='starting' AND params->>'session_parent'=%s ORDER BY id LIMIT 1 FOR UPDATE", (parent['phone'], str(jid)))
@@ -326,3 +332,16 @@ def session_next(jid, closing=False):
                 cur.execute("UPDATE tally_jobs SET params=params - 'session_seen' WHERE id=%s", (jid,))
             return {"ok": True, "job": job}
     return {"ok": True}
+
+
+def release_queued(cur, parent_id):
+    """Jobs queued behind a session that ended (closed or failed) start their own robot run and ask for the PIN."""
+    cur.execute("""UPDATE tally_jobs SET waiting='pin' WHERE state='starting' AND params->>'session_parent'=%s
+                   RETURNING id, phone""", (str(parent_id),))
+    for q in cur.fetchall():
+        try:
+            start_github(q["id"])
+            _wa().notify(cur, q["phone"], f"🔐 Tally job #{q['id']} (queued) is starting on its own — send your *secure PIN*.")
+        except Exception as e:
+            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL WHERE id=%s", (q["id"],))
+            _wa().notify(cur, q["phone"], f"❌ Queued Tally job #{q['id']} could not start: {e}")

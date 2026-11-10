@@ -190,3 +190,14 @@ def restore(vid):
         audit(cur, "update", "tally_book", vid, f"Tally workbook restored to version #{vid}")
     flash(f"Version #{vid} is the current workbook again.", "success")
     return redirect(url_for("tally.index"))
+
+
+@bp.route("/tally/jobs")
+@login_required("owner")
+def jobs():
+    """Every Tally robot run: what it was for, its state and each step it reported."""
+    with db.tx() as cur:
+        cur.execute("""SELECT id, created_at, kind, params - 'xml' AS params, state, waiting, log
+                       FROM tally_jobs ORDER BY id DESC LIMIT 60""")
+        rows = cur.fetchall()
+    return render_template("tally/jobs.html", rows=rows)

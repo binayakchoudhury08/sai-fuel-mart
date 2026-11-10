@@ -1,0 +1,20 @@
+{% extends "base.html" %}{% block title %}Tally jobs<script>setTimeout(function(){ location.reload(); }, 15000);</script>
+{% endblock %}
+{% block content %}
+<section class="section"><header><h2>Tally jobs</h2><small>every robot run · refreshes every 15 s</small>
+<a class="btn small secondary" href="{{ url_for('tally.index') }}">Tally Excel</a></header>
+<div class="body flush tablewrap"><table class="mini"><thead><tr><th>#</th><th>When</th><th>What</th><th>State</th><th>Steps</th></tr></thead><tbody>
+{% for j in rows %}{% set p = j.params or {} %}
+<tr class="{{ 'warnrow' if j.state in ('failed', 'review_required') else '' }}">
+<td><b>{{ j.id }}</b></td>
+<td>{{ j.created_at.strftime('%d %b %H:%M') }}</td>
+<td>{% if j.kind == 'import' %}Import {{ p.get('from', '') }} → {{ p.get('to', '') }}{% if p.get('vouchers') %} · {{ p.vouchers }} vouchers{% endif %}
+    {% elif p.get('report') == 'daybook' %}Day Book {{ p.get('from', '') }}{% else %}Ledger {{ p.get('ledger', '') }} {{ p.get('from', '') }} → {{ p.get('to', '') }}{% endif %}
+    {% if p.get('session_parent') %}<br><small class="muted">queued after #{{ p.session_parent }}</small>{% endif %}</td>
+<td>{% if j.state == 'done' %}<span class="match ok">✓ done</span>{% elif j.state in ('failed', 'review_required') %}<span class="match bad">✗ {{ j.state.replace('_', ' ') }}</span>
+    {% else %}{{ j.state }}{% if j.waiting %} — waiting for {{ j.waiting }}{% endif %}{% endif %}</td>
+<td><details><summary>{{ (j.log or [])|length }} steps</summary><ol style="margin:6px 0 0 18px">{% for s in (j.log or []) %}<li><small><b>{{ s.step }}</b> — {{ s.message }}</small></li>{% endfor %}</ol></details></td>
+</tr>{% else %}<tr><td colspan="5" class="empty">No Tally jobs yet.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<script>setTimeout(function(){ location.reload(); }, 15000);</script>
+{% endblock %}

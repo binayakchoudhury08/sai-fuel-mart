@@ -1116,6 +1116,16 @@ def run_jobs():
                 p = follow["params"]
                 close_side_panel(desk)
                 step("reuse", f"Using the existing session for {company}; no login repeated.")
+                if follow.get("kind") == "import":              # a queued import runs in the same session
+                    r = api("/xml")
+                    if r.status_code != 200:
+                        step("xml", "XML blocked: " + "; ".join(r.json().get("errors", [])[:5]), failed=True)
+                        continue
+                    uploaded = upload_xml(desk, p["name"], r.text)
+                    close_side_panel(desk)
+                    import_xml(desk, uploaded, company, p["vouchers"])
+                    return_to_gateway(desk, company)
+                    continue
                 d1, d2 = date.fromisoformat(p["from"]), date.fromisoformat(p["to"])
                 if p.get("report") == "daybook":
                     daybook_check(desk, company, d1, d2)
