@@ -847,6 +847,10 @@ def handle(cur, phone, user, msg):
         nl = wa_tally.normalize(cur, low, phone)
         if nl and nl != low:
             low = text = nl                                   # understood as one workbook command
+    if (user.get("role") or "") == "owner" and state.get("mode") == "autopilot" and low in (
+            "ok", "okay", "yes", "y", "send", "import", "upload", "done", "haan", "ha", "confirm", "ok import", "go"):
+        from . import wa_tally
+        return wa_tally.autopilot_ok(cur, phone, state)   # autopilot: the checked day goes to Tally
     if low in ("yes", "y", "ok", "haan", "ha", "confirm") and state.get("mode") != "confirm":
         return "Nothing is waiting for YES right now. Send the command again (e.g. *excel add 2/11*)."
     words = low.split(" ")

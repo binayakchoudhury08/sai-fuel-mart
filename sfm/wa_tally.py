@@ -124,6 +124,14 @@ SHEET_RX = r"(hsd|diesel|ms|petrol|cng|lube|payment|expense|receipt|received)"
 
 
 def normalize(cur, low, phone=None):
+    m = re.match(r"^(?:please\s+)?(?:close|autopilot|finish|day close)(?:\s+(?:the\s+)?day)?\s+(.+)$", low.strip())
+    if m and _when(m.group(1)):
+        d = _when(m.group(1))
+        return f"excel autopilot {d:%d/%m}"
+    return _normalize(cur, low, phone)
+
+
+def _normalize(cur, low, phone=None):
     """'See what's in the Excel for 2 Nov\nexcel 2/11' → 'excel 2/11'; 'add daily closing for tally excel 2/11' →
     'excel add 2/11'. None when it is not about the workbook (e.g. 'svt excel yesterday' = a transporter's bill)."""
     lines = [l.strip() for l in low.splitlines() if l.strip()]
@@ -357,6 +365,12 @@ def handle(cur, phone, low, text):
     if not m:
         return None
     rest = m.group(2).strip()
+    mp = re.match(r"^autopilot\s+(.+)$", rest)
+    if mp:
+        d = _when(mp.group(1))
+        if not d:
+            return "Which day? e.g. *close 6/11*"
+        return autopilot(cur, phone, d)
     mj = re.match(r"^(adjust|adj)\s+(.+)$", rest)
     if mj:
         d = _when(mj.group(2))
@@ -491,7 +505,7 @@ def run(cur, st):
             audit(cur, "update", "tally_book", None, what + " (WhatsApp)", business_date=d)
             view = day_view(new, d); chk = daily_check(view)
             return {"image": table_png(d, view, chk, counted_cash(cur, d)),
-                    "caption": f"✅ {what}. Check the ledgers again — all correct? write: upload to tally"}
+                    "caption": f"✅ {what}. Check the ledgers again — all correct? write: upload to tally (or close {d:%d/%m})"}
         if a == "tally_edit":
             from .tally_site import edit_row
             d = date.fromisoformat(st["d"])
@@ -518,3 +532,45 @@ def run(cur, st):
         return f"↩️ Back to the version before “{vs[0]['note'][:60]}”."
     except UserError as e:
         return f"❌ Not done — {e}"
+
+
+# ------------------------------------------------------------------ daily autopilot (owner, 06 Nov)
+def autopilot(cur, phone, d):
+    """close 6/11 → (Daily Closing must be saved) → add the day to the Tally Excel with the owner's adjustment rule
+    (or show it if it is already there) → table photo with the cash check → OK starts the Tally import of that day."""
+    from .wa import save_state
+    from .security import audit, current_user
+    from .tally_book import Adder
+    from .tally_site import add_day, already_has, daily_check, day_view, save_version
+    cur.execute("SELECT COUNT(*) AS n FROM nozzle_readings WHERE business_date=%s AND closing IS NOT NULL", (d,))
+    if not cur.fetchone()["n"]:
+        return (f"📋 {d:%d/%m/%Y}: Daily Closing is not saved yet.\nScan or enter it first (website → Daily Closing → "
+                f"📷 Scan the closing page), then send *close {d:%d/%m}* again.")
+    data = _book(cur)
+    added = ""
+    if not any(already_has(Adder(data), d).values()):
+        try:
+            data, rows = add_day(cur, data, d)
+        except UserError as e:
+            return f"❌ {d:%d/%m/%Y} could not be added to the Tally Excel — {e}"
+        save_version(cur, data, f"Added {d:%d/%m/%Y} from Daily Closing ({len(rows)} rows) — autopilot", current_user()["username"])
+        audit(cur, "update", "tally_book", None, f"Tally workbook: {d:%d/%m/%Y} added — {len(rows)} rows (autopilot)", business_date=d)
+        added = f"added and adjusted ({len(rows)} rows) — "
+    remember_day(cur, phone, d)
+    view = day_view(data, d); chk = daily_check(view)
+    save_state(cur, phone, {"mode": "autopilot", "d": d.isoformat()}, touch=True)
+    bad = [m for m in chk.get("match", []) if not m[4]]
+    warn = (" ⚠️ meter ≠ sales: " + ", ".join(m[0] for m in bad) + " —") if bad else ""
+    return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+            "caption": f"✅ {d:%d/%m/%Y} {added}final cash ₹{inr(chk['Final cash balance'])}.{warn} "
+                       f"All correct? Reply *OK* to import into Tally. To correct: change hsd sales from dtplus to cash"}
+
+
+def autopilot_ok(cur, phone, state):
+    from .wa import save_state
+    from . import tally_jobs
+    d = date.fromisoformat(state["d"])
+    save_state(cur, phone, {}, touch=True)
+    cmd = f"tally import {d:%d/%m}"
+    reply = tally_jobs.handle(cur, phone, cmd, cmd)
+    return reply or f"Send *tally import {d:%d/%m}*."
