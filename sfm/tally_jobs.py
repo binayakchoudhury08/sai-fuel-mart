@@ -47,6 +47,10 @@ def handle(cur, phone, low, text):
     "tally import 4/11 to 5/11 and ledger svt osl november 2026" → the import starts the robot; each ledger is queued
     behind it in the same Tally session. "tally ledger svt osl november" → several ledger PDFs in one session."""
     low = re.sub(r"[\s.!?,;:]+$", "", low)
+    try:
+        recover_orphans(cur)
+    except Exception:
+        pass
     m = re.match(r"^tally\s+import\s+(.+?)\s+(?:and|\+|,|with|&)\s+(?:the\s+)?ledgers?\s+(?:of\s+)?(.+?)\s+" + PERIOD_RX, low)
     ml = None if m else re.match(r"^tally\s+ledgers?\s+(.+?)\s+" + PERIOD_RX, low)
     names = _split_names((m or ml).group(2) if m else ml.group(1)) if (m or ml) else []
@@ -94,7 +98,7 @@ def _handle_one(cur, phone, low, text):
                        log=log || '[{"step":"stop","message":"Stopped by owner"}]'::jsonb WHERE id=%s""", (state,jid))
         return f"Stopped Tally job #{jid}." + (" Submission had started. Check Day Book before retrying." if uncertain else "")
     cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND state NOT IN ('done','failed','review_required') AND waiting IS NOT NULL
-                   AND created_at > NOW() - interval '30 minutes' ORDER BY id DESC LIMIT 1""", (phone,))
+                   AND created_at > NOW() - interval '6 hours' ORDER BY id DESC LIMIT 1""", (phone,))
     job = cur.fetchone()
     if job and job["waiting"] == "import":
         if text.strip().upper() != "IMPORT":
@@ -104,6 +108,9 @@ def _handle_one(cur, phone, low, text):
     if job and job["waiting"] == "pin" and re.fullmatch(r"\d{4,8}", text.strip()):
         cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL WHERE id=%s", (text.strip(), job["id"]))
         return "🔐 PIN received — logging in to Tally Cloud…"
+    if re.fullmatch(r"\d{4,8}", text.strip()) and not (job and job["waiting"] == "pin"):
+        return ("🔐 No Tally job is waiting for a PIN right now — nothing was sent. "
+                "Send the Tally command first, e.g. *tally ledger svt osl nov 2026*, then the PIN.")
     if job and job["waiting"] == "company" and not low.startswith(("tally", "menu", "hi")):
         cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL WHERE id=%s", (text.strip()[:120], job["id"]))
         return f"🏢 Opening *{text.strip()}*…"
@@ -382,3 +389,27 @@ def release_queued(cur, parent_id):
         except Exception as e:
             cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL WHERE id=%s", (q["id"],))
             _wa().notify(cur, q["phone"], f"❌ Queued Tally job #{q['id']} could not start: {e}")
+
+
+def recover_orphans(cur):
+    """Owner (15 Nov): queued jobs must never be stranded. Duplicates waiting in the queue are cancelled; a job queued
+    behind one that has finished, with no robot picking it up (no session poll for 90 s), starts its own robot and
+    asks for the PIN."""
+    cur.execute("""SELECT id, kind, params FROM tally_jobs WHERE state='starting' AND created_at > NOW() - interval '6 hours'
+                   ORDER BY id""")
+    seen = {}
+    for j in cur.fetchall():
+        p = j["params"] or {}
+        sig = (j["kind"], p.get("from"), p.get("to"), p.get("ledger") or "", p.get("report") or "")
+        if sig in seen:
+            cur.execute("""UPDATE tally_jobs SET state='failed', waiting=NULL,
+                           log = log || %s::jsonb WHERE id=%s""",
+                        (json.dumps([{"step": "duplicate", "message": f"Cancelled — same request as job #{seen[sig]}"}]), j["id"]))
+        else:
+            seen[sig] = j["id"]
+    cur.execute("""SELECT DISTINCT p.id FROM tally_jobs q JOIN tally_jobs p ON p.id::text = q.params->>'session_parent'
+                   WHERE q.state='starting' AND q.waiting IS NULL AND q.created_at < NOW() - interval '60 seconds'
+                     AND p.state IN ('done','failed','review_required')
+                     AND (p.params->>'session_seen' IS NULL OR (p.params->>'session_seen')::timestamptz < NOW() - interval '90 seconds')""")
+    for r in cur.fetchall():
+        release_queued(cur, r["id"])

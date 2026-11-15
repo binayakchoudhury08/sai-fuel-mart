@@ -1131,12 +1131,14 @@ def run_jobs():
                     daybook_check(desk, company, d1, d2)
                 else:
                     ledger_pdf(desk, p["ledger"], d1, d2, company)
-                return_to_gateway(desk, company)
+                _safe(lambda: return_to_gateway(desk, company))
         except Exception as e:
             try:
                 step("error", f"Stopped: {type(e).__name__}: {str(e)[:200]}", desk or LAST_DESK, failed=True)
             except Exception:
                 print("Failure status could not be delivered (or job already expired); see tally status.", flush=True)
+            # Hand the queue over even when this job had already finished (its queued jobs start on their own).
+            _safe(lambda: api("/session", method="POST", json={"close": True}))
             raise
         finally:
             # Capture/deliver any failure screenshot above before leaving that screen.
