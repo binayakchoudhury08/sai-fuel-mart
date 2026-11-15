@@ -87,22 +87,22 @@ PART_NOTE = {
 PART_KEY = {"meters": 0, "left": 0, "sales": 1, "right": 1}     # with two keys: half the parts on each
 
 
-def read_part(image_b64, mime, part, careful=False, key_no=None):
+def read_part(image_b64, mime, part, careful=False, key_no=None, budget=55):
     from . import scan as _scan
     keys = _scan.closing_keys()
     _scan._TL.key = keys[(PART_KEY[part] if key_no is None else key_no) % len(keys)] if keys else None
     try:
-        return _read_part(image_b64, mime, part, careful)
+        return _read_part(image_b64, mime, part, careful, budget)
     finally:
         _scan._TL.key = None
 
 
-def _read_part(image_b64, mime, part, careful=False):
+def _read_part(image_b64, mime, part, careful=False, budget=55):
     keys = PART_KEYS[part]
     schema = {"type": "OBJECT", "properties": {k: SCHEMA["properties"][k] for k in keys}}
     img = {"inline_data": {"mime_type": mime, "data": image_b64}}
     return _ask([img, {"text": PROMPT + "\n" + PART_NOTE[part]}], "closing" if careful else "closing-careful",
-                schema=schema, level="low" if careful else "minimal", budget=55)
+                schema=schema, level="low" if careful else "minimal", budget=budget)
 
 
 def _clean_lube(items):
@@ -188,10 +188,14 @@ def work_part(sid, part, careful=False):
                 need[r_["fuel_code"]] = r_["n"]
         best, best_bad, last_err = None, 10 ** 6, None
         for attempt, mode in enumerate((careful, not careful)):        # read; if it does not add up, read again with the other model
-            if attempt and (_time.time() - t0 > 24 or best_bad == 0):
+            # 1st read ≤ 30 s, 2nd read (other key / model) gets the rest — always ending before Vercel's 60 s cut,
+            # so a slow day gives a 2nd read instead of a timed-out request (MS/HSD meters are the slowest part).
+            left = 52 - (_time.time() - t0)
+            if attempt and (left < 10 or best_bad == 0):
                 break
             try:
-                got = read_part(row["img"], "image/jpeg", part, mode, key_no=PART_KEY[part] + attempt)    # re-read: the other key
+                got = read_part(row["img"], "image/jpeg", part, mode, key_no=PART_KEY[part] + attempt,
+                                budget=30 if attempt == 0 else int(left))
             except UserError as e:
                 last_err = e
                 continue

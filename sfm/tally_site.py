@@ -306,7 +306,7 @@ def edit_row(data, sheet, row, fields):
             if orig not in (None, "") and Decimal(str(orig)) == clean["qty"]:
                 clean.pop("qty")                                # litres not changed → the amount decides
             else:
-                clean.pop("amount", None)                       # litres changed → amount = litres × rate
+                clean.pop("amount", None)                       # litres changed → only the litres change
         a.change(sheet, int(row), **clean)
     return a.save()
 

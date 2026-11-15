@@ -739,6 +739,8 @@ excel DD/MM | excel add DD/MM | excel adjust DD/MM | cash DD/MM | daily check DD
 close DD/MM (= finish the day: Tally Excel, photo, then OK sends it to Tally) | ok |
 change <hsd|ms|cng|lube|payment|receipt> sales from <ledger> to <ledger> (e.g. change hsd sales from dtplus to cash) |
 upload to tally | tally ledger <party> <this month|last month|november|DD/MM to DD/MM> | tally check DD/MM | tally status | stop |
+tally import DD/MM to DD/MM and ledger <party> <party> <november 2026> (everything in one Tally session, one PIN) |
+tally ledger <party> <party> <november 2026> |
 reopen DD/MM[-DD/MM] [for <user>] | bill | menu
 Transporters: {parties}. Today is {today}.
 Return JSON {{"command": "..."}}; use "menu" if it is none of these. Never invent numbers that are not in the message.

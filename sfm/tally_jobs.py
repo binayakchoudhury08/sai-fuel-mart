@@ -32,7 +32,35 @@ def start_github(job_id):
         raise UserError(f"GitHub did not start the job ({r.status_code}): {r.text[:160]}")
 
 
+PERIOD_RX = r"((?:till|until)\s+.+|this month|last month|month|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$"
+
+
+def _split_names(names):
+    parts = [p.strip() for p in re.split(r"\s*(?:,|&|\band\b|\+)\s*", names) if p.strip()]
+    if len(parts) == 1 and " " in parts[0]:
+        parts = parts[0].split()                        # "svt osl" → two ledgers (each is matched to the LEDGER MASTER)
+    return parts
+
+
 def handle(cur, phone, low, text):
+    """One statement for several Tally jobs, one login and one PIN (owner, 07 Nov):
+    "tally import 4/11 to 5/11 and ledger svt osl november 2026" → the import starts the robot; each ledger is queued
+    behind it in the same Tally session. "tally ledger svt osl november" → several ledger PDFs in one session."""
+    m = re.match(r"^tally\s+import\s+(.+?)\s+(?:and|\+|,|with|&)\s+(?:the\s+)?ledgers?\s+(?:of\s+)?(.+?)\s+" + PERIOD_RX, low)
+    ml = None if m else re.match(r"^tally\s+ledgers?\s+(.+?)\s+" + PERIOD_RX, low)
+    names = _split_names((m or ml).group(2) if m else ml.group(1)) if (m or ml) else []
+    if m or (ml and len(names) > 1):
+        period = (m or ml).group(3) if m else ml.group(2)
+        replies = []
+        if m:
+            replies.append(_handle_one(cur, phone, f"tally import {m.group(1)}", text))
+        for nm in names:
+            replies.append(_handle_one(cur, phone, f"tally ledger {nm} {period}", text))
+        return "\n\n".join(r for r in replies if r)
+    return _handle_one(cur, phone, low, text)
+
+
+def _handle_one(cur, phone, low, text):
     """WhatsApp: start a job, or answer the job that is waiting (PIN / company)."""
     from .wa import _when
     if low.strip() == "tally status":

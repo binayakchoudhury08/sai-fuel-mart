@@ -329,9 +329,21 @@ class Adder:
         self.cache[(sheet, f"B{r}")] = d
         if party is not None:
             self.b.put(sheet, f"C{r}", value=party, kind="s", formula_keep=False)
-        if sheet in SALES.values() and qty is not None and amount is None:      # litres given → amount = litres × rate
-            rt = Decimal(str(rate if rate is not None else self._val(sheet, f"E{r}")))
-            amount = _r2(Decimal(str(qty)) * rt, "1")
+        if sheet in SALES.values() and rate is not None and self._val(sheet, f"E{r}") is not None \
+                and Decimal(str(rate)) == Decimal(str(self._val(sheet, f"E{r}"))):
+            rate = None                                   # same rate: leave the cell (and its formula) alone
+        if sheet in SALES.values() and qty is not None and amount is None:
+            # Owner (07 Nov): changing the litres changes ONLY the litres — amount and rate stay as they are
+            # (527.99 → 527.98, amount stays 52,799). The litres are typed into that row like a person would.
+            q = Decimal(str(qty))
+            self.b.put(sheet, f"D{r}", value=q, kind="n", formula_keep=False)
+            self.cache[(sheet, f"D{r}")] = q
+            if rate is not None:
+                self.b.put(sheet, f"E{r}", value=Decimal(str(rate)), kind="n", formula_keep=False)
+                self.cache[(sheet, f"E{r}")] = Decimal(str(rate))
+            self.next_row.setdefault(sheet, data_end(self.v[sheet]) + 1)
+            self.added.append((sheet, r, "changed"))
+            return
         if sheet in SALES.values() and rate is not None:
             self.b.put(sheet, f"E{r}", value=Decimal(str(rate)), kind="n", formula_keep=False)
             self.cache[(sheet, f"E{r}")] = Decimal(str(rate))

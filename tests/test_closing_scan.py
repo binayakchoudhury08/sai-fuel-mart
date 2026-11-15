@@ -139,7 +139,7 @@ def split(part):
     if part == "right":
         return {"right": copy.deepcopy(PAGE["lines"][12:]), "final_cash": PAGE["final_cash"], "dips": copy.deepcopy(PAGE["dips"])}
     return {k: copy.deepcopy(PAGE[k]) for k in cs.PART_KEYS[part] if k in PAGE}
-def fake_part(img_b64, mime, part, careful=False, key_no=None):
+def fake_part(img_b64, mime, part, careful=False, key_no=None, budget=55):
     CALLS.append(part + ("*" if careful else ""))
     if part == "right" and not careful:
         raise UserError("Google took too long to answer. Press Retry.")
@@ -162,7 +162,7 @@ check(img2 is None and raw2["final_cash"] == "30432" and len(raw2["lines"]) == l
 h2 = cl.get(job["review"]).get_data(as_text=True)
 check("≠ yesterday’s closing in the system" in h2, "review opens; reusing the 29th page as the 30th is caught (openings ≠ yesterday’s closings)")
 EMPTY = {"meters": {"date": "30.09.26"}}
-def empty_part(img_b64, mime, part, careful=False, key_no=None):
+def empty_part(img_b64, mime, part, careful=False, key_no=None, budget=55):
     return EMPTY.get(part, split(part))
 cs.read_part = empty_part
 with cl.session_transaction() as s_: s_["_csrf"] = "t"
@@ -175,7 +175,7 @@ nl = analyse(nolube)
 check(any("lube line is missing" in f_ for f_ in nl["flags"]), "page’s lube total ≠ lines read → “a lube line is missing or misread”")
 print("A read that misses HSD is re-read automatically")
 TRIES = []
-def flaky(img_b64, mime, part, careful=False, key_no=None):
+def flaky(img_b64, mime, part, careful=False, key_no=None, budget=55):
     TRIES.append((part, careful))
     out = split(part)
     if part == "meters" and len([t for t in TRIES if t[0] == "meters"]) == 1:

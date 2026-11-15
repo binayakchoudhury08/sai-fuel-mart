@@ -31,15 +31,21 @@
     }).join(" · ") + " · " + sec + " s";
     if (failed.length) html += ' <button type="button" class="btn small" id="cscan-retry">↻ Retry carefully</button>';
     msg.hidden = false; msg.className = "flash " + (failed.length ? "error" : "info"); msg.innerHTML = html;
-    var b = document.getElementById("cscan-retry"); if (b) b.onclick = function(){ failed.forEach(function(k){ read(k, true); }); };
+    var b = document.getElementById("cscan-retry"); if (b) b.onclick = function(){ failed.forEach(function(k){ parts[k].tries = 0; read(k, true); }); };
   }
   function read(k, careful){
     parts[k].state = "wait"; parts[k].sec = 0; draw();
     var fd = new FormData(); fd.append("_csrf", csrf()); fd.append("part", k); if (careful) fd.append("careful", "1");
     fetch(job.read, { method: "POST", body: fd, credentials: "same-origin" }).then(json).then(function(r){
+      if (!r.ok && (parts[k].tries || 0) < 2) {            // a failed part is read again by itself (twice), carefully
+        parts[k].tries = (parts[k].tries || 0) + 1; parts[k].error = "re-reading (" + parts[k].tries + "/2)…";
+        setTimeout(function(){ read(k, true); }, 1500); return;
+      }
       parts[k].state = r.ok ? "ok" : "fail"; parts[k].error = r.error; parts[k].sec = r.seconds; draw();
       if (Object.keys(parts).every(function(x){ return parts[x].state === "ok"; })) { clearInterval(tick); msg.className = "flash success"; msg.textContent = "✓ Page read — opening the check screen…"; location.href = job.review; }
-    }).catch(function(){ parts[k].state = "fail"; parts[k].error = "no internet"; draw(); });
+    }).catch(function(){
+      if ((parts[k].tries || 0) < 2) { parts[k].tries = (parts[k].tries || 0) + 1; setTimeout(function(){ read(k, true); }, 3000); return; }
+      parts[k].state = "fail"; parts[k].error = "no internet"; draw(); });
   }
   inp.addEventListener("change", function(){
     var f = inp.files[0]; if (!f) return; inp.value = "";
