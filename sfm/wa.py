@@ -845,6 +845,7 @@ def handle(cur, phone, user, msg):
         return r
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
+    low = re.sub(r"[\s.!?,;:]+$", "", low)               # a keyboard's trailing "." must not break a command
 
     low = re.sub(r"^check\s+tally\b", "tally check", low)
     if mtype == "text" and user.get("role") == "owner":

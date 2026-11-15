@@ -46,6 +46,7 @@ def handle(cur, phone, low, text):
     """One statement for several Tally jobs, one login and one PIN (owner, 07 Nov):
     "tally import 4/11 to 5/11 and ledger svt osl november 2026" → the import starts the robot; each ledger is queued
     behind it in the same Tally session. "tally ledger svt osl november" → several ledger PDFs in one session."""
+    low = re.sub(r"[\s.!?,;:]+$", "", low)
     m = re.match(r"^tally\s+import\s+(.+?)\s+(?:and|\+|,|with|&)\s+(?:the\s+)?ledgers?\s+(?:of\s+)?(.+?)\s+" + PERIOD_RX, low)
     ml = None if m else re.match(r"^tally\s+ledgers?\s+(.+?)\s+" + PERIOD_RX, low)
     names = _split_names((m or ml).group(2) if m else ml.group(1)) if (m or ml) else []
