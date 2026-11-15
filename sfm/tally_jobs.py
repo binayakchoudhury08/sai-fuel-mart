@@ -175,6 +175,14 @@ def _handle_one(cur, phone, low, text):
             return f"No Tally ledger matches “{said}”. Write the name as in Tally."
         params = {"ledger": ledger, "from": first.isoformat(), "to": last.isoformat()}
         kind, what = "ledger", f"ledger {ledger} {first:%d/%m} – {last:%d/%m} as PDF"
+    # The same request already waiting or running (e.g. an earlier try still waiting for its PIN) is not added again.
+    cur.execute("""SELECT id FROM tally_jobs WHERE kind=%s AND state NOT IN ('done','failed','review_required')
+                   AND created_at > NOW() - interval '45 minutes' AND params->>'from'=%s AND params->>'to'=%s
+                   AND COALESCE(params->>'ledger','')=%s AND COALESCE(params->>'report','')=%s ORDER BY id DESC LIMIT 1""",
+                (kind, params.get("from"), params.get("to"), params.get("ledger") or "", params.get("report") or ""))
+    same = cur.fetchone()
+    if same:
+        return f"↪️ {what[:1].upper() + what[1:]} — already requested as Tally job #{same['id']} (not added twice)."
     cur.execute("INSERT INTO tally_jobs (phone, kind, params, waiting) VALUES (%s,%s,%s,'pin') RETURNING id", (phone, kind, json.dumps(params)))
     jid = cur.fetchone()["id"]
     if kind == "import":
