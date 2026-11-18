@@ -135,8 +135,10 @@ def add_day(cur, data, d):
         raise UserError("Give these a Tally name first (Settings → Tally names): " + ", ".join(f"{k}: {s}" for k, s in missing))
     if not rows:
         raise UserError(f"No Daily Closing data on {d:%d/%m/%Y}.")
+    from .services import rates_for
+    site_rates = rates_for(cur, d)
     for row in [r for r in rows if r[0] == METER]:
-        a.meters(d, row[1])
+        a.meters(d, row[1], site_rates)                     # the website's rate for that date (owner, 15 Nov)
     meter_amt = {}                                          # the fuel totals = the meter amounts just written
     for (sh, ref), val in a.cache.items():
         if sh == METER and ref.startswith("D") and isinstance(val, str):
@@ -376,3 +378,11 @@ def auto_split(cur, d, rows, tn, rates, fuel=None):
             out.append(("HSD", led, amt, rates.get("HSD")))
     return out
 
+
+
+def apply_rates(cur, data, d):
+    """excel rate 6/11 — the website's rates for that date on its meter rows (a day added before the rate changed)."""
+    from .services import rates_for
+    a = Adder(data)
+    changed = a.set_meter_rates(d, rates_for(cur, d))
+    return (a.save() if changed else None), changed

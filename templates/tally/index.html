@@ -57,7 +57,8 @@
 <button class="btn small">Add</button></form></div></section>{% endfor %}
 <datalist id="ledgers">{% for c in choices.get('party', []) %}<option>{{ c }}</option>{% endfor %}</datalist>
 <datalist id="items">{% for c in choices.get('item', []) %}<option>{{ c }}</option>{% endfor %}</datalist>
-<section class="section" id="METER-READING"><header><h2>METER READING</h2><small>change a closing → the next day’s opening follows</small></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>Meter</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Testing</th><th class="num">Net</th><th class="num">Amount</th></tr></thead><tbody>
+<section class="section" id="METER-READING"><header><h2>METER READING</h2><small>change a closing → the next day’s opening follows</small>
+<form method="post" action="{{ url_for('tally.rates') }}" data-confirm="Use the website's fuel rates of {{ d.strftime('%d/%m/%Y') }} on these meter rows?">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><button class="btn small secondary">⛽ Use website rates</button></form></header><div class="body flush tablewrap"><table class="mini"><thead><tr><th>Meter</th><th class="num">Opening</th><th class="num">Closing</th><th class="num">Testing</th><th class="num">Net</th><th class="num">Amount</th></tr></thead><tbody>
 {% for r in view[meter] %}<tr><td>{{ r.meter }}</td><td class="num">{{ r.opening }}</td>
 <td class="num"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ meter }}"><input type="hidden" name="meter" value="{{ r.meter }}">
 <input name="closing" value="{{ r.closing }}" inputmode="decimal" style="max-width:130px"><button class="btn small secondary">Save</button></form></td>

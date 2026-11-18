@@ -365,6 +365,14 @@ def handle(cur, phone, low, text):
     if not m:
         return None
     rest = m.group(2).strip()
+    mr_ = re.match(r"^rates?\s+(.+)$", rest)
+    if mr_:
+        d = _when(mr_.group(1))
+        if not d:
+            return "Which day? e.g. *excel rate 6/11*"
+        save_state(cur, phone, {"mode": "confirm", "action": "tally_rates", "d": d.isoformat()}, touch=True)
+        return (f"⛽ Put the website's fuel rates of {d:%d/%m/%Y} on that day's METER READING rows "
+                "(rate and amount; METER MASTER and other days are not touched)?\nReply *YES*.")
     mp = re.match(r"^autopilot\s+(.+)$", rest)
     if mp:
         d = _when(mp.group(1))
@@ -478,7 +486,7 @@ def run(cur, st):
     from .security import audit, current_user
     from .tally_site import add_day, save_version, set_amount
     a = st.get("action")
-    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all"):
+    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates"):
         return None
     who = current_user()["username"]
     try:
@@ -492,6 +500,18 @@ def run(cur, st):
             return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                     "caption": f"✅ {d:%d/%m/%Y} added and adjusted ({len(added)} rows) — final cash ₹{inr(chk['Final cash balance'])}. "
                                "Check the ledgers. To correct: change hsd sales from dtplus to cash · all correct: upload to tally"}
+        if a == "tally_rates":
+            from .tally_site import apply_rates, daily_check, day_view
+            d = date.fromisoformat(st["d"])
+            new, changed = apply_rates(cur, _book(cur), d)
+            if not changed:
+                return f"✅ {d:%d/%m/%Y}: the meter rates already match the website's rates."
+            what = f"METER READING {d:%d/%m/%Y}: rates " + ", ".join(f"{n} {o}→{w}" for n, o, w in changed[:8])
+            save_version(cur, new, what, who)
+            audit(cur, "update", "tally_book", None, what + " (WhatsApp)", business_date=d)
+            view = day_view(new, d); chk = daily_check(view)
+            return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+                    "caption": f"✅ {len(changed)} meter rows now use the website's rates. Check meter vs sales on the photo."}
         if a == "tally_change_all":
             from .tally_book import Adder
             from .tally_site import daily_check, day_view

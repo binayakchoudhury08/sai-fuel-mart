@@ -262,7 +262,7 @@ class Adder:
         self.added.append((sheet, r, f"{from_ledger} → {to_ledger} {amount}"))
         return r
 
-    def meters(self, d, closings):
+    def meters(self, d, closings, rates=None):
         """closings: {pump meter name: closing}. The 8 rows of that date are fixed by Q1 + 8 rows per day."""
         ws = self.v[METER]
         q1 = ws["Q1"].value
@@ -299,6 +299,10 @@ class Adder:
             raise UserError("Meter readings look wrong, nothing added: " + "; ".join(problems))
         for i, name, r, prev, closing in plan:
             mpd, product, unit, rate = master.get(name, [None, None, None, None])
+            site_rate = (rates or {}).get(str(product or "").upper())
+            own_rate = site_rate is not None and (rate is None or Decimal(str(site_rate)) != Decimal(str(rate)))
+            if own_rate:
+                rate = Decimal(str(site_rate))          # the website's rate for that date (METER MASTER is not touched)
             testing = Decimal(0) if product == "CNG" else Decimal(5)
             net = _r2(closing - prev - testing)
             b = self.b
@@ -320,8 +324,31 @@ class Adder:
                 if rate is not None:
                     self.cache[(METER, f"L{r}")] = _r2(net * Decimal(str(rate)))
             b.put(METER, f"H{r}", value=testing, kind="n")
-            b.put(METER, f"K{r}", value=rate if rate is not None else "", kind="n" if rate is not None else "e")
+            b.put(METER, f"K{r}", value=rate if rate is not None else "", kind="n" if rate is not None else "e",
+                  formula_keep=not own_rate)               # a changed rate is typed into this row only
+            self.cache[(METER, f"K{r}")] = rate
             self.added.append((METER, r, f"{name} closing {closing}"))
+
+    def set_meter_rates(self, d, rates):
+        """Apply the website's rates (MS/HSD/CNG) to the meter rows of one date: K typed, amount = net × rate."""
+        ws = self.v[METER]
+        changed = []
+        for r in range(90, ws.max_row + 1):
+            if read_date(ws.cell(r, 2).value) != d:
+                continue
+            fuel = str(self._val(METER, f"E{r}") or "").upper()
+            new = (rates or {}).get(fuel)
+            old = self._val(METER, f"K{r}")
+            if new is None or (old not in (None, "") and Decimal(str(old)) == Decimal(str(new))):
+                continue
+            new = Decimal(str(new))
+            self.b.put(METER, f"K{r}", value=new, kind="n", formula_keep=False)
+            net = self._val(METER, f"I{r}")
+            if net not in (None, ""):
+                self.b.put(METER, f"L{r}", value=_r2(Decimal(str(net)) * new), kind="n")
+            changed.append((self._val(METER, f"D{r}"), old, new))
+        self.added.append((METER, 0, "rates"))
+        return changed
 
     # ---------- changing a row that is already there (no row is ever deleted)
     def change(self, sheet, r, *, party=None, amount=None, item=None, qty=None, rate=None, to=None):

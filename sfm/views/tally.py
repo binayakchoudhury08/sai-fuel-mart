@@ -201,3 +201,22 @@ def jobs():
                        FROM tally_jobs ORDER BY id DESC LIMIT 60""")
         rows = cur.fetchall()
     return render_template("tally/jobs.html", rows=rows)
+
+
+@bp.route("/tally/rates", methods=["POST"])
+@login_required("owner")
+def rates():
+    """The website's fuel rates of a date on that day's meter rows (a day added before the rate was changed)."""
+    from ..tally_site import apply_rates, save_version
+    d = parse_date(request.form.get("d"), "Date")
+    with db.tx() as cur:
+        claim_form_token(cur)
+        data, _ = _book(cur)
+        new, changed = apply_rates(cur, data, d)
+        if changed:
+            what = f"METER READING {d:%d/%m/%Y}: rates " + ", ".join(f"{n} {o}→{w}" for n, o, w in changed[:8])
+            save_version(cur, new, what, current_user()["username"])
+            audit(cur, "update", "tally_book", None, what, business_date=d)
+    flash(f"{len(changed)} meter rows of {d:%d/%m/%Y} now use the website's rates." if changed
+          else f"{d:%d/%m/%Y}: meter rates already match the website's rates.", "success")
+    return redirect(url_for("tally.index", d=d.isoformat()) + "#METER-READING")
