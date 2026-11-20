@@ -82,7 +82,8 @@ def day_rows(cur, d, adder):
                    WHERE r.business_date=%s AND r.closing IS NOT NULL ORDER BY n.fuel_code, n.sort, n.id""", (d,))
     closings = {}
     for r in cur.fetchall():
-        closings[tn("meter", r["name"])] = (Decimal(r["closing"]), Decimal(r["testing"]) if r["testing"] is not None else None)
+        t = Decimal(r["testing"]) if r["testing"] is not None else None
+        closings[tn("meter", r["name"])] = (Decimal(r["closing"]), t if t else None)   # not filled in → the standard 5 L
     if closings:
         rows.append((METER, closings))
     # credit given (declared totals of the day) → HSD SALES
