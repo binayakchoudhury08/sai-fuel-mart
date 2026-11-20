@@ -124,6 +124,30 @@ class Book:
             row = row[:pos] + cell + row[pos:]
         self.xml[sheet] = xml[:rm.start()] + row + xml[rm.end():]
 
+    def cell_xml(self, sheet, ref):
+        xml = self.sheet_xml(sheet)
+        m = re.search(rf'<c r="{ref}"[^>]*?(?:/>|>.*?</c>)', xml, re.S)
+        return m.group(0) if m else None
+
+    def has_formula(self, sheet, ref):
+        c = self.cell_xml(sheet, ref)
+        return bool(c and "<f" in c)
+
+    def put_raw(self, sheet, ref, cell):
+        """Write a cell copied from another row (renamed to ref); None empties it (style kept)."""
+        if cell is None:
+            self.put(sheet, ref, value="", kind="e", formula_keep=False)
+            xml = self.sheet_xml(sheet)
+            self.xml[sheet] = re.sub(rf'(<c r="{ref}"[^>]*?) t="(?:inlineStr|str)"([^>]*>)<is><t></t></is>', r"\1\2", xml)
+            return
+        cell = re.sub(r'<c r="[A-Z]+\d+"', f'<c r="{ref}"', cell, count=1)
+        xml = self.sheet_xml(sheet)
+        col, r = split_ref(ref)
+        self.put(sheet, ref, value="", kind="e", formula_keep=False)          # make sure the cell exists in order
+        xml = self.sheet_xml(sheet)
+        xml = re.sub(rf'<c r="{ref}"[^>]*?(?:/>|>.*?</c>)', lambda m: cell, xml, count=1, flags=re.S)
+        self.xml[sheet] = xml
+
     def style_of(self, sheet, ref):
         xml = self.sheet_xml(sheet)
         m = re.search(rf'<c r="{ref}"[^>]*? s="(\d+)"', xml)
@@ -187,6 +211,7 @@ class Adder:
         self.next_row = {}
         self.cache = {}            # (sheet, ref) → value we calculated for new rows
         self.added = []            # (sheet, row, summary)
+        self.extra_dates = {}      # sheet → dates whose totals must be recalculated (a deleted entry's date)
 
     def _val(self, sheet, ref):
         if (sheet, ref) in self.cache:
@@ -332,6 +357,70 @@ class Adder:
                   formula_keep=not own_rate)               # a changed rate is typed into this row only
             self.cache[(METER, f"K{r}")] = rate
             self.added.append((METER, r, f"{name} closing {closing}"))
+
+    INPUTS = {**{sh: ["B", "C", "F"] for sh in SALES.values()}, LUBE: ["B", "C", "D", "E", "F"],
+              PAYMENT: ["B", "C", "D", "E"], RECEIPT: ["B", "C", "D", "E"]}
+    TOTALS = {**{sh: ["G", "H"] for sh in SALES.values()}, LUBE: ["H"], PAYMENT: ["F"], RECEIPT: ["F"]}
+
+    def delete_row(self, sheet, r):
+        """Owner (19 Nov): delete one entry like Excel's Delete Row — the entries below move up one row (inputs only;
+        the prepared formulas stay), so the rate carried from the row above (E = IF(B="","",E above)) never breaks.
+        SL no., qty, rate and the day totals are recalculated."""
+        from .util import UserError
+        if sheet not in self.INPUTS:
+            raise UserError("Entries can be deleted in HSD / MS / CNG / LUBE / PAYMENT / RECEIPT.")
+        ws = self.v[sheet]
+        end = data_end(ws)
+        if not (2 <= r <= end) or ws.cell(r, 2).value in (None, ""):
+            raise UserError(f"Row {r} has no entry in {sheet}.")
+        gone_date = read_date(ws.cell(r, 2).value)
+        sales = sheet in SALES.values()
+        cols = self.INPUTS[sheet]
+        for rr in range(r, end):                                   # move every entry below up one row
+            for c in cols:
+                self.b.put_raw(sheet, f"{c}{rr}", self.b.cell_xml(sheet, f"{c}{rr + 1}"))
+                self.cache[(sheet, f"{c}{rr}")] = self._val(sheet, f"{c}{rr + 1}") if (sheet, f"{c}{rr + 1}") in self.cache else ws.cell(rr + 1, col_num(c)).value
+            if sales:                                              # a typed rate moves with its entry; else the carry formula
+                if self.b.has_formula(sheet, f"E{rr + 1}"):
+                    self.b.put(sheet, f"E{rr}", value="", kind="e", new_formula=f'IF(B{rr}="","",E{rr - 1})')
+                else:
+                    self.b.put_raw(sheet, f"E{rr}", self.b.cell_xml(sheet, f"E{rr + 1}"))
+                    self.cache[(sheet, f"E{rr}")] = ws.cell(rr + 1, 5).value
+        for c in cols:                                             # the last row is now empty
+            self.b.put_raw(sheet, f"{c}{end}", None)
+            self.cache[(sheet, f"{c}{end}")] = ""
+        if sales:
+            self.b.put(sheet, f"E{end}", value="", kind="e", new_formula=f'IF(B{end}="","",E{end - 1})')
+            self.cache[(sheet, f"E{end}")] = ""
+        # recalculate the formula results of the moved rows: SL no., rate carry, qty, lube amount
+        for rr in range(r, end + 1):
+            has = self._val(sheet, f"B{rr}") not in (None, "")
+            self.b.put(sheet, f"A{rr}", value=rr - 1 if has else "", kind="n" if has else "e")
+            if sales:
+                if self.b.has_formula(sheet, f"E{rr}"):
+                    e = self._val(sheet, f"E{rr - 1}") if has else ""
+                    self.cache[(sheet, f"E{rr}")] = e
+                    self.b.put(sheet, f"E{rr}", value=e if e not in (None, "") else "", kind="n" if e not in (None, "") else "e")
+                e, f_ = self._val(sheet, f"E{rr}"), self._val(sheet, f"F{rr}")
+                if has and e not in (None, "") and f_ not in (None, ""):
+                    q = _r2(Decimal(str(f_)) / Decimal(str(e)))
+                    self.b.put(sheet, f"D{rr}", value=q, kind="n"); self.cache[(sheet, f"D{rr}")] = q
+                else:
+                    self.b.put(sheet, f"D{rr}", value="", kind="e"); self.cache[(sheet, f"D{rr}")] = ""
+            elif sheet == LUBE:
+                q, rt = self._val(sheet, f"E{rr}"), self._val(sheet, f"F{rr}")
+                if has and q not in (None, "") and rt not in (None, ""):
+                    g = _r2(Decimal(str(q)) * Decimal(str(rt)), "1")
+                    self.b.put(sheet, f"G{rr}", value=g, kind="n"); self.cache[(sheet, f"G{rr}")] = g
+                else:
+                    self.b.put(sheet, f"G{rr}", value="", kind="e"); self.cache[(sheet, f"G{rr}")] = ""
+            for t in self.TOTALS[sheet]:
+                self.b.put(sheet, f"{t}{rr}", value="", kind="e")
+            if has:
+                self.added.append((sheet, rr, "moved"))
+        self.extra_dates.setdefault(sheet, set()).add(gone_date)
+        self.next_row[sheet] = end
+        return gone_date
 
     def change_meter_testing(self, d, name, testing):
         """Owner (19 Nov): testing litres of one meter row — typed into H; net = closing − opening − testing;
@@ -499,7 +588,9 @@ class Adder:
                 d = dv if isinstance(dv, date) and not isinstance(dv, datetime) else read_date(dv)
                 if d is not None:
                     dates.setdefault(d, []).append(r)
-            touched = {self.cache[(sh, f"B{r}")] for (s, r, _) in self.added if s == sh}
+            touched = {read_date(self.cache[(sh, f"B{r}")]) if not isinstance(self.cache[(sh, f"B{r}")], date) or isinstance(self.cache[(sh, f"B{r}")], datetime) else self.cache[(sh, f"B{r}")]
+                       for (s, r, _) in self.added if s == sh and (sh, f"B{r}") in self.cache} | self.extra_dates.get(sh, set())
+            touched.discard(None)
             for d in touched:
                 rows = dates.get(d, [])
                 for tcol, scol in pairs:

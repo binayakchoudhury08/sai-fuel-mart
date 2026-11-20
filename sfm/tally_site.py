@@ -389,3 +389,10 @@ def apply_rates(cur, data, d):
     a = Adder(data)
     changed = a.set_meter_rates(d, rates_for(cur, d))
     return (a.save() if changed else None), changed
+
+
+def delete_entry(data, sheet, row):
+    """Delete one entry of HSD / MS / CNG / LUBE / PAYMENT / RECEIPT (the rows below move up)."""
+    a = Adder(data)
+    d = a.delete_row(sheet, int(row))
+    return a.save(), d

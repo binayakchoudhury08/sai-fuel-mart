@@ -365,6 +365,22 @@ def handle(cur, phone, low, text):
     if not m:
         return None
     rest = m.group(2).strip()
+    md = re.match(rf"^(?:delete|remove)\s+{SHEET_RX}(?:\s+sales?)?\s+(\S+)\s+(.+)$", rest)
+    if md:
+        sheet, d = SHEET_WORDS[md.group(1)], _when(md.group(2))
+        if not d:
+            return "Write: *excel delete hsd 2/11 paytm*"
+        from .tally_site import day_view, norm
+        rows = day_view(_book(cur), d)[sheet]
+        key = "to" if sheet in (PAYMENT, RECEIPT) else ("item" if sheet == LUBE else "party")
+        hit = [r for r in rows if norm(md.group(3)) and norm(r[key]).startswith(norm(md.group(3)))]
+        if len(hit) != 1:
+            return (f"Which entry? {sheet} on {d:%d/%m}: " + ", ".join(f"{r[key]} {inr(r['amount'])}" for r in rows)
+                    if rows else f"No entries in {sheet} on {d:%d/%m}.")
+        save_state(cur, phone, {"mode": "confirm", "action": "tally_delete", "sheet": sheet, "row": hit[0]["row"],
+                                "d": d.isoformat()}, touch=True)
+        remember_day(cur, phone, d)
+        return f"🗑 Delete from *{sheet}* {d:%d/%m}: *{hit[0][key]} ₹{inr(hit[0]['amount'])}* (row {hit[0]['row']})?\nReply *YES*."
     mt = re.match(r"^testing\s+(\S+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:l|ltr|litres?|liters?)?$", rest)
     if mt:
         d = _when(mt.group(1))
@@ -501,7 +517,7 @@ def handle(cur, phone, low, text):
         return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                 "caption": f"Workbook {d:%d/%m/%Y} — change: excel hsd {d:%d/%m} phone pe 62084 · check: daily check {d:%d/%m}"}
     return ("📗 *Tally workbook*\n• *excel 1/11* — table photo of the date\n• *excel add 2/11* — add the day from Daily Closing\n"
-            "• *excel adjust 1/11* — tap sheet → tap name → type amount\n• *excel rename hsd 1/11 paytm to phone pe* · *excel meter 2/11 petrol du1 691091.33*\n• *excel hsd 1/11 phone pe 62084* (ms / cng / payment / receipt)\n• *daily check 1/11* · *cash 1/11*\n• *xml 1/11 to 3/11* · *excel undo*")
+            "• *excel adjust 1/11* — tap sheet → tap name → type amount\n• *excel delete hsd 1/11 paytm* — delete an entry\n• *excel rename hsd 1/11 paytm to phone pe* · *excel meter 2/11 petrol du1 691091.33*\n• *excel hsd 1/11 phone pe 62084* (ms / cng / payment / receipt)\n• *daily check 1/11* · *cash 1/11*\n• *xml 1/11 to 3/11* · *excel undo*")
 
 
 def run(cur, st):
@@ -509,7 +525,7 @@ def run(cur, st):
     from .security import audit, current_user
     from .tally_site import add_day, save_version, set_amount
     a = st.get("action")
-    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates", "tally_testing"):
+    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates", "tally_testing", "tally_delete"):
         return None
     who = current_user()["username"]
     try:
@@ -523,6 +539,15 @@ def run(cur, st):
             return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                     "caption": f"✅ {d:%d/%m/%Y} added and adjusted ({len(added)} rows) — final cash ₹{inr(chk['Final cash balance'])}. "
                                "Check the ledgers. To correct: change hsd sales from dtplus to cash · all correct: upload to tally"}
+        if a == "tally_delete":
+            from .tally_site import daily_check, day_view, delete_entry
+            new, d = delete_entry(_book(cur), st["sheet"], st["row"])
+            what = f"{st['sheet']} {d:%d/%m/%Y}: deleted row {st['row']}"
+            save_version(cur, new, what, who)
+            audit(cur, "delete", "tally_book", None, what + " (WhatsApp)", business_date=d)
+            view = day_view(new, d); chk = daily_check(view)
+            return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+                    "caption": f"🗑 Deleted. The entries below moved up. Undo: excel undo"}
         if a == "tally_testing":
             from .tally_book import Adder
             from .tally_site import daily_check, day_view

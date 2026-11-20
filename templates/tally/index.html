@@ -48,7 +48,9 @@
 {% else %}<input name="party" value="{{ r.party }}" list="ledgers" style="max-width:220px"><input name="amount" value="{{ r.amount }}" inputmode="decimal" style="max-width:120px" title="amount ₹">
 <input name="qty" value="{{ r.qty }}" inputmode="decimal" style="max-width:100px" title="litres"><input type="hidden" name="orig_qty" value="{{ r.qty }}"><span class="muted">L ×</span>
 <input name="rate" value="{{ r.rate }}" inputmode="decimal" style="max-width:90px" title="rate">{% endif %}
-<button class="btn small secondary">Save</button></form></td></tr>
+<button class="btn small secondary">Save</button></form>
+<form method="post" action="{{ url_for('tally.delete') }}" style="display:inline" data-confirm="Delete row {{ r.row }} of {{ sh }}? The entries below move up (Versions can bring it back).">{{ hidden() }}
+<input type="hidden" name="sheet" value="{{ sh }}"><input type="hidden" name="row" value="{{ r.row }}"><button class="btn small danger" title="Delete this entry">🗑</button></form></td></tr>
 {% else %}<tr><td colspan="6" class="empty">No rows on this date.</td></tr>{% endfor %}</tbody></table>
 <form method="post" action="{{ url_for('tally.set_row') }}" class="body btnrow" style="flex-wrap:wrap">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ sh }}"><b>Add row</b>
 {% if sh in pay %}<input name="from_ledger" placeholder="{{ 'Paid from' if sh == 'PAYMENT' else 'Received in' }} (Cash)" list="ledgers" style="max-width:180px"><input name="name" placeholder="{{ 'Paid to' if sh == 'PAYMENT' else 'Received from' }}" list="ledgers" required style="max-width:200px"><input name="amount" placeholder="Amount" inputmode="decimal" required style="max-width:120px">

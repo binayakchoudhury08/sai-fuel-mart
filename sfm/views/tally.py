@@ -220,3 +220,25 @@ def rates():
     flash(f"{len(changed)} meter rows of {d:%d/%m/%Y} now use the website's rates." if changed
           else f"{d:%d/%m/%Y}: meter rates already match the website's rates.", "success")
     return redirect(url_for("tally.index", d=d.isoformat()) + "#METER-READING")
+
+
+@bp.route("/tally/delete", methods=["POST"])
+@login_required("owner")
+def delete():
+    """Delete one entry of a sheet — the entries below move up (formulas and the rate chain stay intact)."""
+    from ..tally_site import delete_entry, save_version
+    sheet, row = request.form.get("sheet"), int(request.form.get("row") or 0)
+    if sheet not in SHEETS:
+        raise UserError("Unknown sheet.")
+    with db.tx() as cur:
+        claim_form_token(cur)
+        data, _ = _book(cur)
+        from ..tally_book import Adder
+        v = Adder(data).v[sheet]
+        what_row = " · ".join(str(v.cell(row, c).value) for c in (3, 4, 5, 6) if v.cell(row, c).value not in (None, ""))
+        new, d = delete_entry(data, sheet, row)
+        what = f"{sheet} {d:%d/%m/%Y}: deleted row {row} ({what_row[:80]})"
+        save_version(cur, new, what, current_user()["username"])
+        audit(cur, "delete", "tally_book", None, what, business_date=d)
+    flash("Deleted — " + what + ". The entries below moved up; Versions can bring it back.", "success")
+    return redirect(url_for("tally.index", d=d.isoformat()) + "#" + sheet.replace(" ", "-"))
