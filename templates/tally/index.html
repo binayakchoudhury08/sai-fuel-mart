@@ -62,7 +62,8 @@
 {% for r in view[meter] %}<tr><td>{{ r.meter }}</td><td class="num">{{ r.opening }}</td>
 <td class="num"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ meter }}"><input type="hidden" name="meter" value="{{ r.meter }}">
 <input name="closing" value="{{ r.closing }}" inputmode="decimal" style="max-width:130px"><button class="btn small secondary">Save</button></form></td>
-<td class="num">{{ r.testing }}</td><td class="num">{{ r.net }}</td><td class="num">{{ r.amount }}</td></tr>{% else %}<tr><td colspan="6" class="empty">No meter rows on this date.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+<td class="num"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ meter }}"><input type="hidden" name="meter" value="{{ r.meter }}">
+<input name="testing" value="{{ r.testing }}" inputmode="decimal" style="max-width:70px" title="testing litres"><button class="btn small secondary">Save</button></form></td><td class="num">{{ r.net }}</td><td class="num">{{ r.amount }}</td></tr>{% else %}<tr><td colspan="6" class="empty">No meter rows on this date.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 
 <section class="section"><header><h2>Versions</h2><small>every change is kept</small></header><div class="body flush tablewrap"><table class="mini"><tbody>
 {% for v in versions %}<tr><td>#{{ v.id }}</td><td>{{ v.created_at.strftime('%d %b %H:%M') }}</td><td>{{ v.note }}</td><td>{{ v.created_by }}</td>

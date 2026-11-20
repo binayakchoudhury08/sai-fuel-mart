@@ -275,6 +275,8 @@ class Adder:
                 master[mm.cell(r, 1).value] = [mm.cell(r, c).value for c in range(2, 6)]      # MPD, product, unit, rate
         base = 90 + (d - q1).days * 8
         closings = self._match_meters(closings, names, base)
+        testings = {n: v[1] for n, v in closings.items() if isinstance(v, tuple) and v[1] is not None}   # from Daily Closing
+        closings = {n: (v[0] if isinstance(v, tuple) else v) for n, v in closings.items()}
         unknown = [n for n in closings if n not in names]
         if unknown:
             from .util import UserError
@@ -303,7 +305,9 @@ class Adder:
             own_rate = site_rate is not None and (rate is None or Decimal(str(site_rate)) != Decimal(str(rate)))
             if own_rate:
                 rate = Decimal(str(site_rate))          # the website's rate for that date (METER MASTER is not touched)
-            testing = Decimal(0) if product == "CNG" else Decimal(5)
+            default_testing = Decimal(0) if product == "CNG" else Decimal(5)
+            testing = Decimal(str(testings[name])) if name in testings else default_testing
+            own_testing = testing != default_testing     # typed into that row only (the H formula gives 0 / 5)
             net = _r2(closing - prev - testing)
             b = self.b
             b.put(METER, f"B{r}", value=f"{d.day}/{d.month}/{d.year}", kind="s",
@@ -323,11 +327,38 @@ class Adder:
                 b.put(METER, f"L{r}", value=_r2(net * Decimal(str(rate))) if rate is not None else "", kind="n" if rate is not None else "e")
                 if rate is not None:
                     self.cache[(METER, f"L{r}")] = _r2(net * Decimal(str(rate)))
-            b.put(METER, f"H{r}", value=testing, kind="n")
+            b.put(METER, f"H{r}", value=testing, kind="n", formula_keep=not own_testing)
             b.put(METER, f"K{r}", value=rate if rate is not None else "", kind="n" if rate is not None else "e",
                   formula_keep=not own_rate)               # a changed rate is typed into this row only
             self.cache[(METER, f"K{r}")] = rate
             self.added.append((METER, r, f"{name} closing {closing}"))
+
+    def change_meter_testing(self, d, name, testing):
+        """Owner (19 Nov): testing litres of one meter row — typed into H; net = closing − opening − testing;
+        amount = net × rate."""
+        ws = self.v[METER]
+        rows = [r for r in range(90, ws.max_row + 1) if ws.cell(r, 4).value == name and read_date(ws.cell(r, 2).value) == d]
+        if not rows:
+            from .util import UserError
+            raise UserError(f"{name} has no row on {d:%d/%m/%Y}.")
+        r = rows[0]
+        t = Decimal(str(testing))
+        opening, closing = self._val(METER, f"F{r}"), self._val(METER, f"G{r}")
+        if opening in (None, "") or closing in (None, ""):
+            from .util import UserError
+            raise UserError(f"{name} on {d:%d/%m/%Y} has no opening/closing reading.")
+        net = _r2(Decimal(str(closing)) - Decimal(str(opening)) - t)
+        if net < 0:
+            from .util import UserError
+            raise UserError(f"{name}: testing {t} L is more than the litres sold.")
+        self.b.put(METER, f"H{r}", value=t, kind="n", formula_keep=False)
+        self.b.put(METER, f"I{r}", value=net, kind="n")
+        rate = self._val(METER, f"K{r}")
+        if rate not in (None, ""):
+            self.b.put(METER, f"L{r}", value=_r2(net * Decimal(str(rate))), kind="n")
+        self.cache.update({(METER, f"H{r}"): t, (METER, f"I{r}"): net})
+        self.added.append((METER, r, f"{name} testing {t}"))
+        return net
 
     def set_meter_rates(self, d, rates):
         """Apply the website's rates (MS/HSD/CNG) to the meter rows of one date: K typed, amount = net × rate."""
@@ -414,13 +445,13 @@ class Adder:
         last = {n: self._last_closing(n, base + i) for i, n in enumerate(names)}
         fuel = lambda n: next((f for f in ("PETROL", "DIESEL", "CNG") if f in (n or "").upper()), "")
         out, used = {}, set()
-        for given, value in sorted(closings.items(), key=lambda kv: Decimal(str(kv[1]))):
-            v = Decimal(str(value))
+        for given, value in sorted(closings.items(), key=lambda kv: Decimal(str(kv[1][0] if isinstance(kv[1], tuple) else kv[1]))):
+            v = Decimal(str(value[0] if isinstance(value, tuple) else value))
             fits = [n for n in names if n not in used and last[n] is not None and Decimal(0) <= v - last[n] <= 50000]
             same = [n for n in fits if fuel(n) == fuel(given)] or fits
             pick = min(same, key=lambda n: v - last[n]) if same else given      # the closest last closing of that fuel
             used.add(pick)
-            out[pick] = v
+            out[pick] = value if isinstance(value, tuple) else v
         return out
 
     def change_meter(self, d, name, closing):

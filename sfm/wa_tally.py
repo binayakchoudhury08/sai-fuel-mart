@@ -365,6 +365,29 @@ def handle(cur, phone, low, text):
     if not m:
         return None
     rest = m.group(2).strip()
+    mt = re.match(r"^testing\s+(\S+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:l|ltr|litres?|liters?)?$", rest)
+    if mt:
+        d = _when(mt.group(1))
+        from .tally_site import day_view
+        meters = [r["meter"] for r in day_view(_book(cur), d)[METER]] if d else []
+        words = re.findall(r"[a-z0-9]+", mt.group(2))
+        fuel = {"ms": "PETROL", "petrol": "PETROL", "hsd": "DIESEL", "diesel": "DIESEL", "cng": "CNG"}
+        total = Decimal(mt.group(3))
+        if len(words) == 1 and words[0] in fuel:       # "ms 15" → 15 L spread over all petrol meters
+            group = [m for m in meters if fuel[words[0]] in m.upper()]
+            if not group:
+                return f"No {words[0].upper()} meters on that day. Meters: " + ", ".join(meters or ["(none)"])
+            each = (total / len(group)).quantize(Decimal("0.01"))
+            plan = [(m, each) for m in group[:-1]] + [(group[-1], total - each * (len(group) - 1))]
+        else:
+            hit = [m for m in meters if all(w in m.lower().replace(" ", "") or w in m.lower() for w in words)]
+            if not d or len(hit) != 1:
+                return "Write: *excel testing 2/11 petrol du1 10* or *excel testing 2/11 ms 15*\nMeters: " + ", ".join(meters or ["(none on that date)"])
+            plan = [(hit[0], total)]
+        save_state(cur, phone, {"mode": "confirm", "action": "tally_testing", "d": d.isoformat(),
+                                "plan": [[m, str(t)] for m, t in plan]}, touch=True)
+        return (f"🧪 Testing on {d:%d/%m}:\n" + "\n".join(f"• {m}: {t} L" for m, t in plan)
+                + "\n(net litres and amount recalculate)\nReply *YES*.")
     mr_ = re.match(r"^rates?\s+(.+)$", rest)
     if mr_:
         d = _when(mr_.group(1))
@@ -486,7 +509,7 @@ def run(cur, st):
     from .security import audit, current_user
     from .tally_site import add_day, save_version, set_amount
     a = st.get("action")
-    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates"):
+    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates", "tally_testing"):
         return None
     who = current_user()["username"]
     try:
@@ -500,6 +523,20 @@ def run(cur, st):
             return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                     "caption": f"✅ {d:%d/%m/%Y} added and adjusted ({len(added)} rows) — final cash ₹{inr(chk['Final cash balance'])}. "
                                "Check the ledgers. To correct: change hsd sales from dtplus to cash · all correct: upload to tally"}
+        if a == "tally_testing":
+            from .tally_book import Adder
+            from .tally_site import daily_check, day_view
+            d = date.fromisoformat(st["d"])
+            ad = Adder(_book(cur))
+            for m, t in st["plan"]:
+                ad.change_meter_testing(d, m, Decimal(t))
+            new = ad.save()
+            what = f"METER READING {d:%d/%m/%Y}: testing " + ", ".join(f"{m} {t} L" for m, t in st["plan"])
+            save_version(cur, new, what, who)
+            audit(cur, "update", "tally_book", None, what + " (WhatsApp)", business_date=d)
+            view = day_view(new, d); chk = daily_check(view)
+            return {"image": table_png(d, view, chk, counted_cash(cur, d)),
+                    "caption": f"✅ Testing changed — net litres and amounts recalculated. Check meter vs sales on the photo."}
         if a == "tally_rates":
             from .tally_site import apply_rates, daily_check, day_view
             d = date.fromisoformat(st["d"])

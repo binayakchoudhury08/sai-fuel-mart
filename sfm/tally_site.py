@@ -78,11 +78,11 @@ def day_rows(cur, d, adder):
 
     rates = rates_for(cur, d)
     # meters: closing readings of every nozzle
-    cur.execute("""SELECT n.name, r.closing FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
+    cur.execute("""SELECT n.name, r.closing, r.testing FROM nozzle_readings r JOIN nozzles n ON n.id=r.nozzle_id
                    WHERE r.business_date=%s AND r.closing IS NOT NULL ORDER BY n.fuel_code, n.sort, n.id""", (d,))
     closings = {}
     for r in cur.fetchall():
-        closings[tn("meter", r["name"])] = Decimal(r["closing"])
+        closings[tn("meter", r["name"])] = (Decimal(r["closing"]), Decimal(r["testing"]) if r["testing"] is not None else None)
     if closings:
         rows.append((METER, closings))
     # credit given (declared totals of the day) → HSD SALES
@@ -296,7 +296,9 @@ def search_names(a, sheet, text, limit=9):
 def edit_row(data, sheet, row, fields):
     """Website / WhatsApp: change any input of one row (party / item / ledger, amount, qty, rate) — or a meter closing."""
     a = Adder(data)
-    if sheet == METER:
+    if sheet == METER and fields.get("testing") not in (None, ""):
+        a.change_meter_testing(fields["d"], fields["meter"], fields["testing"])
+    elif sheet == METER:
         a.change_meter(fields["d"], fields["meter"], fields["closing"])
     else:
         clean = {k: v for k, v in fields.items() if k in ("party", "amount", "item", "qty", "rate", "to") and v not in (None, "")}
