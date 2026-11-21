@@ -295,10 +295,69 @@ def recover_tally_screen(desk):
     raise RuntimeError("Could not return to Gateway from the previous task")
 
 
+def _tally_window_somewhere(desk):
+    """A TallyPrime window that is not full screen (e.g. left small in the corner with an "Error" box, 21 Nov):
+    white/blue window area on the dark desktop in the left part of the screen."""
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(desk.screenshot(type="png"))).convert("RGB")
+        w, h = im.size
+        light = total = 0
+        for x in range(int(w * 0.01), int(w * 0.25), 8):
+            for y in range(int(h * 0.05), int(h * 0.70), 8):
+                r, g, b = im.getpixel((x, y))
+                total += 1
+                if (r > 200 and g > 200 and b > 200) or (b > 100 and b > r + 40):
+                    light += 1
+        return light / max(total, 1) > 0.35
+    except Exception:
+        return False
+
+
+def fix_tally_window(desk):
+    """Owner (21 Nov): Tally open but small / behind an error → press OK, maximise, and if needed close TallyPrime and
+    open it again. Checks the screen after every try; True when Tally fills the screen."""
+    tries = [
+        ("OK on the error box", lambda: (desk.keyboard.press("Enter"), time.sleep(1), desk.mouse.click(89, 108),
+                                         time.sleep(1), desk.keyboard.press("Enter"))),
+        ("maximise the window", lambda: (desk.mouse.click(150, 300), desk.keyboard.press("Super+Up"), time.sleep(1),
+                                         desk.keyboard.press("Alt+F10"))),
+        ("double-click its title bar", lambda: desk.mouse.dblclick(150, 6)),
+    ]
+    for name, act in tries:
+        if _tally_on_screen(desk):
+            return True
+        _safe(act)
+        time.sleep(3)
+    if _tally_on_screen(desk):
+        return True
+    # close TallyPrime and open it again from the desktop icon
+    step("tally", "Tally was open in a small window — closing TallyPrime and opening it again…", desk)
+    for _ in range(2):
+        _safe(lambda: desk.mouse.click(150, 300)); time.sleep(0.5)
+        desk.keyboard.press("Alt+F4"); time.sleep(2)
+        desk.keyboard.press("y"); time.sleep(0.5); desk.keyboard.press("Enter"); time.sleep(4)
+        if not _tally_window_somewhere(desk):
+            break
+    desk.mouse.dblclick(*TALLY_ICON)
+    for _ in range(30):
+        time.sleep(3)
+        if _tally_on_screen(desk):
+            return True
+        if _tally_window_somewhere(desk):
+            for name, act in tries:
+                _safe(act); time.sleep(2)
+                if _tally_on_screen(desk):
+                    return True
+    return _tally_on_screen(desk)
+
+
 def open_tally(desk):
     close_side_panel(desk)
     dismiss_popups(desk)
     opened = _tally_on_screen(desk)
+    if not opened and _tally_window_somewhere(desk):             # Tally already open, but small / behind an error
+        opened = fix_tally_window(desk)
     for attempt in range(2):
         if opened:
             break
@@ -308,6 +367,8 @@ def open_tally(desk):
             if _tally_on_screen(desk):
                 opened = True
                 break
+        if not opened and _tally_window_somewhere(desk):         # it opened, but not full screen
+            opened = fix_tally_window(desk)
         if opened:
             break
     if not opened:
