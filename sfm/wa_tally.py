@@ -135,7 +135,8 @@ def _normalize(cur, low, phone=None):
     """'See what's in the Excel for 2 Nov\nexcel 2/11' → 'excel 2/11'; 'add daily closing for tally excel 2/11' →
     'excel add 2/11'. None when it is not about the workbook (e.g. 'svt excel yesterday' = a transporter's bill)."""
     lines = [l.strip() for l in low.splitlines() if l.strip()]
-    if phone and re.match(r"^(please\s+)?(upload|import|send)\b.*\btally\b", low) and not _when(low):
+    if phone and re.match(r"^(please\s+)?(upload|import|send)\b.*\btally\b", low) and not _when(low) \
+            and not re.search(r"\b(live|session|open|start)\b", low):
         d = last_day(cur, phone)
         return f"tally import {d:%d/%m}" if d else "tally import"
     if re.match(rf"^(please\s+)?(change|edit|replace|make)\b.*\b{SHEET_RX}\b.*\bto\b", low):

@@ -847,6 +847,9 @@ def handle(cur, phone, user, msg):
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
     low = re.sub(r"[\s.!?,;:]+$", "", low)               # a keyboard's trailing "." must not break a command
+    # "send tally live", "please open tally live", "start tally session" → "tally live"
+    if re.search(r"\btally\b", low) and re.search(r"\b(live|session)\b", low) or re.fullmatch(r"(?:please\s+|send\s+)?(?:open|start)\s+tally", low):
+        low = "tally live"
     if mtype == "text" and (user.get("role") or "") == "owner":
         cur.execute("""SELECT 1 FROM tally_jobs WHERE phone=%s AND kind='live' AND waiting='command'
                        AND state NOT IN ('done','failed','review_required') AND created_at > NOW() - interval '1 hour'""", (phone,))
