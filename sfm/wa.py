@@ -741,6 +741,7 @@ change <hsd|ms|cng|lube|payment|receipt> sales from <ledger> to <ledger> (e.g. c
 upload to tally | tally ledger <party> <this month|last month|november|DD/MM to DD/MM> | tally check DD/MM | tally status | stop |
 tally import DD/MM to DD/MM and ledger <party> <party> <november 2026> (everything in one Tally session, one PIN) |
 tally ledger <party> <party> <november 2026> |
+tally live (open Tally and drive it step by step: create ledger, go to, click, type, keys) |
 reopen DD/MM[-DD/MM] [for <user>] | bill | menu
 Transporters: {parties}. Today is {today}.
 Return JSON {{"command": "..."}}; use "menu" if it is none of these. Never invent numbers that are not in the message.
@@ -846,6 +847,14 @@ def handle(cur, phone, user, msg):
     text = (msg.get("text") or {}).get("body", "") if mtype == "text" else (msg.get("image", {}) or {}).get("caption", "")
     low = re.sub(r"\s+", " ", text.strip().lower())
     low = re.sub(r"[\s.!?,;:]+$", "", low)               # a keyboard's trailing "." must not break a command
+    if mtype == "text" and (user.get("role") or "") == "owner":
+        cur.execute("""SELECT 1 FROM tally_jobs WHERE phone=%s AND kind='live' AND waiting='command'
+                       AND state NOT IN ('done','failed','review_required') AND created_at > NOW() - interval '1 hour'""", (phone,))
+        if cur.fetchone():                              # a live Tally session: every message is its next step
+            from . import tally_jobs
+            if state.get("mode"):
+                save_state(cur, phone, {}, touch=True)
+            return tally_jobs.handle(cur, phone, low, text)
 
     low = re.sub(r"^check\s+tally\b", "tally check", low)
     if mtype == "text" and user.get("role") == "owner":
@@ -863,7 +872,7 @@ def handle(cur, phone, user, msg):
     # Explicit remote-Tally commands must precede workbook normalization,
     # transporter-document shortcuts, and stale local confirmation sessions.
     if mtype == "text" and (user.get("role") or "") == "owner" and re.match(
-            r"^tally\s+(?:check|day\s*book|ledger|import|status)\b", low):
+            r"^(?:tally\s+(?:check|day\s*book|ledger|import|status|live|open|start|session)\b|(?:open|start)\s+tally$)", low):
         from . import tally_jobs
         if state.get("mode"):
             save_state(cur, phone, {}, touch=True)

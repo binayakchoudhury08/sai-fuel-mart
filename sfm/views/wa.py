@@ -261,7 +261,7 @@ def tally_claim(jid):
 
 @bp.route("/api/tally/job/<int:jid>/wait/<field>", methods=["GET"])
 def tally_wait(jid, field):
-    if not _internal_ok() or field not in ("pin", "company", "import"):
+    if not _internal_ok() or field not in ("pin", "company", "import", "command"):
         return jsonify({"ok": False}), 401
     from ..tally_jobs import agent_wait
     return jsonify(agent_wait(jid, field))

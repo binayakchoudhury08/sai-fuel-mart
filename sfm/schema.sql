@@ -690,3 +690,7 @@ CREATE TABLE IF NOT EXISTS pump.tally_jobs (
 
 -- v3.29: a bill scan belongs to the date selected on Credit Transport (the dates on the slips are not used)
 ALTER TABLE pump.scan_batches ADD COLUMN IF NOT EXISTS business_date DATE;
+
+-- v3.30: live Tally sessions driven step by step from WhatsApp
+ALTER TABLE pump.tally_jobs DROP CONSTRAINT IF EXISTS tally_jobs_kind_check;
+ALTER TABLE pump.tally_jobs ADD CONSTRAINT tally_jobs_kind_check CHECK (kind IN ('import','ledger','live'));

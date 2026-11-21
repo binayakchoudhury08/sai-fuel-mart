@@ -100,6 +100,8 @@ def _handle_one(cur, phone, low, text):
     cur.execute("""SELECT * FROM tally_jobs WHERE phone=%s AND state NOT IN ('done','failed','review_required') AND waiting IS NOT NULL
                    AND created_at > NOW() - interval '6 hours' ORDER BY id DESC LIMIT 1""", (phone,))
     job = cur.fetchone()
+    if job and job["waiting"] == "command":          # a live session: every reply is the next step (numbers too)
+        return live_answer(cur, job, re.sub(r"\s+", " ", text.strip().lower()), text)
     if job and job["waiting"] == "import":
         if text.strip().upper() != "IMPORT":
             return "Review the import screenshot, then reply *IMPORT* or *STOP*."
@@ -118,6 +120,16 @@ def _handle_one(cur, phone, low, text):
     mc = re.fullmatch(r"tally\s+(?:check|day\s*book)\s+(.+)", low)
     again = bool(re.match(r"^tally\s+import\s+again\b", low))
     low = re.sub(r"^tally\s+import\s+again\b", "tally import", low)
+    if re.match(r"^(tally\s+(live|open|start|session)|open\s+tally|start\s+tally)$", low):
+        cur.execute("INSERT INTO tally_jobs (phone, kind, params, waiting) VALUES (%s,'live','{}','pin') RETURNING id", (phone,))
+        jid = cur.fetchone()["id"]
+        try:
+            start_github(jid)
+        except UserError as e:
+            cur.execute("UPDATE tally_jobs SET state='failed', waiting=NULL WHERE id=%s", (jid,))
+            return f"❌ {e}"
+        return (f"🖥 Tally live session #{jid}: I will open Tally, then send a screenshot and ask what to do — step by step.\n"
+                "🔐 Send your *secure PIN* now (it is never stored).")
     m = re.match(r"^tally\s+import\s+(.+?)(?:\s+(?:to|-)\s+(.+))?$", low)
     ml = re.match(r"^tally\s+ledger\s+(.+?)\s+((?:till|until)\s+.+|this month|last month|month|[a-z]+(?:\s+\d{4})?|\d{1,2}[./-]\d{1,2}.*)$", low)
     if not (m or ml or mc):
@@ -264,7 +276,7 @@ def agent_wait(jid, field):
             return {"state": "missing"}
         if j["state"] in ("done", "failed", "review_required", "submitting"):
             return {"state": "cancelled"}
-        expected = {"pin": "running", "company": "tally", "import": "awaiting_import"}
+        expected = {"pin": "running", "company": "tally", "import": "awaiting_import", "command": "live"}
         if field not in expected or j["state"] != expected[field]:
             return {"state": "cancelled"}
         now = __import__("datetime").datetime.now(j["created_at"].tzinfo)
@@ -279,6 +291,8 @@ def agent_wait(jid, field):
             ans = j["answer"]
             cur.execute("UPDATE tally_jobs SET answer=NULL, answered_at=NULL WHERE id=%s", (jid,))
             return {"state": "ok", "answer": ans}
+        if field == "command" and j["waiting"] != "command":
+            cur.execute("UPDATE tally_jobs SET waiting='command', answer=NULL WHERE id=%s", (jid,))
         if field == "company" and j["waiting"] != "company":
             cur.execute("UPDATE tally_jobs SET waiting='company', answer=NULL WHERE id=%s", (jid,))
             _wa().notify(cur, j["phone"], f"🏢 Tally job #{jid}: which company should I open? (e.g. *SAI FUEL MART 26-27*)")
@@ -413,3 +427,68 @@ def recover_orphans(cur):
                      AND (p.params->>'session_seen' IS NULL OR (p.params->>'session_seen')::timestamptz < NOW() - interval '90 seconds')""")
     for r in cur.fetchall():
         release_queued(cur, r["id"])
+
+
+# ------------------------------------------------------------------ live Tally session (owner, 20 Nov)
+LIVE_GRAMMAR = (r"^(enter|esc|escape|tab|space|backspace|up|down|left|right|page ?up|page ?down|home|end|f\d{1,2}|"
+                r"(alt|ctrl|shift)\+\S+|(up|down|left|right|tab|enter|esc|backspace)\s+\d{1,2}|type\s+.+|click\s+.+|"
+                r"go to\s+.+|create ledger\s+.+|save|cancel|screenshot|show|stop)$")
+LIVE_HELP = ("Reply with what to do, e.g. *create ledger Sharma Transport under Sundry Debtors* · *go to day book* · "
+             "*click Display More Reports* · *type 5000* · *enter* · *esc* · *down 3* · *alt+c* · *ctrl+a* · "
+             "*save as gst report* (remember the steps) · *run gst report* · *stop*")
+
+
+def live_translate(text):
+    """Free wording → one live step (the robot's small grammar). Uses the same Gemini key as the assistant."""
+    low = re.sub(r"\s+", " ", text.strip().lower())
+    if re.fullmatch(r"[\d.,/-]+", low):
+        return "type " + text.strip()                   # a plain number / date is typed
+    if re.match(LIVE_GRAMMAR, low):
+        return text.strip() if low.startswith(("type ", "click ", "create ledger ", "go to ")) else low
+    try:
+        from . import scan
+        prompt = ("Turn the owner's instruction for TallyPrime into ONE step of this grammar, keeping names exactly: "
+                  "enter | esc | tab | up/down/left/right [n] | alt+<key> | ctrl+<key> | f<n> | type <text> | "
+                  "click <words on the screen> | go to <report name> | create ledger <name> under <group> | stop. "
+                  'Return JSON {"step": "..."}.\nInstruction: ' + text)
+        out = scan._call(scan._models("message")[0], [{"text": prompt}], schema=False, job="message", timeout=15)
+        step_ = ((out or {}).get("step") or "").strip()
+        if step_ and re.match(LIVE_GRAMMAR, step_.lower()):
+            return step_
+    except Exception:
+        pass
+    return None
+
+
+def live_answer(cur, job, low, text):
+    """The owner's reply while a live session waits for the next step."""
+    hist = (job["params"] or {}).get("history", [])
+    if low in ("stop", "done", "close", "close tally", "finish", "exit"):
+        cmd = "stop"
+    elif re.match(r"^save as\s+(.+)$", low):
+        name = re.match(r"^save as\s+(.+)$", low).group(1).strip()
+        mark = (job["params"] or {}).get("mark", 0)
+        steps = hist[mark:]
+        if not steps:
+            return "Nothing to save yet — do the steps first, then *save as <name>*."
+        cur.execute("""INSERT INTO settings (key, value) VALUES (%s,%s) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""",
+                    (f"tally_macro:{name}", json.dumps(steps)))
+        cur.execute("UPDATE tally_jobs SET params = params || %s::jsonb WHERE id=%s", (json.dumps({"mark": len(hist)}), job["id"]))
+        return f"💾 Saved *{name}* ({len(steps)} steps). Next time: *run {name}*."
+    elif re.match(r"^run\s+(.+)$", low):
+        name = re.match(r"^run\s+(.+)$", low).group(1).strip()
+        cur.execute("SELECT value FROM settings WHERE key=%s", (f"tally_macro:{name}",))
+        r = cur.fetchone()
+        if not r:
+            cur.execute("SELECT key FROM settings WHERE key LIKE 'tally_macro:%%' ORDER BY key")
+            saved = [x["key"].split(":", 1)[1] for x in cur.fetchall()]
+            return f"No saved steps called “{name}”. Saved: " + (", ".join(saved) or "none yet")
+        cmd = "\n".join(json.loads(r["value"]))
+    else:
+        cmd = live_translate(text)
+        if not cmd:
+            return "🤔 I could not turn that into a Tally step. " + LIVE_HELP
+    new_hist = hist + ([c for c in cmd.split("\n")] if cmd != "stop" else [])
+    cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL, params = params || %s::jsonb WHERE id=%s",
+                (cmd, json.dumps({"history": new_hist}), job["id"]))
+    return "⏹ Closing the session." if cmd == "stop" else "▶ " + cmd.replace("\n", " → ")

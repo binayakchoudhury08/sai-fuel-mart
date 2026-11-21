@@ -1030,6 +1030,92 @@ def ledger_pdf(desk, ledger, d1, d2, company):
     step("pdf", f"Ledger PDF sent: {pdf_name}" + (" — note: " + "; ".join(notes) if notes else ""), None, done=True)
 
 
+
+# ------------------------------------------------------------------ live session (owner, 20 Nov)
+LIVE_LIMIT = 18 * 60
+KEYS = {"enter": "Enter", "esc": "Escape", "escape": "Escape", "tab": "Tab", "space": "Space", "backspace": "Backspace",
+        "up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight", "page up": "PageUp",
+        "pageup": "PageUp", "page down": "PageDown", "pagedown": "PageDown", "home": "Home", "end": "End"}
+MODS = {"alt": "Alt", "ctrl": "Control", "shift": "Shift"}
+
+
+def live_step(desk, line):
+    """One step of the owner's instruction: keys, typing, clicking words seen on the screen, Go To, create ledger."""
+    s_ = line.strip(); low = s_.lower()
+    m = re.fullmatch(r"(up|down|left|right|tab|enter|esc|backspace)\s+(\d{1,2})", low)
+    if m:
+        for _ in range(int(m.group(2))):
+            desk.keyboard.press(KEYS[m.group(1)]); time.sleep(0.25)
+        return
+    if low in KEYS:
+        desk.keyboard.press(KEYS[low]); return
+    if re.fullmatch(r"f\d{1,2}", low):
+        desk.keyboard.press(low.upper()); return
+    m = re.fullmatch(r"(alt|ctrl|shift)\+(\S+)", low)
+    if m:
+        key = m.group(2)
+        key = key.upper() if re.fullmatch(r"f\d{1,2}", key) else (KEYS.get(key) or key)
+        desk.keyboard.press(f"{MODS[m.group(1)]}+{key}"); return
+    if low.startswith("type "):
+        remote_type(desk, s_[5:]); return
+    if low.startswith("click "):
+        label = s_[6:].strip()
+        try:
+            click_setting(desk, [label], ocr_mode=11)
+        except Exception:
+            click_setting(desk, [label], ocr_mode=6)
+        return
+    if low.startswith("go to "):
+        desk.keyboard.press("Alt+G"); time.sleep(1.2)
+        remote_type(desk, s_[6:].strip()); time.sleep(1.2)
+        desk.keyboard.press("Enter"); return
+    m = re.fullmatch(r"create ledger\s+(.+?)(?:\s+under\s+(.+))?", s_, re.I)
+    if m:
+        name, group = m.group(1).strip(), (m.group(2) or "").strip()
+        desk.keyboard.press("Alt+C"); time.sleep(1.5)       # Create master
+        remote_type(desk, "Ledger"); time.sleep(1); desk.keyboard.press("Enter"); time.sleep(2)
+        remote_type(desk, name); desk.keyboard.press("Enter"); time.sleep(0.8)
+        desk.keyboard.press("Enter"); time.sleep(0.8)          # (alias)
+        if group:
+            remote_type(desk, group); time.sleep(1); desk.keyboard.press("Enter"); time.sleep(1)
+        step("live", f"Ledger form filled: {name}" + (f" under {group}" if group else "")
+             + ". Check the screenshot — reply *save* to save it, or *cancel*.", desk)
+        ans = wait_answer("command", minutes=10).strip().lower()
+        if ans in ("save", "yes", "ok", "ctrl+a"):
+            desk.keyboard.press("Control+a")
+        else:
+            desk.keyboard.press("Escape"); time.sleep(0.6); desk.keyboard.press("Escape")
+        return
+    if low == "save":
+        desk.keyboard.press("Control+a"); return
+    if low == "cancel":
+        desk.keyboard.press("Escape"); return
+    if low in ("screenshot", "show"):
+        return
+    raise RuntimeError("I do not know that step")
+
+
+def live_session(desk, company):
+    start = time.time()
+    step("live", f"Tally is open ({company}). What next? e.g. create ledger … under … · go to day book · "
+                 "click <words on screen> · type … · enter · esc · alt+c · save as <name> · run <name> · stop", desk)
+    while time.time() - start < LIVE_LIMIT:
+        cmd = wait_answer("command", minutes=10)
+        if cmd.strip().lower() == "stop":
+            step("live_end", "Live session closed.", desk, done=True)
+            return
+        notes = []
+        for line in [x for x in cmd.split("\n") if x.strip()]:
+            try:
+                live_step(desk, line)
+                time.sleep(0.8)
+            except Exception as e:
+                notes.append(f"“{line}”: {str(e)[:80]}")
+        time.sleep(1.2)
+        left = max(0, int((LIVE_LIMIT - (time.time() - start)) / 60))
+        step("live", ("⚠️ " + "; ".join(notes) + " — " if notes else "✅ Done. ") + f"What next? ({left} min left)", desk)
+    step("live_end", "Session time is up (about 20 minutes) — closed. Send *tally live* to start again.", desk, done=True)
+
 def ensure_runtime():
     """Support the existing Actions workflow without requiring workflow-write permission."""
     if importlib.util.find_spec("PIL") is None:
@@ -1080,7 +1166,10 @@ def run_jobs():
             ctx = browser.new_context(accept_downloads=True)
             page = login(ctx)
             desk = connect(page)
-            if job["kind"] == "import":
+            if job["kind"] == "live":                        # owner drives Tally step by step from WhatsApp
+                company = open_tally(desk)
+                live_session(desk, company)
+            elif job["kind"] == "import":
                 r = api("/xml")
                 if r.status_code != 200:
                     step("xml", "XML blocked: " + "; ".join(r.json().get("errors", [])[:5]), failed=True); return
