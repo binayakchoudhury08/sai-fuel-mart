@@ -67,6 +67,16 @@
 <td class="num"><form method="post" action="{{ url_for('tally.edit') }}" class="btnrow">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}"><input type="hidden" name="sheet" value="{{ meter }}"><input type="hidden" name="meter" value="{{ r.meter }}">
 <input name="testing" value="{{ r.testing }}" inputmode="decimal" style="max-width:70px" title="testing litres"><button class="btn small secondary">Save</button></form></td><td class="num">{{ r.net }}</td><td class="num">{{ r.amount }}</td></tr>{% else %}<tr><td colspan="6" class="empty">No meter rows on this date.</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 
+{% if meta %}<section class="section" id="ledger-master"><header><h2>📒 Ledger master</h2><small>{{ choices.get('party', [])|length }} ledgers — names your converter accepts</small></header>
+<form method="post" action="{{ url_for('tally.ledger_add') }}" class="body btnrow" style="flex-wrap:wrap">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}">
+<input name="name" list="ledgers" placeholder="Ledger name exactly as in Tally — type to check if it exists" required style="min-width:280px;flex:1">
+<button class="btn small">➕ Add to LEDGER MASTER</button></form>
+<p class="hint" style="padding:0 18px 12px">Also create the same ledger in Tally, or the import will refuse it.</p></section>
+<section class="section"><header><h2>Meter testing</h2><small>used when a day is added</small></header>
+<form method="post" action="{{ url_for('tally.testing_mode_set') }}" class="body btnrow" style="flex-wrap:wrap">{{ hidden() }}<input type="hidden" name="d" value="{{ d.isoformat() }}">
+<label><input type="radio" name="mode" value="standard" {{ 'checked' if tmode != 'closing' }}> Standard 5 L per nozzle (CNG 0)</label>
+<label><input type="radio" name="mode" value="closing" {{ 'checked' if tmode == 'closing' }}> From Daily Closing (0 when not entered — no 5 L)</label>
+<button class="btn small secondary">Save</button></form></section>{% endif %}
 <section class="section"><header><h2>Versions</h2><small>every change is kept</small></header><div class="body flush tablewrap"><table class="mini"><tbody>
 {% for v in versions %}<tr><td>#{{ v.id }}</td><td>{{ v.created_at.strftime('%d %b %H:%M') }}</td><td>{{ v.note }}</td><td>{{ v.created_by }}</td>
 <td>{% if not loop.first %}<form method="post" action="{{ url_for('tally.restore', vid=v.id) }}" data-confirm="Make version #{{ v.id }} the current workbook again?">{{ hidden() }}<button class="btn small secondary">Restore</button></form>{% endif %}</td></tr>{% endfor %}

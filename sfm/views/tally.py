@@ -50,7 +50,10 @@ def index():
             missing = [(k, s_, suggest(s_, choices[k])) for k, s_ in miss]
         except Exception as e:                       # a damaged upload must not break the page
             flash(f"Could not read the workbook: {e}", "error")
-    return render_template("tally/index.html", d=d, meta=meta, versions=versions, view=view, check=check,
+    from ..tally_site import testing_mode as _tm
+    with db.tx() as cur:
+        tmode = _tm(cur)
+    return render_template("tally/index.html", d=d, meta=meta, versions=versions, view=view, check=check, tmode=tmode,
                            names=names, kinds=KINDS, sheets=SHEETS, meter=METER, missing=missing, choices=choices)
 
 
@@ -242,3 +245,31 @@ def delete():
         audit(cur, "delete", "tally_book", None, what, business_date=d)
     flash("Deleted — " + what + ". The entries below moved up; Versions can bring it back.", "success")
     return redirect(url_for("tally.index", d=d.isoformat()) + "#" + sheet.replace(" ", "-"))
+
+
+@bp.route("/tally/ledger", methods=["POST"])
+@login_required("owner")
+def ledger_add():
+    from ..tally_site import add_ledger, save_version
+    name = (request.form.get("name") or "").strip()
+    with db.tx() as cur:
+        claim_form_token(cur)
+        data, _ = _book(cur)
+        new, row = add_ledger(data, name)
+        save_version(cur, new, f"LEDGER MASTER: added “{name}” (row {row})", current_user()["username"])
+        audit(cur, "create", "tally_book", None, f"LEDGER MASTER: added “{name}”")
+    flash(f"“{name}” added to LEDGER MASTER. Make sure the same ledger exists in Tally too.", "success")
+    return redirect(url_for("tally.index", d=request.form.get("d") or None) + "#ledger-master")
+
+
+@bp.route("/tally/testing-mode", methods=["POST"])
+@login_required("owner")
+def testing_mode_set():
+    from ..tally_site import set_testing_mode
+    mode = request.form.get("mode")
+    with db.tx() as cur:
+        claim_form_token(cur)
+        set_testing_mode(cur, mode)
+        audit(cur, "update", "settings", None, f"Tally Excel meter testing: {'from Daily Closing' if mode == 'closing' else 'standard 5 L'}")
+    flash("Meter testing: " + ("taken from Daily Closing (0 when not entered)." if mode == "closing" else "standard 5 L per nozzle (CNG 0)."), "success")
+    return redirect(url_for("tally.index", d=request.form.get("d") or None))

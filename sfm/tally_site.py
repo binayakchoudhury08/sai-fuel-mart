@@ -82,8 +82,10 @@ def day_rows(cur, d, adder):
                    WHERE r.business_date=%s AND r.closing IS NOT NULL ORDER BY n.fuel_code, n.sort, n.id""", (d,))
     closings = {}
     for r in cur.fetchall():
-        t = Decimal(r["testing"]) if r["testing"] is not None else None
-        closings[tn("meter", r["name"])] = (Decimal(r["closing"]), t if t else None)   # not filled in → the standard 5 L
+        t = Decimal(r["testing"]) if r["testing"] is not None else Decimal(0)
+        # owner's choice (Tally Excel page / "excel testing mode …"): Daily Closing's testing exactly (0 when not
+        # entered), or the standard 5 L per nozzle (CNG 0) as in his Excel
+        closings[tn("meter", r["name"])] = (Decimal(r["closing"]), t if testing_mode(cur) == "closing" else None)
     if closings:
         rows.append((METER, closings))
     # credit given (declared totals of the day) → HSD SALES
@@ -396,3 +398,36 @@ def delete_entry(data, sheet, row):
     a = Adder(data)
     d = a.delete_row(sheet, int(row))
     return a.save(), d
+
+
+def testing_mode(cur):
+    cur.execute("SELECT value FROM settings WHERE key='tally_testing_mode'")
+    r = cur.fetchone()
+    return "closing" if r and str(r["value"]).strip('"') == "closing" else "standard"
+
+
+def set_testing_mode(cur, mode):
+    cur.execute("""INSERT INTO settings (key, value) VALUES ('tally_testing_mode', %s)
+                   ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value""", ("closing" if mode == "closing" else "standard",))
+
+
+def ledgers(data):
+    from .tally_book import Adder
+    return masters(Adder(data))[0]
+
+
+def add_ledger(data, name):
+    """Add a name to LEDGER MASTER (column A, next free row, styled like the row above). Exact Tally spelling."""
+    from .tally_book import Adder
+    name = re.sub(r"\s+", " ", (name or "").strip())
+    if not name or len(name) > 100:
+        raise UserError("Write the ledger name exactly as in Tally.")
+    a = Adder(data)
+    ws = a.v["LEDGER MASTER"]
+    existing = [ws.cell(r, 1).value for r in range(2, ws.max_row + 1) if ws.cell(r, 1).value]
+    same = [x for x in existing if norm(x) == norm(name)]
+    if same:
+        raise UserError(f"“{same[0]}” is already in LEDGER MASTER.")
+    last = max(r for r in range(1, ws.max_row + 1) if ws.cell(r, 1).value)
+    a.b.put("LEDGER MASTER", f"A{last + 1}", value=name, kind="s", formula_keep=False, style=a.b.style_of("LEDGER MASTER", f"A{last}"))
+    return a.b.save(), last + 1

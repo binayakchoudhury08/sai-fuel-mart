@@ -365,6 +365,19 @@ def handle(cur, phone, low, text):
     if not m:
         return None
     rest = m.group(2).strip()
+    mm2 = re.match(r"^testing\s+mode\s+(closing|daily closing|dc|standard|5|5l|5 l|default)$", rest)
+    if mm2:
+        from .tally_site import set_testing_mode
+        mode = "closing" if mm2.group(1) in ("closing", "daily closing", "dc") else "standard"
+        set_testing_mode(cur, mode)
+        return ("🧪 Meter testing: " + ("taken from Daily Closing for each nozzle (0 when not entered — no 5 L)."
+                if mode == "closing" else "standard 5 L per nozzle (CNG 0)."))
+    ml2 = re.match(r"^add\s+ledger\s+(.+)$", rest)
+    if ml2:
+        name = text.strip().split(None, 3)[-1] if text.lower().startswith("excel add ledger") else ml2.group(1)
+        name = re.sub(r"^ledger\s+", "", name, flags=re.I).strip()
+        save_state(cur, phone, {"mode": "confirm", "action": "tally_ledger", "name": name}, touch=True)
+        return f"📒 Add *{name}* to LEDGER MASTER (exact Tally spelling)?\nReply *YES*."
     md = re.match(rf"^(?:delete|remove)\s+{SHEET_RX}(?:\s+sales?)?\s+(\S+)\s+(.+)$", rest)
     if md:
         sheet, d = SHEET_WORDS[md.group(1)], _when(md.group(2))
@@ -381,7 +394,7 @@ def handle(cur, phone, low, text):
                                 "d": d.isoformat()}, touch=True)
         remember_day(cur, phone, d)
         return f"🗑 Delete from *{sheet}* {d:%d/%m}: *{hit[0][key]} ₹{inr(hit[0]['amount'])}* (row {hit[0]['row']})?\nReply *YES*."
-    mt = re.match(r"^testing\s+(\S+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:l|ltr|litres?|liters?)?$", rest)
+    mt = None if rest.startswith("testing mode") else re.match(r"^testing\s+(\S+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s*(?:l|ltr|litres?|liters?)?$", rest)
     if mt:
         d = _when(mt.group(1))
         from .tally_site import day_view
@@ -525,7 +538,7 @@ def run(cur, st):
     from .security import audit, current_user
     from .tally_site import add_day, save_version, set_amount
     a = st.get("action")
-    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates", "tally_testing", "tally_delete"):
+    if a not in ("tally_add", "tally_set", "tally_undo", "tally_edit", "tally_change_all", "tally_rates", "tally_testing", "tally_delete", "tally_ledger"):
         return None
     who = current_user()["username"]
     try:
@@ -539,6 +552,12 @@ def run(cur, st):
             return {"image": table_png(d, view, chk, counted_cash(cur, d)),
                     "caption": f"✅ {d:%d/%m/%Y} added and adjusted ({len(added)} rows) — final cash ₹{inr(chk['Final cash balance'])}. "
                                "Check the ledgers. To correct: change hsd sales from dtplus to cash · all correct: upload to tally"}
+        if a == "tally_ledger":
+            from .tally_site import add_ledger
+            new, row = add_ledger(_book(cur), st["name"])
+            save_version(cur, new, f"LEDGER MASTER: added “{st['name']}” (row {row})", who)
+            audit(cur, "create", "tally_book", None, f"LEDGER MASTER: added “{st['name']}” (WhatsApp)")
+            return f"✅ “{st['name']}” added to LEDGER MASTER. Create the same ledger in Tally too."
         if a == "tally_delete":
             from .tally_site import daily_check, day_view, delete_entry
             new, d = delete_entry(_book(cur), st["sheet"], st["row"])
