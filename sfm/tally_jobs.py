@@ -432,32 +432,24 @@ def recover_orphans(cur):
 # ------------------------------------------------------------------ live Tally session (owner, 20 Nov)
 LIVE_GRAMMAR = (r"^(enter|esc|escape|tab|space|backspace|up|down|left|right|page ?up|page ?down|home|end|f\d{1,2}|"
                 r"(alt|ctrl|shift)\+\S+|(up|down|left|right|tab|enter|esc|backspace)\s+\d{1,2}|type\s+.+|click\s+.+|"
-                r"go to\s+.+|create ledger\s+.+|save|cancel|screenshot|show|stop)$")
-LIVE_HELP = ("Reply with what to do, e.g. *create ledger Sharma Transport under Sundry Debtors* · *go to day book* · "
-             "*click Display More Reports* · *type 5000* · *enter* · *esc* · *down 3* · *alt+c* · *ctrl+a* · "
-             "*save as gst report* (remember the steps) · *run gst report* · *stop*")
+                r"save|cancel|screenshot|show|stop)$")
+LIVE_HELP = ("One step per message, a photo after each: a word on the screen (*create*, *ledger*, *day book*) is selected · "
+             "*enter* · *esc* · *down 3* · *alt+c* · *ctrl+a* · *type 5000* (or just *5000*) · "
+             "*save as <name>* (remember the steps) · *run <name>* · *stop*")
 
 
 def live_translate(text):
-    """Free wording → one live step (the robot's small grammar). Uses the same Gemini key as the assistant."""
-    low = re.sub(r"\s+", " ", text.strip().lower())
+    """Owner (21 Nov): one step at a time, exactly as written — no shortcuts, no guessing.
+    Keys / type / click as written; a number is typed; any other words are selected on the screen ("pick")."""
+    raw = text.strip()
+    low = re.sub(r"\s+", " ", raw.lower())
+    if not low:
+        return None
     if re.fullmatch(r"[\d.,/-]+", low):
-        return "type " + text.strip()                   # a plain number / date is typed
+        return "type " + raw                            # a plain number / date is typed
     if re.match(LIVE_GRAMMAR, low):
-        return text.strip() if low.startswith(("type ", "click ", "create ledger ", "go to ")) else low
-    try:
-        from . import scan
-        prompt = ("Turn the owner's instruction for TallyPrime into ONE step of this grammar, keeping names exactly: "
-                  "enter | esc | tab | up/down/left/right [n] | alt+<key> | ctrl+<key> | f<n> | type <text> | "
-                  "click <words on the screen> | go to <report name> | create ledger <name> under <group> | stop. "
-                  'Return JSON {"step": "..."}.\nInstruction: ' + text)
-        out = scan._call(scan._models("message")[0], [{"text": prompt}], schema=False, job="message", timeout=15)
-        step_ = ((out or {}).get("step") or "").strip()
-        if step_ and re.match(LIVE_GRAMMAR, step_.lower()):
-            return step_
-    except Exception:
-        pass
-    return None
+        return raw if low.startswith(("type ", "click ")) else low
+    return "pick " + raw                                # select these words on the screen (click, else type)
 
 
 def live_answer(cur, job, low, text):

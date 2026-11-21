@@ -1101,7 +1101,7 @@ MODS = {"alt": "Alt", "ctrl": "Control", "shift": "Shift"}
 
 
 def live_step(desk, line):
-    """One step of the owner's instruction: keys, typing, clicking words seen on the screen, Go To, create ledger."""
+    """One step of the owner's instruction: keys, typing, selecting words seen on the screen, Go To."""
     s_ = line.strip(); low = s_.lower()
     m = re.fullmatch(r"(up|down|left|right|tab|enter|esc|backspace)\s+(\d{1,2})", low)
     if m:
@@ -1130,23 +1130,18 @@ def live_step(desk, line):
         desk.keyboard.press("Alt+G"); time.sleep(1.2)
         remote_type(desk, s_[6:].strip()); time.sleep(1.2)
         desk.keyboard.press("Enter"); return
-    m = re.fullmatch(r"create ledger\s+(.+?)(?:\s+under\s+(.+))?", s_, re.I)
-    if m:
-        name, group = m.group(1).strip(), (m.group(2) or "").strip()
-        desk.keyboard.press("Alt+C"); time.sleep(1.5)       # Create master
-        remote_type(desk, "Ledger"); time.sleep(1); desk.keyboard.press("Enter"); time.sleep(2)
-        remote_type(desk, name); desk.keyboard.press("Enter"); time.sleep(0.8)
-        desk.keyboard.press("Enter"); time.sleep(0.8)          # (alias)
-        if group:
-            remote_type(desk, group); time.sleep(1); desk.keyboard.press("Enter"); time.sleep(1)
-        step("live", f"Ledger form filled: {name}" + (f" under {group}" if group else "")
-             + ". Check the screenshot — reply *save* to save it, or *cancel*.", desk)
-        ans = wait_answer("command", minutes=10).strip().lower()
-        if ans in ("save", "yes", "ok", "ctrl+a"):
-            desk.keyboard.press("Control+a")
-        else:
-            desk.keyboard.press("Escape"); time.sleep(0.6); desk.keyboard.press("Escape")
-        return
+    if low.startswith("pick "):                          # owner: select these words on the screen, nothing more
+        words = s_[5:].strip()
+        try:
+            click_setting(desk, [words], ocr_mode=11)
+            return f"selected “{words}”"
+        except Exception:
+            try:
+                click_setting(desk, [words], ocr_mode=6)
+                return f"selected “{words}”"
+            except Exception:
+                remote_type(desk, words)
+                return f"typed “{words}” (it was not visible to click)"
     if low == "save":
         desk.keyboard.press("Control+a"); return
     if low == "cancel":
@@ -1158,23 +1153,25 @@ def live_step(desk, line):
 
 def live_session(desk, company):
     start = time.time()
-    step("live", f"Tally is open ({company}). What next? e.g. create ledger … under … · go to day book · "
-                 "click <words on screen> · type … · enter · esc · alt+c · save as <name> · run <name> · stop", desk)
+    step("live", f"Tally is open ({company}). What next? One step per message, e.g. create · ledger · enter · "
+                 "esc · down 3 · type 5000 · save as <name> · run <name> · stop", desk)
     while time.time() - start < LIVE_LIMIT:
         cmd = wait_answer("command", minutes=10)
         if cmd.strip().lower() == "stop":
             step("live_end", "Live session closed.", desk, done=True)
             return
-        notes = []
+        notes, done_ = [], []
         for line in [x for x in cmd.split("\n") if x.strip()]:
             try:
-                live_step(desk, line)
+                did = live_step(desk, line)
+                done_.append(did or line)
                 time.sleep(0.8)
             except Exception as e:
                 notes.append(f"“{line}”: {str(e)[:80]}")
         time.sleep(1.2)
         left = max(0, int((LIVE_LIMIT - (time.time() - start)) / 60))
-        step("live", ("⚠️ " + "; ".join(notes) + " — " if notes else "✅ Done. ") + f"What next? ({left} min left)", desk)
+        step("live", ("⚠️ " + "; ".join(notes) + " — " if notes else "✅ " + "; ".join(done_) + ". ")
+             + f"What next? ({left} min left)", desk)
     step("live_end", "Session time is up (about 20 minutes) — closed. Send *tally live* to start again.", desk, done=True)
 
 def ensure_runtime():
