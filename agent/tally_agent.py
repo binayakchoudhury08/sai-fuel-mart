@@ -1130,18 +1130,15 @@ def live_step(desk, line):
         desk.keyboard.press("Alt+G"); time.sleep(1.2)
         remote_type(desk, s_[6:].strip()); time.sleep(1.2)
         desk.keyboard.press("Enter"); return
-    if low.startswith("pick "):                          # owner: select these words on the screen, nothing more
+    if low.startswith("pick "):                          # owner: select these words on the screen — a click, nothing more
         words = s_[5:].strip()
-        try:
-            click_setting(desk, [words], ocr_mode=11)
-            return f"selected “{words}”"
-        except Exception:
+        for mode in (11, 6):
             try:
-                click_setting(desk, [words], ocr_mode=6)
+                click_setting(desk, [words], activate=False, ocr_mode=mode)
                 return f"selected “{words}”"
             except Exception:
-                remote_type(desk, words)
-                return f"typed “{words}” (it was not visible to click)"
+                continue
+        raise RuntimeError(f"not found on the screen — nothing done. To type it, send: type {words}")
     if low == "save":
         desk.keyboard.press("Control+a"); return
     if low == "cancel":

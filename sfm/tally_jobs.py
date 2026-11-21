@@ -438,18 +438,48 @@ LIVE_HELP = ("One step per message, a photo after each: a word on the screen (*c
              "*save as <name>* (remember the steps) · *run <name>* · *stop*")
 
 
+KEY_WORDS = {"esc": "esc", "escape": "esc", "back": "esc", "go back": "esc", "previous": "esc", "close": "esc",
+             "enter": "enter", "return": "enter", "ok": "enter", "okay": "enter", "next": "enter", "open": "enter",
+             "accept": "ctrl+a", "save": "ctrl+a", "tab": "tab", "space": "space", "backspace": "backspace",
+             "delete": "backspace", "up": "up", "down": "down", "left": "left", "right": "right",
+             "page up": "page up", "page down": "page down", "home": "home", "end": "end"}
+
+
+def _key(words):
+    """'esc' / 'press esc' / 'back' / 'alt c' / 'ctrl a' / 'down 3' / 'f2' → a key step, else None."""
+    w = re.sub(r"^(?:press|hit|key|push|tap)\s+", "", words.strip().lower())
+    w = re.sub(r"\s+(?:key|button)$", "", w)
+    m = re.fullmatch(r"(alt|ctrl|control|shift)\s*[+ ]\s*(\S+)", w)
+    if m:
+        return ("ctrl" if m.group(1) == "control" else m.group(1)) + "+" + m.group(2)
+    m = re.fullmatch(r"(up|down|left|right|tab|enter|esc|escape|backspace)\s*(?:x\s*)?(\d{1,2})(?:\s*times)?", w)
+    if m:
+        return f"{KEY_WORDS.get(m.group(1), m.group(1))} {m.group(2)}"
+    if re.fullmatch(r"f\d{1,2}", w):
+        return w
+    return KEY_WORDS.get(w)
+
+
 def live_translate(text):
     """Owner (21 Nov): one step at a time, exactly as written — no shortcuts, no guessing.
-    Keys / type / click as written; a number is typed; any other words are selected on the screen ("pick")."""
+    Key words (esc / back / press esc / enter / ok / alt c / down 3 …) are keys; "type …" types; a number is typed;
+    any other words are SELECTED on the screen (a click — never typed)."""
     raw = text.strip()
     low = re.sub(r"\s+", " ", raw.lower())
     if not low:
         return None
+    if low in ("screenshot", "show", "photo", "stop"):
+        return low
+    k = _key(low)
+    if k:
+        return k
+    if low.startswith("type "):
+        return "type " + raw[5:].strip()
     if re.fullmatch(r"[\d.,/-]+", low):
         return "type " + raw                            # a plain number / date is typed
-    if re.match(LIVE_GRAMMAR, low):
-        return raw if low.startswith(("type ", "click ")) else low
-    return "pick " + raw                                # select these words on the screen (click, else type)
+    if low.startswith("click "):
+        return "pick " + raw[6:].strip()
+    return "pick " + raw                                # select these words on the screen (click only)
 
 
 def live_answer(cur, job, low, text):
@@ -483,4 +513,4 @@ def live_answer(cur, job, low, text):
     new_hist = hist + ([c for c in cmd.split("\n")] if cmd != "stop" else [])
     cur.execute("UPDATE tally_jobs SET answer=%s, answered_at=NOW(), waiting=NULL, params = params || %s::jsonb WHERE id=%s",
                 (cmd, json.dumps({"history": new_hist}), job["id"]))
-    return "⏹ Closing the session." if cmd == "stop" else "▶ " + cmd.replace("\n", " → ")
+    return "⏹ Closing the session." if cmd == "stop" else ""   # the next photo says what was done
